@@ -1,0 +1,19 @@
+docs/Dockerfile
+  s_59c936ea9b1f29::t_c20c9399cb4e98 19-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ff4885921ab87e0d3210977b2fefd786b9b7dbf6",
+  "prompts": {},
+  "sessions": {
+    "s_59c936ea9b1f29": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6869f015-f007-4bcb-9580-c058bed82bd0",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
