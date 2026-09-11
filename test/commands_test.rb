@@ -216,7 +216,120 @@ class CommandsTest < ActiveSupport::TestCase
     assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/md5.js")
   end
 
+  test "pin command with --from esm.run vendors the bundle and pins the dependencies it imports" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0", "--from", "esm.run")
+
+    assert_includes out, 'Pinning "md5" to vendor/javascript/md5.js via download from https://cdn.jsdelivr.net/npm/md5@2.2.0/+esm'
+    assert_includes out, 'Pinning "charenc" to vendor/javascript/charenc.js via download from https://cdn.jsdelivr.net/npm/charenc@0.0.1/+esm'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, 'pin "md5" # @2.2.0 (esm.run)'
+    assert_includes content, 'pin "charenc" # @0.0.1 (esm.run)'
+    assert_includes content, 'pin "crypt" # @0.0.1 (esm.run)'
+    assert_includes content, 'pin "is-buffer" # @1.1.4 (esm.run)'
+
+    vendored = File.read("#{@tmpdir}/dummy/vendor/javascript/md5.js")
+    assert_equal "// md5@2.2.0 downloaded from https://cdn.jsdelivr.net/npm/md5@2.2.0/+esm", vendored.lines.first.strip
+    assert_includes vendored, %(from"charenc")
+    assert_no_match %r{["']/npm/}, vendored
+    assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/charenc.js")
+  end
+
+  test "pin command with --from esm.run keeps dependency pins the app already has" do
+    importmap_config('pin "charenc", to: "https://ga.jspm.io/npm:charenc@0.0.2/charenc.js", preload: false')
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0", "--from", "esm.run")
+
+    assert_includes out, 'Keeping existing pin for "charenc" (bundle was built against @0.0.1)'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, 'pin "charenc", to: "https://ga.jspm.io/npm:charenc@0.0.2/charenc.js", preload: false'
+    assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/charenc.js")
+  end
+
+  test "pin command with --from esm.run and --remote pins the bundle URL without downloading" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0", "--from", "esm.run", "--remote")
+
+    assert_includes out, 'Pinning "md5" to https://cdn.jsdelivr.net/npm/md5@2.2.0/+esm'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, 'pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/+esm"'
+    assert_not_includes content, "charenc"
+    assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/md5.js")
+  end
+
+  test "update command keeps a package vendored from esm.run on esm.run" do
+    importmap_config("")
+    run_importmap_command("pin", "md5@2.2.0", "--from", "esm.run")
+
+    out, _err = run_importmap_command("update")
+
+    assert_includes out, 'Pinning "md5" to vendor/javascript/md5.js via download from https://cdn.jsdelivr.net/npm/md5@2.3.0/+esm'
+    assert_includes File.read("#{@tmpdir}/dummy/vendor/javascript/md5.js"), %(from"charenc")
+  end
+
+  test "pristine command redownloads esm.run packages from esm.run" do
+    importmap_config("")
+    run_importmap_command("pin", "md5@2.2.0", "--from", "esm.run")
+
+    original = File.read("#{@tmpdir}/dummy/vendor/javascript/md5.js")
+    File.write("#{@tmpdir}/dummy/vendor/javascript/md5.js", "corrupted")
+
+    out, _err = run_importmap_command("pristine")
+
+    assert_includes out, 'Downloading "md5" to vendor/javascript/md5.js from https://cdn.jsdelivr.net/npm/md5@2.2.0/+esm'
+    assert_equal original, File.read("#{@tmpdir}/dummy/vendor/javascript/md5.js")
+  end
+
+  test "pin command with --minify minifies the download and later pins keep minifying" do
+    skip "no JavaScript minifier installed (bun, esbuild or terser)" unless minifier_available?
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0", "--minify")
+
+    assert_includes out, 'Pinning "md5" to vendor/javascript/md5.js via download from https://ga.jspm.io/npm:md5@2.2.0/md5.js (minified)'
+    assert_equal "// md5@2.2.0 downloaded from https://ga.jspm.io/npm:md5@2.2.0/md5.js (minified)",
+                 File.readlines("#{@tmpdir}/dummy/vendor/javascript/md5.js").first.strip
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), 'pin "md5" # @2.2.0 (minified)'
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), 'pin "charenc" # @0.0.2 (minified)'
+
+    out, _err = run_importmap_command("pin", "md5@2.3.0")
+
+    assert_includes out, 'https://ga.jspm.io/npm:md5@2.3.0/md5.js (minified)'
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), 'pin "md5" # @2.3.0 (minified)'
+
+    out, _err = run_importmap_command("pin", "md5@2.3.0", "--no-minify")
+
+    assert_not_includes out, "(minified)"
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), "pin \"md5\" # @2.3.0\n"
+  end
+
+  test "pristine command with --minify minifies every vendored package" do
+    skip "no JavaScript minifier installed (bun, esbuild or terser)" unless minifier_available?
+    importmap_config("")
+    run_importmap_command("pin", "md5@2.2.0")
+
+    unminified = File.read("#{@tmpdir}/dummy/vendor/javascript/md5.js")
+
+    out, _err = run_importmap_command("pristine", "--minify")
+
+    assert_includes out, 'Downloading "md5" to vendor/javascript/md5.js from https://ga.jspm.io/npm:md5@2.2.0/md5.js (minified)'
+    minified = File.read("#{@tmpdir}/dummy/vendor/javascript/md5.js")
+    assert_includes minified.lines.first, "(minified)"
+    assert_operator minified.bytesize, :<, unminified.bytesize
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), 'pin "md5" # @2.2.0 (minified)'
+  end
+
   private
+    def minifier_available?
+      require "importmap/minifier"
+      Importmap::Minifier.available?
+    end
+
     def importmap_config(content)
       File.write("#{@tmpdir}/dummy/config/importmap.rb", "#{content}\n")
     end

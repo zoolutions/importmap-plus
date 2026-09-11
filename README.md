@@ -156,6 +156,56 @@ Remote pins are respected from then on — no `--remote` flag needed. When a rem
 
 Options on existing pins, like `preload: false`, are preserved when a pin is rewritten. An explicit `integrity:` value is dropped when the URL changes, since the old hash would no longer match — see the SRI section below for pinning fresh integrity hashes.
 
+### Loading bundles from esm.run
+
+[esm.run](https://www.jsdelivr.com/esm) is jsDelivr's bundling endpoint: it serves one minified ES module per package, no matter what the package ships on npm. Where jspm hands you a package's own `dist` file (unminified for plenty of packages), `--from esm.run` gives you the bundle:
+
+```bash
+./bin/importmap pin luxon --from esm.run
+Pinning "luxon" to vendor/javascript/luxon.js via download from https://cdn.jsdelivr.net/npm/luxon@3.7.2/+esm
+```
+
+A bundle references the packages it depends on as absolute `/npm/dep@1.2.3/+esm` imports, which only resolve on jsDelivr. When the bundle is vendored, those imports are rewritten to bare specifiers (`import { Controller } from "@hotwired/stimulus"`) so they resolve through your import map, and every dependency without a pin is pinned the same way — vendored from esm.run, at the version the bundle was built against:
+
+```bash
+./bin/importmap pin stimulus-use --from esm.run
+Pinning "stimulus-use" to vendor/javascript/stimulus-use.js via download from https://cdn.jsdelivr.net/npm/stimulus-use@0.53.1/+esm
+Keeping existing pin for "@hotwired/stimulus" (bundle was built against @3.2.2)
+```
+
+A dependency you already pin is left alone: the bundle then resolves to whatever your import map says, exactly like a jspm download would. With `--remote`, the pin points at the bundle URL and its imports load from jsDelivr as-is.
+
+Versions are resolved through jsDelivr's data API, so `pin luxon@3 --from esm.run` and subpaths like `pin apexcharts/core --from esm.run` work the way they do on npm.
+
+### Where a package came from is remembered
+
+The version comment on a vendored pin also names the CDN when it isn't jspm:
+
+```ruby
+pin "luxon" # @3.7.2 (esm.run)
+pin "react" # @19.1.0 (unpkg)
+```
+
+`./bin/importmap update` and `./bin/importmap pristine` read it and go back to the same CDN — an esm.run bundle stays a bundle, an unpkg download stays on unpkg — and so does `pin` when you leave out `--from`. Pass `--from` to move a package to another CDN.
+
+### Minifying vendored packages
+
+Lighthouse's unminified-javascript audit will tell you which packages ship unminified builds. Pass `--minify` to run a download through a JavaScript minifier before it lands in `vendor/javascript`:
+
+```bash
+./bin/importmap pin luxon --minify
+Pinning "luxon" to vendor/javascript/luxon.js via download from https://ga.jspm.io/npm:luxon@3.7.2/build/es6/luxon.mjs (minified)
+```
+
+The first of [bun](https://bun.sh), [esbuild](https://esbuild.github.io) or [terser](https://terser.org) found in `node_modules/.bin` or on your `PATH` is used, always in transform-only mode so bare import specifiers are left exactly as the CDN resolved them. The pin records it (`pin "luxon" # @3.7.2 (minified)`, or `(esm.run, minified)` for a bundle), and from then on `update`, `pristine` and a plain `pin` keep minifying that package; `--no-minify` turns it off again, and `./bin/importmap pristine --minify` minifies everything you have vendored in one go.
+
+To use a different minifier, assign anything that responds to `call(source)` and returns the minified source:
+
+```ruby
+# config/initializers/importmap.rb — only read by bin/importmap
+Importmap::Packager.minifier = ->(source) { MyMinifier.minify(source) }
+```
+
 ## Subresource Integrity (SRI)
 
 For enhanced security, importmap-rails supports [Subresource Integrity (SRI)](https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity) hashes for packages loaded from external CDNs.
