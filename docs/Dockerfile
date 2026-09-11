@@ -16,7 +16,9 @@ FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
 
 WORKDIR /app/docs
 
-ARG BUN_VERSION=1.3.2
+# Keep in step with the repo-root .bun-version: bun.lock is written by the local
+# bun, and an older bun can't read a newer lockfile version.
+ARG BUN_VERSION=1.4.0
 ENV BUN_INSTALL="/usr/local/bun" \
     PATH="/usr/local/bun/bin:$PATH" \
     BUNDLE_DEPLOYMENT="0" \
