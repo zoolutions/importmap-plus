@@ -1,20 +1,100 @@
 #!/usr/bin/env bash
+# Cut a gem release: bump lib/importmap/version.rb, tag it, and publish a
+# GitHub Release. Publishing fires .github/workflows/release.yml, which runs
+# the tests and pushes to RubyGems over trusted publishing — no API key here.
+#
+#   bin/release            # patch bump  (1.2.3 -> 1.2.4)
+#   bin/release minor      # 1.2.3 -> 1.3.0
+#   bin/release major      # 1.2.3 -> 2.0.0
+#   bin/release 1.4.0      # explicit version
+#   bin/release --dry-run  # print what would happen
+set -euo pipefail
 
-VERSION=$1
+REPO="zoolutions/importmap-plus"
+VERSION_FILE="lib/importmap/version.rb"
+BUMP="patch"
+DRY_RUN=false
 
-if [ -z "$VERSION" ]; then
-  echo "Usage: $0 <version>"
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY_RUN=true ;;
+    major|minor|patch) BUMP="$arg" ;;
+    v*.*.*) BUMP="${arg#v}" ;;
+    *.*.*) BUMP="$arg" ;;
+    *) echo "Unknown argument: $arg" >&2; exit 1 ;;
+  esac
+done
+
+cd "$(dirname "$0")/.."
+
+current="$(ruby -r ./lib/importmap/version -e 'print Importmap::VERSION')"
+
+case "$BUMP" in
+  major|minor|patch)
+    IFS=. read -r major minor patch <<<"$current"
+    case "$BUMP" in
+      major) major=$((major + 1)); minor=0; patch=0 ;;
+      minor) minor=$((minor + 1)); patch=0 ;;
+      patch) patch=$((patch + 1)) ;;
+    esac
+    next="$major.$minor.$patch"
+    ;;
+  *) next="$BUMP" ;;
+esac
+
+tag="v$next"
+
+echo "Releasing $current -> $next ($tag) on $REPO"
+
+if [ "$DRY_RUN" = true ]; then
+  echo "(dry run — nothing written, tagged or published)"
+  exit 0
+fi
+
+if [ -n "$(git status --porcelain)" ]; then
+  echo "Working tree is dirty; commit or stash first." >&2
   exit 1
 fi
 
-printf "module Importmap\n  VERSION = \"$VERSION\"\nend\n" > ./lib/importmap/version.rb
-bundle
-for gemfile in $(ls gemfiles/*.gemfile); do BUNDLE_GEMFILE="$gemfile" bundle; done
-git add Gemfile.lock gemfiles/*.lock lib/importmap/version.rb
-git commit -m "Bump version for $VERSION"
-git push
-git tag v$VERSION
-git push --tags
-gem build importmap-rails.gemspec
-gem push "importmap-rails-$VERSION.gem" --host https://rubygems.org
-rm importmap-rails-$VERSION.gem
+branch="$(git branch --show-current)"
+if [ "$branch" != "main" ]; then
+  echo "Release from main, not $branch." >&2
+  exit 1
+fi
+
+git pull --ff-only origin main
+
+if git rev-parse "$tag" >/dev/null 2>&1; then
+  echo "Tag $tag already exists." >&2
+  exit 1
+fi
+
+# An explicit `bin/release 1.0.0` on a version file that already says 1.0.0 —
+# the first release of a version — has nothing to bump, only to tag.
+if [ "$current" != "$next" ]; then
+  ruby -e '
+    path, current, next_version = ARGV
+    source = File.read(path)
+    updated = source.sub(/VERSION = "#{Regexp.escape(current)}"/, %(VERSION = "#{next_version}"))
+    abort "Could not find VERSION = \"#{current}\" in #{path}" if updated == source
+    File.write(path, updated)
+  ' "$VERSION_FILE" "$current" "$next"
+
+  bundle install --quiet
+  git add "$VERSION_FILE" Gemfile.lock
+  git commit -m "Prepare for $next"
+  git push origin main
+else
+  echo "$VERSION_FILE already says $next; tagging it as is."
+fi
+
+git tag -a "$tag" -m "$next"
+git push origin "$tag"
+
+gh release create "$tag" \
+  --repo "$REPO" \
+  --title "$next" \
+  --generate-notes
+
+echo "Released $tag. Watch the push job:"
+echo "  gh run watch --repo $REPO"

@@ -1,0 +1,72 @@
+name: Release
+
+# Publishing a GitHub Release fires this workflow, which builds the gem from
+# that tag and pushes it to RubyGems over trusted publishing (OIDC) — there is
+# no RubyGems API key anywhere in this repository.
+#
+# One-time setup on rubygems.org, before the first release:
+#   Gem → Trusted publishers → Create, with
+#     Repository: zoolutions/importmap-plus
+#     Workflow:   release.yml
+#     Environment: rubygems
+#   A gem that does not exist yet is registered as a *pending* trusted
+#   publisher from https://rubygems.org/trusted_publishers/new — that is what
+#   makes the very first push work without a key.
+on:
+  release:
+    types: [ published ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (defaults to the latest release)"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test before publishing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      - name: Run tests
+        run: bundle exec rake test
+
+  push:
+    name: Push to RubyGems
+    needs: test
+    runs-on: ubuntu-latest
+    environment: rubygems
+    permissions:
+      contents: write
+      # Trusted publishing mints a short-lived RubyGems token from this.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      - name: Verify the tag matches Importmap::VERSION
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          version="v$(ruby -r ./lib/importmap/version -e 'print Importmap::VERSION')"
+          if [ "$tag" != "$version" ]; then
+            echo "Tag $tag does not match $version from lib/importmap/version.rb" >&2
+            exit 1
+          fi
+
+      - uses: rubygems/release-gem@v1

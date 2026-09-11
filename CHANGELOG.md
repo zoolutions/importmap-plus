@@ -1,0 +1,41 @@
+# Changelog
+
+## 1.0.0
+
+First release of importmap-plus, a drop-in replacement for
+[importmap-rails](https://github.com/rails/importmap-rails) 2.2.3. The
+`Importmap::` API, the pin DSL and the generated import map are unchanged;
+`Importmap::UPSTREAM_VERSION` names the importmap-rails release this tracks.
+
+### Added
+
+- **`bin/importmap pin --minify`** runs a download through bun, esbuild or
+  terser — the first found in `node_modules/.bin` or on `PATH`, including
+  Windows `.cmd` shims — before it lands in `vendor/javascript`. Always
+  transform-only, so bare import specifiers stay exactly as the CDN resolved
+  them and the import map keeps resolving them. `pristine --minify` does the
+  same for everything already vendored. Plenty of packages publish unminified
+  ESM (pdfjs-dist, choices.js, luxon), and no CDN minifies them for you.
+- **`--from esm.run`** pins jsDelivr's bundled builds instead of a package's
+  own dist file. A bundle references its dependencies as absolute
+  `/npm/dep@1.2.3/+esm` imports, which resolve only on jsDelivr; those are
+  rewritten to bare specifiers on download and each dependency without a pin
+  is vendored the same way. A dependency the app already pins is left alone,
+  so the bundle resolves to the version the app chose. Versions resolve
+  through jsDelivr's data API, so `pin luxon@3` and `pin apexcharts/core`
+  work as they do on npm.
+- **Provenance in the pin comment.** A vendored pin records the CDN when it
+  isn't jspm and whether the file was minified — `pin "luxon" # @3.7.2
+  (esm.run, minified)`. `update`, `pristine` and a plain `pin` read it back,
+  so a package keeps its CDN and stays minified without repeating the flags.
+  This extends to every CDN: an unpkg download no longer silently moves back
+  to jspm on the next `update`.
+- **An explicit `--from` moves a remote pin** to that CDN, instead of being
+  overruled by the provider the pin already points at.
+
+### Changed
+
+- `bin/release` tags a version and publishes a GitHub Release, which fires
+  `.github/workflows/release.yml` to push the gem over RubyGems trusted
+  publishing. The upstream script pushed from a developer's machine with an
+  API key.

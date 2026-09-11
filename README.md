@@ -1,4 +1,12 @@
-# Importmap for Rails
+# importmap-plus
+
+A drop-in replacement for [importmap-rails](https://github.com/rails/importmap-rails) with better vendoring: `bin/importmap pin --minify`, `--from esm.run` for jsDelivr's bundled builds, and a pin comment that remembers which CDN a package came from so later updates go back to it. Everything else is importmap-rails, constants included, so an app switches by changing one line in its `Gemfile`.
+
+**Install this gem or importmap-rails, never both** — they define the same `Importmap::` constants and the same engine.
+
+See [what this adds](#loading-bundles-from-esmrun) below; the rest of this README is importmap-rails' own, which this gem tracks at the version in `Importmap::UPSTREAM_VERSION`.
+
+---
 
 [Import maps](https://github.com/WICG/import-maps) let you import JavaScript modules using logical names that map to versioned/digested files – directly from the browser. So you can [build modern JavaScript applications using JavaScript libraries made for ES modules (ESM) without the need for transpiling or bundling](https://world.hey.com/dhh/modern-web-apps-without-javascript-bundling-or-transpiling-a20f2755). This frees you from needing Webpack, Yarn, npm, or any other part of the JavaScript toolchain. All you need is the asset pipeline that's already included in Rails.
 
@@ -9,10 +17,12 @@ With this approach you'll ship many small JavaScript files instead of one big Ja
 
 ## Installation
 
-Importmap for Rails is automatically included in Rails 7+ for new applications, but you can also install it manually in existing applications:
+Rails 7+ ships importmap-rails for new applications. To use importmap-plus instead:
 
-1. Run `./bin/bundle add importmap-rails`
-2. Run `./bin/rails importmap:install`
+1. Replace `gem "importmap-rails"` with `gem "importmap-plus"` in your `Gemfile`, or run `./bin/bundle add importmap-plus` in an app that has neither
+2. Run `./bin/rails importmap:install` if the app has no `config/importmap.rb` yet
+
+An app already on importmap-rails needs nothing else: the pins, the `config/importmap.rb`, the helpers and the `Importmap::` constants are unchanged.
 
 Note: In order to use JavaScript from Rails frameworks like Action Cable, Action Text, and Active Storage, you must be running Rails 7.0+. This was the first version that shipped with ESM compatible builds of these libraries.
 
