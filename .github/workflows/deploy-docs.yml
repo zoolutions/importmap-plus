@@ -1,0 +1,26 @@
+name: Deploy docs
+
+# The docs site (docs/) is built and deployed by docs-kit's reusable workflow,
+# defined once for every zoolutions docs site. Its defaults already assume a
+# gem repo with the app at docs/: working_directory docs, dockerfile
+# docs/Dockerfile, build context the repo root (the app depends on the gem
+# through `path: ".."`). Fires on a published release, alongside release.yml,
+# so the docs go live with the gem.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+# The caller MUST grant packages: write — a reusable workflow can only narrow
+# the permissions it's given, never escalate.
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  deploy:
+    uses: zoolutions/docs-kit/.github/workflows/deploy.yml@main
+    with:
+      image: zoolutions/importmap-plus
+      service: importmap-plus
+    secrets: inherit

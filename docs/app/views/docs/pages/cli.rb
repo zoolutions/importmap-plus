@@ -1,0 +1,101 @@
+# frozen_string_literal: true
+
+# Every bin/importmap command and option on one page.
+class Views::Docs::Pages::Cli < DocsUI::Page
+  title "CLI reference"
+  eyebrow "Reference"
+
+  def lead = "Every bin/importmap command, its options, and its exit status."
+
+  def content
+    commands
+    pin_options
+    update_options
+    pristine_options
+    exit_codes
+  end
+
+  private
+
+  def commands
+    DocsUI::Section("Commands") do
+      DocsUI::Table(
+        [ "Command", "What it does", "Docs" ],
+        [
+          [ [ :code, "pin [PACKAGES]" ], "Resolves each package on a CDN, downloads it to vendor/javascript (or pins the URL with --remote) and writes the pin.", [ :md, "[Pinning](/docs/pinning)" ] ],
+          [ [ :code, "unpin [PACKAGES]" ], "Removes the pin and the vendored file.", [ :md, "[Pinning](/docs/pinning)" ] ],
+          [ [ :code, "lock [PACKAGES]" ], "Marks the pins as locked at their current version. No network.", [ :md, "[Locking](/docs/locking)" ] ],
+          [ [ :code, "unlock [PACKAGES]" ], "Removes the lock marker. No network.", [ :md, "[Locking](/docs/locking)" ] ],
+          [ [ :code, "update [PACKAGES]" ], "Re-pins the outdated packages: the named ones, or every one.", [ :md, "[Updating](/docs/updating)" ] ],
+          [ [ :code, "outdated" ], "Lists packages the registry has a newer version of.", [ :md, "[Updating](/docs/updating)" ] ],
+          [ [ :code, "audit" ], "Lists known vulnerabilities for the pinned versions.", [ :md, "[Updating](/docs/updating)" ] ],
+          [ [ :code, "pristine" ], "Redownloads every vendored package at its pinned version.", [ :md, "[Updating](/docs/updating)" ] ],
+          [ [ :code, "packages" ], "Prints every package with a version, one per line.", [ :md, "[Updating](/docs/updating)" ] ],
+          [ [ :code, "json" ], "Boots the app and prints the resolved import map as JSON.", [ :md, "[Updating](/docs/updating)" ] ]
+        ]
+      )
+      md <<~'MD'
+        A package spec is `name[@version][/subpath]`: `react`, `luxon@3`,
+        `luxon@3.7.2`, `apexcharts/core`, `@hotwired/stimulus@3`. `lock` and
+        `unlock` take names only.
+      MD
+    end
+  end
+
+  def pin_options
+    DocsUI::Section("pin options") do
+      DocsUI::PropTable(
+        [
+          [ [ :code, "--from CDN" ], "String", "the pin's CDN, else jspm", "jspm, unpkg, jsdelivr, esm.sh, skypack or esm.run. Also moves a remote pin to that CDN." ],
+          [ [ :code, "--remote" ], "Boolean", "false", "Pin the resolved URL instead of vendoring a download; converts a vendored pin." ],
+          [ [ :code, "--minify / --no-minify" ], "Boolean", "what the pin says", "Run the download through bun, esbuild or terser. Recorded on the pin." ],
+          [ [ :code, "--lock / --no-lock" ], "Boolean", "what the pin says", "Lock the named packages at this version, or drop their lock. Dependencies are never locked." ],
+          [ [ :code, "--force" ], "Boolean", "false", "Re-pin locked packages, keeping each lock at the new version." ],
+          [ [ :code, "--preload VALUE" ], "String, repeatable", "the pin's preload", "true, false, or an entry point name; repeat for several entry points." ],
+          [ [ :code, "--env ENV" ], "String", "production", "The jspm environment condition (production or development)." ]
+        ],
+        headers: [ "Option", "Type", "Default", "Description" ]
+      )
+    end
+  end
+
+  def update_options
+    DocsUI::Section("update options") do
+      DocsUI::PropTable(
+        [
+          [ [ :code, "--all" ], "Boolean", "false", "Update every outdated package — what a bare update does; rejected together with names." ],
+          [ [ :code, "--force" ], "Boolean", "false", "Update locked packages too, keeping each lock at the new version." ]
+        ],
+        headers: [ "Option", "Type", "Default", "Description" ]
+      )
+    end
+  end
+
+  def pristine_options
+    DocsUI::Section("pristine options") do
+      DocsUI::PropTable(
+        [
+          [ [ :code, "--from CDN" ], "String", "each pin's CDN", "Redownload everything from this CDN and record it on each pin." ],
+          [ [ :code, "--minify / --no-minify" ], "Boolean", "what each pin says", "Minify every download, or none, and record it." ],
+          [ [ :code, "--env ENV" ], "String", "production", "The jspm environment condition." ]
+        ],
+        headers: [ "Option", "Type", "Default", "Description" ]
+      )
+    end
+  end
+
+  def exit_codes
+    DocsUI::Section("Exit status") do
+      DocsUI::Table(
+        [ "Command", "Exits 1 when" ],
+        [
+          [ [ :code, "outdated" ], "an unlocked package is outdated" ],
+          [ [ :code, "audit" ], "a vulnerability is known for a pinned version" ],
+          [ [ :code, "update" ], "a named package has no pin, or names are combined with --all; nothing is updated in either case" ],
+          [ [ :code, "lock / unlock" ], "a named package has no pin, has no version to lock at, or was given with a version" ],
+          [ "any", "a CDN or registry request fails after three attempts; the message names the URL" ]
+        ]
+      )
+    end
+  end
+end

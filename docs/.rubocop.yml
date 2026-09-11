@@ -1,0 +1,26 @@
+---
+AllCops:
+  NewCops: enable
+
+inherit_gem:
+  rubocop-rails-omakase: rubocop.yml
+  docs-kit:
+  - config/rubocop/docs_kit.yml
+require:
+- docs_kit/rubocop
+plugins:
+- rubocop-rspec
+
+Style/Documentation:
+  Enabled: false
+
+# Request specs read top-to-bottom and legitimately assert more than once.
+RSpec/ExampleLength:
+  Enabled: false
+RSpec/MultipleExpectations:
+  Enabled: false
+RSpec/DescribeClass:
+  Enabled: false
+# The registry pages and Phlex views are content, not spec'd by class path.
+RSpec/SpecFilePathFormat:
+  Enabled: false
