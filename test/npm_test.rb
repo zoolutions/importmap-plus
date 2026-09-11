@@ -124,7 +124,11 @@ class Importmap::NpmTest < ActiveSupport::TestCase
       def code() "500" end
     end.new
 
-    client.expect(:request, nil, [Net::HTTP::Get])
+    # A 5xx is retried before it is given up on, so the registry is asked
+    # once per attempt and the last answer is the one reported.
+    Importmap::HttpRetries.attempts.times { client.expect(:request, nil, [Net::HTTP::Get]) }
+    original_wait = Importmap::HttpRetries.wait
+    Importmap::HttpRetries.wait = 0
 
     Net::HTTP.stub(:start, response, client) do
       e = assert_raises(Importmap::Npm::HTTPError) do
@@ -132,7 +136,10 @@ class Importmap::NpmTest < ActiveSupport::TestCase
       end
 
       assert_equal "Unexpected error response 500: {\"message\":\"Service unavailable\"}", e.message
+      client.verify
     end
+  ensure
+    Importmap::HttpRetries.wait = original_wait
   end
 
   test "failed vulnerable packages with mock" do
@@ -194,5 +201,38 @@ class Importmap::NpmTest < ActiveSupport::TestCase
     path = File.join(dir, name)
     File.write(path, "console.log(123)")
     path
+  end
+
+  test "outdated packages retries a reset registry connection" do
+    attempts = 0
+    response = Class.new do
+      def code() "200" end
+      def body() { "dist-tags" => { "latest" => "2.3.0" } }.to_json end
+    end.new
+    flaky = ->(*, **) { attempts += 1; raise Errno::ECONNRESET, "SSL_connect" if attempts < 3; response }
+    original_wait = Importmap::HttpRetries.wait
+    Importmap::HttpRetries.wait = 0
+
+    Net::HTTP.stub(:start, flaky) do
+      outdated_packages = @npm.outdated_packages
+
+      assert_equal 3, attempts
+      assert_equal "2.3.0", outdated_packages[0].latest_version
+    end
+  ensure
+    Importmap::HttpRetries.wait = original_wait
+  end
+
+  test "outdated packages gives up on a registry that keeps resetting" do
+    broken = ->(*, **) { raise Errno::ECONNRESET, "SSL_connect" }
+    original_wait = Importmap::HttpRetries.wait
+    Importmap::HttpRetries.wait = 0
+
+    Net::HTTP.stub(:start, broken) do
+      error = assert_raises(Importmap::Npm::HTTPError) { @npm.outdated_packages }
+      assert_match(/SSL_connect/, error.message)
+    end
+  ensure
+    Importmap::HttpRetries.wait = original_wait
   end
 end

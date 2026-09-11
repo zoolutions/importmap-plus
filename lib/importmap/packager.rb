@@ -2,8 +2,11 @@ require "net/http"
 require "uri"
 require "json"
 require "importmap/minifier"
+require "importmap/http_retries"
 
 class Importmap::Packager
+  include Importmap::HttpRetries
+
   PIN_REGEX = /#{Importmap::Map::PIN_REGEX}(.*)/.freeze # :nodoc:
   PRELOAD_OPTION_REGEXP = /preload:\s*(\[[^\]]+\]|true|false|["'][^"']*["'])/.freeze # :nodoc:
   TO_OPTION_REGEXP = /to:\s*["']([^"']*)["']/.freeze # :nodoc:
@@ -52,12 +55,18 @@ class Importmap::Packager
 
   # CDNs reset connections and rate-limit bursts. Each request is tried this
   # many times, pausing retry_wait × attempt between tries, before it fails.
-  singleton_class.attr_accessor :retry_attempts, :retry_wait
-  self.retry_attempts = 3
-  self.retry_wait = 0.5
+  # Shared with Importmap::Npm, which talks to the registry the same way.
+  class << self
+    def retry_attempts = Importmap::HttpRetries.attempts
+    def retry_attempts=(value)
+      Importmap::HttpRetries.attempts = value
+    end
 
-  RETRYABLE_ERRORS = [ SocketError, SystemCallError, Timeout::Error, EOFError, OpenSSL::SSL::SSLError, Net::ProtocolError ].freeze # :nodoc:
-  RETRYABLE_CODES = %w[ 429 500 502 503 504 ].freeze # :nodoc:
+    def retry_wait = Importmap::HttpRetries.wait
+    def retry_wait=(value)
+      Importmap::HttpRetries.wait = value
+    end
+  end
 
   # Anything responding to #call(source) => String. Defaults to the first of
   # bun, esbuild or terser found on the machine.
@@ -268,28 +277,6 @@ class Importmap::Packager
       raise
     rescue => error
       raise HTTPError, "Unexpected transport error (#{error.class}: #{error.message})"
-    end
-
-    # Runs the request again on a reset connection, a timeout or a 429/5xx,
-    # a bounded number of times with a growing pause, so one flaky hop turns
-    # into a slower success instead of a failed pin.
-    def with_retries(description)
-      attempts = 0
-
-      loop do
-        attempts += 1
-
-        begin
-          response = yield
-          return response unless attempts < self.class.retry_attempts && RETRYABLE_CODES.include?(response.code.to_s)
-        rescue *RETRYABLE_ERRORS => error
-          unless attempts < self.class.retry_attempts
-            raise HTTPError, "Unexpected transport error #{description} (#{error.class}: #{error.message})"
-          end
-        end
-
-        sleep self.class.retry_wait * attempts
-      end
     end
 
     def normalize_provider(name)
