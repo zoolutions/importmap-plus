@@ -11,12 +11,14 @@ class Importmap::Commands < Thor
 
   desc "pin [*PACKAGES]", "Pin new packages"
   option :env, type: :string, aliases: :e, default: "production"
-  option :from, type: :string, aliases: :f, default: "jspm"
+  option :from, type: :string, aliases: :f, desc: "CDN to resolve from: jspm (default), unpkg, jsdelivr, esm.sh, skypack or esm.run"
   option :preload, type: :string, repeatable: true, desc: "Can be used multiple times"
   option :remote, type: :boolean, default: false, desc: "Pin to the remote URL instead of vendoring a download"
+  option :minify, type: :boolean, desc: "Minify the vendored download with bun, esbuild or terser"
   def pin(*packages)
-    for_each_import(packages, env: options[:env], from: options[:from]) do |package, url|
-      pin_package(package, url, preload: options[:preload], remote: options[:remote], env: options[:env])
+    for_each_import_grouped_by_provider(packages, env: options[:env], from: options[:from]) do |package, url|
+      pin_package(package, url, preload: options[:preload], remote: options[:remote], env: options[:env],
+                                minify: options[:minify], from: options[:from])
     end
   end
 
@@ -34,17 +36,21 @@ class Importmap::Commands < Thor
 
   desc "pristine", "Redownload all pinned packages"
   option :env, type: :string, aliases: :e, default: "production"
-  option :from, type: :string, aliases: :f, default: "jspm"
+  option :from, type: :string, aliases: :f, desc: "CDN to resolve from; defaults to the one each package was vendored from"
+  option :minify, type: :boolean, desc: "Minify every download; defaults to what each vendored file already is"
   def pristine
     packages = prepare_packages_with_versions
 
-    for_each_import(packages, env: options[:env], from: options[:from]) do |package, url|
+    for_each_import_grouped_by_provider(packages, env: options[:env], from: options[:from]) do |package, url|
       if packager.remote_pin?(package)
         puts %(Skipping "#{package}" (pinned to remote URL))
       else
-        puts %(Downloading "#{package}" to #{packager.vendor_path}/#{package}.js from #{url})
+        minify = options[:minify].nil? ? vendored_minified?(package) : options[:minify]
 
-        packager.download(package, url)
+        puts %(Downloading "#{package}" to #{packager.vendor_path}/#{package}.js from #{url}#{" (minified)" if minify})
+
+        pin_esm_run_dependencies packager.download(package, url, minify: minify), minify: minify
+        record_provenance(package, url, minify) if provenance_changed?(package, url, minify)
       end
     end
   end
@@ -95,7 +101,7 @@ class Importmap::Commands < Thor
   desc "update", "Update outdated package pins"
   def update
     if (outdated_packages = npm.outdated_packages).any?
-      for_each_import(outdated_packages.map(&:name), env: "production", from: "jspm") do |package, url|
+      for_each_import_grouped_by_provider(outdated_packages.map(&:name), env: "production") do |package, url|
         pin_package(package, url)
       end
     else
@@ -117,26 +123,77 @@ class Importmap::Commands < Thor
       @npm ||= Importmap::Npm.new
     end
 
-    def pin_package(package, url, preload: nil, remote: false, env: "production")
+    def pin_package(package, url, preload: nil, remote: false, env: "production", minify: nil, from: nil)
       existing_options = packager.extract_existing_pin_options(package)[package] || {}
       preload = existing_options[:preload] if preload.nil?
       existing_url = existing_options[:to] if existing_options[:to].to_s.match?(Importmap::Packager::REMOTE_URL_REGEXP)
 
       if existing_url
-        repin_remote_package(package, url, existing_url, preload, env: env)
+        repin_remote_package(package, url, existing_url, preload, env: env, from: from)
       elsif remote
         pin_remote_package(package, url, preload)
       else
-        pin_vendored_package(package, url, preload)
+        pin_vendored_package(package, url, preload, minify: minify)
       end
     end
 
-    def pin_vendored_package(package, url, preload)
-      puts %(Pinning "#{package}" to #{packager.vendor_path}/#{package}.js via download from #{url})
+    def pin_vendored_package(package, url, preload, minify: nil)
+      minify = vendored_minified?(package) if minify.nil?
 
-      packager.download(package, url)
+      puts %(Pinning "#{package}" to #{packager.vendor_path}/#{package}.js via download from #{url}#{" (minified)" if minify})
 
-      update_importmap_with_pin(package, packager.vendored_pin_for(package, url, preload))
+      dependencies = packager.download(package, url, minify: minify)
+
+      update_importmap_with_pin(package, packager.vendored_pin_for(package, url, preload, minify: minify))
+
+      pin_esm_run_dependencies(dependencies, preload: preload, minify: minify)
+    end
+
+    # An esm.run bundle imports its dependencies as bare specifiers after
+    # download, so each one needs a pin. Pins the app already has win: the
+    # bundle then resolves to whatever version the app chose.
+    def pin_esm_run_dependencies(dependencies, preload: nil, minify: nil)
+      dependencies.each do |dependency, url|
+        if packager.packaged?(dependency)
+          puts %(Keeping existing pin for "#{dependency}" (bundle was built against #{packager.extract_package_version_from(url)}))
+        else
+          pin_package(dependency, url, preload: preload, minify: minify)
+        end
+      end
+    end
+
+    # pristine can change where a package comes from (--from) or whether it is
+    # minified (--minify) without re-resolving its pin, so rewrite just the
+    # comment those are recorded in. Left alone otherwise: a pin may carry
+    # options, such as integrity, that a rewrite would drop.
+    def record_provenance(package, url, minify)
+      preload = (packager.extract_existing_pin_options(package)[package] || {})[:preload]
+
+      update_importmap_with_pin(package, packager.vendored_pin_for(package, url, preload, minify: minify))
+    end
+
+    def provenance_changed?(package, url, minify)
+      current = packager.pin_provenance(package) || {}
+      desired = packager.provenance_for(url, minify: minify)
+
+      current.values_at(:provider, :minified) != desired.values_at(:provider, :minified)
+    end
+
+    def vendored_minified?(package)
+      packager.pin_provenance(package)&.dig(:minified) || false
+    end
+
+    # A vendored package keeps coming from the CDN its pin comment names, the
+    # way a remote pin keeps its provider, unless --from says otherwise.
+    # Packages that aren't pinned yet resolve from jspm.
+    def for_each_import_grouped_by_provider(packages, env:, from: nil, &block)
+      packages.group_by { |spec| from || vendored_provider_for(spec) || "jspm" }.each do |provider, group|
+        for_each_import(group, env: env, from: provider, &block)
+      end
+    end
+
+    def vendored_provider_for(spec)
+      packager.pin_provenance(packager.package_key_for(spec))&.dig(:provider)
     end
 
     def pin_remote_package(package, url, preload)
@@ -147,7 +204,11 @@ class Importmap::Commands < Thor
       update_importmap_with_pin(package, packager.pin_for(package, url, preloads: preload))
     end
 
-    def repin_remote_package(package, url, existing_url, preload, env:)
+    def repin_remote_package(package, url, existing_url, preload, env:, from: nil)
+      # `url` was already resolved from the requested CDN, so an explicit
+      # --from moves the pin instead of being overruled by its current one.
+      return pin_remote_package(package, url, preload) if from
+
       provider = packager.provider_for_url(existing_url)
 
       if provider.nil?
@@ -179,6 +240,8 @@ class Importmap::Commands < Thor
       else
         append_to_file("config/importmap.rb", new_pin, verbose: false)
       end
+
+      packager.reload!
     end
 
     def handle_package_not_found(packages, from)

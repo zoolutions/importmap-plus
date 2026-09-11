@@ -253,4 +253,298 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     result = packager.extract_existing_pin_options(package_name)
     result[package_name]
   end
+
+  test "provider_for_url tells esm.run bundles apart from plain jsdelivr files" do
+    assert_equal "esm.run", @packager.provider_for_url("https://cdn.jsdelivr.net/npm/md5@2.2.0/+esm")
+    assert_equal "esm.run", @packager.provider_for_url("https://cdn.jsdelivr.net/npm/@hotwired/stimulus@3.2.2/+esm")
+    assert_equal "jsdelivr", @packager.provider_for_url("https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js")
+  end
+
+  test "import from esm.run resolves versions through jsDelivr's data API" do
+    requested = []
+    resolved = Class.new do
+      def code() "200" end
+      def body() { "version" => "9.9.9" }.to_json end
+    end.new
+
+    Net::HTTP.stub(:get_response, ->(uri) { requested << uri.to_s; resolved }) do
+      result = @packager.import("md5", "@hotwired/stimulus@3", "apexcharts@7.1.0/core", from: "esm.run")
+
+      assert_equal({
+        "md5"                => "https://cdn.jsdelivr.net/npm/md5@9.9.9/+esm",
+        "@hotwired/stimulus" => "https://cdn.jsdelivr.net/npm/@hotwired/stimulus@9.9.9/+esm",
+        "apexcharts/core"    => "https://cdn.jsdelivr.net/npm/apexcharts@9.9.9/core/+esm"
+      }, result[:imports])
+    end
+
+    assert_equal [
+      "https://data.jsdelivr.com/v1/packages/npm/md5/resolved",
+      "https://data.jsdelivr.com/v1/packages/npm/@hotwired/stimulus/resolved?specifier=3",
+      "https://data.jsdelivr.com/v1/packages/npm/apexcharts/resolved?specifier=7.1.0"
+    ], requested
+  end
+
+  test "import from esm.run keeps an unscoped subpath out of the package name" do
+    requested = []
+    resolved = Class.new do
+      def code() "200" end
+      def body() { "version" => "7.1.0" }.to_json end
+    end.new
+
+    Net::HTTP.stub(:get_response, ->(uri) { requested << uri.to_s; resolved }) do
+      result = @packager.import("apexcharts/core", "@scope/pkg/sub", from: "esm.run")
+
+      assert_equal({
+        "apexcharts/core" => "https://cdn.jsdelivr.net/npm/apexcharts@7.1.0/core/+esm",
+        "@scope/pkg/sub"  => "https://cdn.jsdelivr.net/npm/@scope/pkg@7.1.0/sub/+esm"
+      }, result[:imports])
+    end
+
+    assert_equal [
+      "https://data.jsdelivr.com/v1/packages/npm/apexcharts/resolved",
+      "https://data.jsdelivr.com/v1/packages/npm/@scope/pkg/resolved"
+    ], requested
+  end
+
+  test "import from esm.run returns nil for a package jsDelivr doesn't know" do
+    missing = Class.new { def code() "404" end }.new
+
+    Net::HTTP.stub(:get_response, missing) do
+      assert_nil @packager.import("missing-package-that-doesnt-exist", from: "esm.run")
+    end
+  end
+
+  test "download rewrites an esm.run bundle's imports to bare specifiers and reports its dependencies" do
+    bundle = <<~JS
+      import{a}from"/npm/charenc@0.0.2/+esm";import b from '/npm/@scope/pkg@1.0.0/sub/path/+esm';
+      const c = () => import("/npm/crypt@0.0.2/+esm");
+      export default a
+    JS
+    response = Class.new do
+      define_method(:code) { "200" }
+      define_method(:body) { bundle }
+    end.new
+
+    Dir.mktmpdir do |vendor_dir|
+      packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+      dependencies = Net::HTTP.stub(:get_response, response) do
+        packager.download("md5", "https://cdn.jsdelivr.net/npm/md5@2.2.0/+esm")
+      end
+
+      assert_equal [
+        ["charenc", "https://cdn.jsdelivr.net/npm/charenc@0.0.2/+esm"],
+        ["@scope/pkg/sub/path", "https://cdn.jsdelivr.net/npm/@scope/pkg@1.0.0/sub/path/+esm"],
+        ["crypt", "https://cdn.jsdelivr.net/npm/crypt@0.0.2/+esm"]
+      ], dependencies
+
+      vendored = File.read(Pathname.new(vendor_dir).join("md5.js"))
+      assert_equal "// md5@2.2.0 downloaded from https://cdn.jsdelivr.net/npm/md5@2.2.0/+esm", vendored.lines.first.strip
+      assert_includes vendored, %(from"charenc")
+      assert_includes vendored, %(from '@scope/pkg/sub/path')
+      assert_includes vendored, %(import("crypt"))
+      assert_no_match %r{["']/npm/}, vendored
+    end
+  end
+
+  test "package_key_for names the pin a spec resolves to" do
+    assert_equal "md5", @packager.package_key_for("md5@2.2.0")
+    assert_equal "apexcharts/core", @packager.package_key_for("apexcharts@7.1.0/core")
+    assert_equal "apexcharts/core", @packager.package_key_for("apexcharts/core")
+    assert_equal "@hotwired/stimulus", @packager.package_key_for("@hotwired/stimulus@3")
+    assert_equal "@scope/pkg/sub", @packager.package_key_for("@scope/pkg@1.0.0/sub")
+  end
+
+  test "download warns when a bundle imports one dependency at two versions" do
+    bundle = %(import a from"/npm/charenc@0.0.1/+esm";import b from"/npm/charenc@0.0.2/+esm";export default[a,b])
+    response = Class.new do
+      define_method(:code) { "200" }
+      define_method(:body) { bundle }
+    end.new
+
+    Dir.mktmpdir do |vendor_dir|
+      packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+      dependencies = nil
+      _out, err = capture_io do
+        dependencies = Net::HTTP.stub(:get_response, response) do
+          packager.download("md5", "https://cdn.jsdelivr.net/npm/md5@2.2.0/+esm")
+        end
+      end
+
+      assert_equal [ [ "charenc", "https://cdn.jsdelivr.net/npm/charenc@0.0.1/+esm" ] ], dependencies
+      assert_match(/charenc is imported at 0\.0\.1, 0\.0\.2/, err)
+      assert_equal 2, File.read(Pathname.new(vendor_dir).join("md5.js")).scan(%(from"charenc")).size
+    end
+  end
+
+  test "download only rewrites an esm.run bundle's module specifiers" do
+    bundle = %(import a from"/npm/charenc@0.0.2/+esm";const u="/npm/sneaky@1.0.0/+esm";export default[a,u])
+    response = Class.new do
+      define_method(:code) { "200" }
+      define_method(:body) { bundle }
+    end.new
+
+    Dir.mktmpdir do |vendor_dir|
+      packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+      dependencies = Net::HTTP.stub(:get_response, response) do
+        packager.download("md5", "https://cdn.jsdelivr.net/npm/md5@2.2.0/+esm")
+      end
+
+      assert_equal [ [ "charenc", "https://cdn.jsdelivr.net/npm/charenc@0.0.2/+esm" ] ], dependencies
+
+      vendored = File.read(Pathname.new(vendor_dir).join("md5.js"))
+      assert_includes vendored, %(import a from"charenc")
+      assert_includes vendored, %(const u="/npm/sneaky@1.0.0/+esm")
+    end
+  end
+
+  test "reload! drops the cached import map so a pin written now is seen next" do
+    Dir.mktmpdir do |dir|
+      importmap_path = Pathname.new(dir).join("importmap.rb")
+      File.write(importmap_path, %(pin "react" # @17.0.2\n))
+      packager = Importmap::Packager.new(importmap_path)
+
+      assert packager.packaged?("react")
+      assert_not packager.packaged?("md5")
+
+      File.write(importmap_path, %(pin "react" # @17.0.2\npin "md5" # @2.2.0\n))
+      assert_not packager.packaged?("md5"), "expected the import map to be memoized"
+
+      packager.reload!
+      assert packager.packaged?("md5")
+    end
+  end
+
+  test "provenance_for describes what a pin for this URL would record" do
+    assert_equal({ provider: nil, minified: false },
+                 @packager.provenance_for("https://ga.jspm.io/npm:react@17.0.2/index.js"))
+    assert_equal({ provider: nil, minified: true },
+                 @packager.provenance_for("https://ga.jspm.io/npm:react@17.0.2/index.js", minify: true))
+    assert_equal({ provider: "esm.run", minified: false },
+                 @packager.provenance_for("https://cdn.jsdelivr.net/npm/luxon@3.7.2/+esm"))
+    assert_equal({ provider: "unpkg", minified: false },
+                 @packager.provenance_for("https://unpkg.com/react@17.0.2/index.js"))
+  end
+
+  test "download with minify runs the minifier and records it in the file header" do
+    response = Class.new do
+      def code() "200" end
+      def body() "export  const   answer = 42;\n//# sourceMappingURL=index.js.map\n" end
+    end.new
+    original_minifier = Importmap::Packager.minifier
+    Importmap::Packager.minifier = ->(source) { "MINIFIED:#{source.gsub(/\s+/, " ")}" }
+
+    Dir.mktmpdir do |vendor_dir|
+      packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+      dependencies = Net::HTTP.stub(:get_response, response) do
+        packager.download("react", "https://ga.jspm.io/npm:react@17.0.2/index.js", minify: true)
+      end
+
+      assert_equal [], dependencies
+
+      vendored = File.read(Pathname.new(vendor_dir).join("react.js"))
+      assert_equal "// react@17.0.2 downloaded from https://ga.jspm.io/npm:react@17.0.2/index.js (minified)", vendored.lines.first.strip
+      assert_includes vendored, "MINIFIED:export const answer = 42;"
+    end
+  ensure
+    Importmap::Packager.minifier = original_minifier
+  end
+
+  test "download retries a reset connection before giving up" do
+    attempts = 0
+    response = Class.new do
+      def code() "200" end
+      def body() "export default 1" end
+    end.new
+    flaky = ->(_uri) { attempts += 1; raise Errno::ECONNRESET, "SSL_connect" if attempts < 3; response }
+
+    without_retry_wait do
+      Dir.mktmpdir do |vendor_dir|
+        packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+        Net::HTTP.stub(:get_response, flaky) { packager.download("react", "https://ga.jspm.io/npm:react@17.0.2/index.js") }
+
+        assert_equal 3, attempts
+        assert_includes File.read(Pathname.new(vendor_dir).join("react.js")), "export default 1"
+      end
+    end
+  end
+
+  test "download gives up on a connection that keeps resetting" do
+    attempts = 0
+    broken = ->(_uri) { attempts += 1; raise Errno::ECONNRESET, "SSL_connect" }
+
+    without_retry_wait do
+      Dir.mktmpdir do |vendor_dir|
+        packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+        error = Net::HTTP.stub(:get_response, broken) do
+          assert_raises(Importmap::Packager::HTTPError) { packager.download("react", "https://ga.jspm.io/npm:react@17.0.2/index.js") }
+        end
+
+        assert_equal Importmap::Packager.retry_attempts, attempts
+        assert_match(/Connection reset|SSL_connect/, error.message)
+        assert_not File.exist?(Pathname.new(vendor_dir).join("react.js"))
+      end
+    end
+  end
+
+  test "import retries a rate-limited response" do
+    responses = [
+      Class.new { def code() "429" end; def body() "" end }.new,
+      Class.new { def code() "200" end; def body() { "map" => { "imports" => { "react" => "https://ga.jspm.io/npm:react@17.0.2/index.js" } } }.to_json end }.new
+    ]
+    attempts = 0
+
+    without_retry_wait do
+      Net::HTTP.stub(:post, ->(*) { attempts += 1; responses.shift }) do
+        assert_equal "https://ga.jspm.io/npm:react@17.0.2/index.js", @packager.import("react@17.0.2")[:imports]["react"]
+      end
+    end
+
+    assert_equal 2, attempts
+  end
+
+  test "vendored_pin_for records a non-default CDN and minification in the version comment" do
+    assert_equal %(pin "react" # @17.0.2), @packager.vendored_pin_for("react", "https://ga.jspm.io/npm:react@17.0.2/index.js")
+    assert_equal %(pin "react" # @17.0.2 (minified)),
+                 @packager.vendored_pin_for("react", "https://ga.jspm.io/npm:react@17.0.2/index.js", minify: true)
+    assert_equal %(pin "react" # @17.0.2 (unpkg)),
+                 @packager.vendored_pin_for("react", "https://unpkg.com/react@17.0.2/index.js")
+    assert_equal %(pin "luxon", preload: false # @3.7.2 (esm.run, minified)),
+                 @packager.vendored_pin_for("luxon", "https://cdn.jsdelivr.net/npm/luxon@3.7.2/+esm", false, minify: true)
+  end
+
+  test "pin_provenance reads the version comment back" do
+    Dir.mktmpdir do |dir|
+      importmap_path = Pathname.new(dir).join("importmap.rb")
+      File.write(importmap_path, <<~RUBY)
+        pin "react" # @17.0.2
+        pin "luxon", preload: false # @3.7.2 (esm.run, minified)
+        pin "md5" # @2.2.0 (unpkg)
+        pin "choices.js" # @11.2.4 (minified)
+        pin "application"
+      RUBY
+      packager = Importmap::Packager.new(importmap_path)
+
+      assert_equal({ version: "17.0.2", provider: nil, minified: false }, packager.pin_provenance("react"))
+      assert_equal({ version: "3.7.2", provider: "esm.run", minified: true }, packager.pin_provenance("luxon"))
+      assert_equal({ version: "2.2.0", provider: "unpkg", minified: false }, packager.pin_provenance("md5"))
+      assert_equal({ version: "11.2.4", provider: nil, minified: true }, packager.pin_provenance("choices.js"))
+      assert_nil packager.pin_provenance("application")
+      assert_nil packager.pin_provenance("not-pinned")
+    end
+  end
+
+  private
+    def without_retry_wait
+      original = Importmap::Packager.retry_wait
+      Importmap::Packager.retry_wait = 0
+      yield
+    ensure
+      Importmap::Packager.retry_wait = original
+    end
 end
