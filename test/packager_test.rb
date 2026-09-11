@@ -347,6 +347,37 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     end
   end
 
+  test "package_key_for names the pin a spec resolves to" do
+    assert_equal "md5", @packager.package_key_for("md5@2.2.0")
+    assert_equal "apexcharts/core", @packager.package_key_for("apexcharts@7.1.0/core")
+    assert_equal "apexcharts/core", @packager.package_key_for("apexcharts/core")
+    assert_equal "@hotwired/stimulus", @packager.package_key_for("@hotwired/stimulus@3")
+    assert_equal "@scope/pkg/sub", @packager.package_key_for("@scope/pkg@1.0.0/sub")
+  end
+
+  test "download warns when a bundle imports one dependency at two versions" do
+    bundle = %(import a from"/npm/charenc@0.0.1/+esm";import b from"/npm/charenc@0.0.2/+esm";export default[a,b])
+    response = Class.new do
+      define_method(:code) { "200" }
+      define_method(:body) { bundle }
+    end.new
+
+    Dir.mktmpdir do |vendor_dir|
+      packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+      dependencies = nil
+      _out, err = capture_io do
+        dependencies = Net::HTTP.stub(:get_response, response) do
+          packager.download("md5", "https://cdn.jsdelivr.net/npm/md5@2.2.0/+esm")
+        end
+      end
+
+      assert_equal [ [ "charenc", "https://cdn.jsdelivr.net/npm/charenc@0.0.1/+esm" ] ], dependencies
+      assert_match(/charenc is imported at 0\.0\.1, 0\.0\.2/, err)
+      assert_equal 2, File.read(Pathname.new(vendor_dir).join("md5.js")).scan(%(from"charenc")).size
+    end
+  end
+
   test "download only rewrites an esm.run bundle's module specifiers" do
     bundle = %(import a from"/npm/charenc@0.0.2/+esm";const u="/npm/sneaky@1.0.0/+esm";export default[a,u])
     response = Class.new do

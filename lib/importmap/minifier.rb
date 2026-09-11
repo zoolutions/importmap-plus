@@ -49,7 +49,7 @@ class Importmap::Minifier
 
   # Pass a tool name to force one, or nothing to use the first one found.
   def initialize(tool = :auto)
-    @tool = tool == :auto ? self.class.detect : tool
+    @tool = tool == :auto ? self.class.detect : tool&.to_s
   end
 
   def call(source)

@@ -193,9 +193,7 @@ class Importmap::Commands < Thor
     end
 
     def vendored_provider_for(spec)
-      package = spec.sub(/(?<=.)@[^@\/]+\z/, "")
-
-      packager.pin_provenance(package)&.dig(:provider)
+      packager.pin_provenance(packager.package_key_for(spec))&.dig(:provider)
     end
 
     def pin_remote_package(package, url, preload)

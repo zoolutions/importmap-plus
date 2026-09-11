@@ -8,6 +8,12 @@ class Importmap::MinifierTest < ActiveSupport::TestCase
     assert_match(/install bun, esbuild or terser/, error.message)
   end
 
+  test "accepts a tool name as a symbol" do
+    assert_equal "esbuild", Importmap::Minifier.new(:esbuild).tool
+    assert_equal "terser", Importmap::Minifier.new("terser").tool
+    assert_nil Importmap::Minifier.new(nil).tool
+  end
+
   test "finds a tool in node_modules/.bin before looking on PATH" do
     Dir.mktmpdir do |dir|
       Dir.chdir(dir) do

@@ -209,6 +209,13 @@ class Importmap::Packager
     provider.to_s == ESM_RUN_PROVIDER
   end
 
+  # The import-map key a package spec pins: "apexcharts@7.1.0/core" pins
+  # "apexcharts/core", "@hotwired/stimulus@3" pins "@hotwired/stimulus".
+  def package_key_for(spec)
+    name, _version, subpath = spec.to_s.match(PACKAGE_SPEC_REGEXP)&.captures
+    name ? "#{name}#{subpath}" : spec.to_s
+  end
+
   def remove_existing_package_file(package)
     FileUtils.rm_rf vendored_package_path(package)
   end
@@ -352,11 +359,23 @@ class Importmap::Packager
     # resolves through the import map, and lists what it needs pinned.
     def rewrite_esm_run_imports(source)
       dependencies = {}
+      versions = Hash.new { |hash, key| hash[key] = [] }
 
       rewritten = source.gsub(ESM_RUN_IMPORT_REGEXP) do
         keyword, quote, name, version, subpath = $1, $2, $3, $4, $5.to_s
-        dependencies["#{name}#{subpath}"] ||= "#{ESM_RUN_CDN}#{name}@#{version}#{subpath}/+esm"
+        key = "#{name}#{subpath}"
+        dependencies[key] ||= "#{ESM_RUN_CDN}#{name}@#{version}#{subpath}/+esm"
+        versions[key] << version unless versions[key].include?(version)
         "#{keyword}#{quote}#{name}#{subpath}#{quote}"
+      end
+
+      # An import map maps a bare specifier to one file, so a bundle that
+      # imports the same package at two versions can only get the first one
+      # it asked for. Say so rather than pick silently.
+      versions.each do |key, seen|
+        next if seen.one?
+
+        warn %(#{key} is imported at #{seen.join(", ")} by this bundle; pinning @#{seen.first}, an import map holds one version)
       end
 
       [rewritten, dependencies.to_a]
