@@ -1,5 +1,11 @@
 name: CI
-on: [push, pull_request]
+# The command tests talk to live CDNs (jspm, jsDelivr). A push to a PR branch
+# used to start a push run AND a pull_request run — two full matrices hitting
+# the same endpoints at once — so run pushes only for main.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
 jobs:
   tests:
     strategy:
