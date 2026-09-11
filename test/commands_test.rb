@@ -375,7 +375,14 @@ class CommandsTest < ActiveSupport::TestCase
       File.write("#{@tmpdir}/dummy/config/importmap.rb", "#{content}\n")
     end
 
+    # bin/importmap talks to live CDNs, so when it fails the reason is in its
+    # output — surface it instead of a bare "Command failed with exit 1".
     def run_importmap_command(command, *args)
-      capture_subprocess_io { system("bin/importmap", command, *args, exception: true) }
+      status = nil
+      out, err = capture_subprocess_io { status = system("bin/importmap", command, *args) }
+
+      flunk "bin/importmap #{[command, *args].join(" ")} failed (#{$?.exitstatus.inspect}):\n#{out}#{err}" unless status
+
+      [out, err]
     end
 end
