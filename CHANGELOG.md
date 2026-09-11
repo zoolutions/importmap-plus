@@ -32,6 +32,10 @@ First release of importmap-plus, a drop-in replacement for
   to jspm on the next `update`.
 - **An explicit `--from` moves a remote pin** to that CDN, instead of being
   overruled by the provider the pin already points at.
+- **Requests retry.** A reset connection, a timeout or a 429/5xx from the
+  CDN is tried up to three times with a growing pause before `bin/importmap`
+  gives up, and the failure then names the URL instead of a raw backtrace.
+  `Importmap::Packager.retry_attempts` / `retry_wait` tune it.
 
 ### Changed
 
