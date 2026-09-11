@@ -121,20 +121,26 @@ class Importmap::Commands < Thor
     end
   end
 
-  desc "update", "Update outdated package pins"
-  def update
-    if (outdated_packages = npm.outdated_packages).any?
-      packages = without_locked_updates(outdated_packages.map(&:name))
+  desc "update [*PACKAGES]", "Update outdated package pins"
+  option :all, type: :boolean, default: false, desc: "Update every outdated package (the default when no names are given)"
+  option :force, type: :boolean, default: false, desc: "Update locked packages too, keeping each lock at the new version"
+  def update(*packages)
+    if packages.any? && options[:all]
+      puts "Pass package names or --all, not both"
+      exit 1
+    end
 
-      if packages.empty?
-        puts "Nothing to update (every outdated package is locked)"
-      else
-        for_each_import_grouped_by_provider(packages, env: "production") do |package, url|
-          pin_package(package, url)
-        end
-      end
-    else
+    outdated_packages = npm.outdated_packages(only: packages.presence)
+    exit 1 unless every_package_known?(packages, outdated_packages)
+
+    if outdated_packages.empty?
       puts "No outdated packages found"
+    elsif (names = without_locked_updates(outdated_packages.map(&:name), force: options[:force])).empty?
+      puts "Nothing to update (every outdated package is locked; pass --force)"
+    else
+      for_each_import_grouped_by_provider(names, env: "production") do |package, url|
+        pin_package(package, url)
+      end
     end
   end
 
@@ -232,20 +238,44 @@ class Importmap::Commands < Thor
       specs.reject do |spec|
         package = packager.package_key_for(spec)
 
-        packager.locked?(package).tap do |locked|
-          puts %(Skipping "#{package}" (locked at #{packager.pin_provenance(package)[:version]}; run bin/importmap unlock #{package} or pass --force)) if locked
-        end
+        packager.locked?(package).tap { |locked| puts skip_locked_message(package) if locked }
       end
     end
 
     # update sees npm names (apexcharts) where pins are import-map keys
     # (apexcharts/core), so a lock on any pin of the package holds it.
-    def without_locked_updates(names)
+    def without_locked_updates(names, force: false)
+      return names if force
+
       names.reject do |name|
-        (locked = locked_pin_covering(name)).tap do
-          puts %(Skipping "#{name}" (locked at #{packager.pin_provenance(locked)[:version]}; run bin/importmap unlock #{locked})) if locked
-        end
+        (locked = locked_pin_covering(name)).tap { puts skip_locked_message(locked) if locked }
       end
+    end
+
+    def skip_locked_message(package)
+      %(Skipping "#{package}" (locked at #{packager.pin_provenance(package)[:version]}; run bin/importmap unlock #{package} or pass --force))
+    end
+
+    # Says why a named package won't be updated. A name with no pin at all
+    # is a typo until proven otherwise, so nothing is updated in that case.
+    def every_package_known?(names, outdated_packages)
+      versioned = npm.packages_with_versions.to_h
+      outdated  = outdated_packages.map(&:name)
+
+      names.map do |name|
+        next true if outdated.include?(name)
+
+        if versioned.key?(name)
+          puts %("#{name}" is already up to date (#{versioned[name]}))
+        elsif packager.packaged?(name)
+          puts %(Can't tell whether "#{name}" is outdated: its pin has no version)
+        else
+          puts %(Couldn't find a pin for "#{name}")
+          next false
+        end
+
+        true
+      end.all?
     end
 
     def locked_pin_covering(name)

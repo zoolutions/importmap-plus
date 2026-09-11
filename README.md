@@ -147,6 +147,17 @@ If you later wish to remove a downloaded pin:
 Unpinning and removing "react"
 ```
 
+### Updating packages
+
+`./bin/importmap update` re-pins every package the npm registry has a newer version of. Name packages to update just those, or pass `--all` to say explicitly that you mean everything:
+
+```bash
+./bin/importmap update luxon stimulus-use
+./bin/importmap update --all
+```
+
+A named package that isn't outdated, or has no version to compare, is reported and left alone; a name with no pin at all stops the command before anything is updated. A package is re-resolved together with the dependencies its CDN lists for it, so those move as well, keeping their own pin options. [Locked](#locking-a-package-at-a-version) packages are skipped; `--force` updates them too and keeps each lock at the new version.
+
 ### Pinning to remote CDN URLs
 
 If you'd rather load a package straight from the CDN instead of vendoring a download, pass `--remote`:
@@ -214,7 +225,7 @@ pin "@hotwired/stimulus", to: "@hotwired--stimulus.js" # @3.2.2 (esm.run, locked
 pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: false # @2.2.0 (locked)
 ```
 
-A locked package is skipped by `./bin/importmap update` and by a plain `pin` of the same package, each saying so. `pin luxon@4.0.0 --force` moves it and keeps the lock at the new version; `pin luxon@4.0.0 --lock` does the same; `--no-lock` moves it and drops the lock. `pristine` redownloads a locked package at the version it is locked at. Only the packages you name are locked — the dependencies a CDN resolves alongside them keep floating. `outdated` still lists a locked package that has a newer version, marked in its Locked column, but doesn't count it as drift: it exits 1 only when an unlocked package is outdated.
+A locked package is skipped by `./bin/importmap update` and by a plain `pin` of the same package, each saying so. `update --force` and `pin luxon@4.0.0 --force` move it and keep the lock at the new version; `pin luxon@4.0.0 --lock` does the same; `--no-lock` moves it and drops the lock. `pristine` redownloads a locked package at the version it is locked at. Only the packages you name are locked — the dependencies a CDN resolves alongside them keep floating. `outdated` still lists a locked package that has a newer version, marked in its Locked column, but doesn't count it as drift: it exits 1 only when an unlocked package is outdated.
 
 ### Minifying vendored packages
 

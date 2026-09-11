@@ -14,6 +14,13 @@
   file. `pristine` still redownloads a locked package, at the locked
   version. Only the packages named on the command line are locked, never
   the dependencies a CDN resolves with them.
+- **`update` takes package names, `--all` and `--force`.**
+  `bin/importmap update luxon stimulus-use` re-pins just those, asking the
+  registry about them alone; `update --all` says explicitly what a bare
+  `update` has always done. A named package that is up to date, or has no
+  version to compare, is reported; a name with no pin stops the command
+  before anything is touched. `--force` updates locked packages too and
+  keeps each lock at the new version.
 - **`outdated` shows locks.** A new Locked column marks packages held at
   their version, and the command exits 1 only when an unlocked package is
   outdated, so CI stays green for the versions the app chose.
