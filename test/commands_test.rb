@@ -108,6 +108,17 @@ class CommandsTest < ActiveSupport::TestCase
     assert_not_includes updated_content, "integrity:"
   end
 
+  test "update command preserves a boolean integrity option" do
+    importmap_config('pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: false, integrity: false')
+
+    out, _err = run_importmap_command("update")
+
+    assert_includes out, "Pinning"
+
+    updated_content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes updated_content, 'pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.3.0/md5.js", preload: false, integrity: false'
+  end
+
   test "update command handles packages with different quote styles" do
     importmap_config("pin 'md5', to: 'https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js', preload: false")
 

@@ -126,25 +126,26 @@ class Importmap::Commands < Thor
     def pin_package(package, url, preload: nil, remote: false, env: "production", minify: nil, from: nil)
       existing_options = packager.extract_existing_pin_options(package)[package] || {}
       preload = existing_options[:preload] if preload.nil?
+      integrity = existing_options[:integrity]
       existing_url = existing_options[:to] if existing_options[:to].to_s.match?(Importmap::Packager::REMOTE_URL_REGEXP)
 
       if existing_url
-        repin_remote_package(package, url, existing_url, preload, env: env, from: from)
+        repin_remote_package(package, url, existing_url, preload, env: env, from: from, integrity: integrity)
       elsif remote
-        pin_remote_package(package, url, preload)
+        pin_remote_package(package, url, preload, integrity: integrity)
       else
-        pin_vendored_package(package, url, preload, minify: minify)
+        pin_vendored_package(package, url, preload, minify: minify, integrity: integrity)
       end
     end
 
-    def pin_vendored_package(package, url, preload, minify: nil)
+    def pin_vendored_package(package, url, preload, minify: nil, integrity: nil)
       minify = vendored_minified?(package) if minify.nil?
 
       puts %(Pinning "#{package}" to #{packager.vendor_path}/#{package}.js via download from #{url}#{" (minified)" if minify})
 
       dependencies = packager.download(package, url, minify: minify)
 
-      update_importmap_with_pin(package, packager.vendored_pin_for(package, url, preload, minify: minify))
+      update_importmap_with_pin(package, packager.vendored_pin_for(package, url, preload, minify: minify, integrity: integrity))
 
       pin_esm_run_dependencies(dependencies, preload: preload, minify: minify)
     end
@@ -167,9 +168,10 @@ class Importmap::Commands < Thor
     # comment those are recorded in. Left alone otherwise: a pin may carry
     # options, such as integrity, that a rewrite would drop.
     def record_provenance(package, url, minify)
-      preload = (packager.extract_existing_pin_options(package)[package] || {})[:preload]
+      existing_options = packager.extract_existing_pin_options(package)[package] || {}
 
-      update_importmap_with_pin(package, packager.vendored_pin_for(package, url, preload, minify: minify))
+      update_importmap_with_pin(package, packager.vendored_pin_for(package, url, existing_options[:preload],
+                                                                   minify: minify, integrity: existing_options[:integrity]))
     end
 
     def provenance_changed?(package, url, minify)
@@ -196,27 +198,27 @@ class Importmap::Commands < Thor
       packager.pin_provenance(packager.package_key_for(spec))&.dig(:provider)
     end
 
-    def pin_remote_package(package, url, preload)
+    def pin_remote_package(package, url, preload, integrity: nil)
       puts %(Pinning "#{package}" to #{url})
 
       packager.remove_existing_package_file(package)
 
-      update_importmap_with_pin(package, packager.pin_for(package, url, preloads: preload))
+      update_importmap_with_pin(package, packager.pin_for(package, url, preloads: preload, integrity: integrity))
     end
 
-    def repin_remote_package(package, url, existing_url, preload, env:, from: nil)
+    def repin_remote_package(package, url, existing_url, preload, env:, from: nil, integrity: nil)
       # `url` was already resolved from the requested CDN, so an explicit
       # --from moves the pin instead of being overruled by its current one.
-      return pin_remote_package(package, url, preload) if from
+      return pin_remote_package(package, url, preload, integrity: integrity) if from
 
       provider = packager.provider_for_url(existing_url)
 
       if provider.nil?
         puts %(Skipping "#{package}" pinned to custom URL #{existing_url})
       elsif provider == packager.provider_for_url(url)
-        pin_remote_package(package, url, preload)
+        pin_remote_package(package, url, preload, integrity: integrity)
       elsif (provider_url = resolve_url_from_provider(package, url, provider, env: env))
-        pin_remote_package(package, provider_url, preload)
+        pin_remote_package(package, provider_url, preload, integrity: integrity)
       else
         puts %(Keeping "#{package}" pinned to #{existing_url} (couldn't resolve it from #{provider}))
       end

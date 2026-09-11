@@ -134,6 +134,30 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     assert_equal({}, options)
   end
 
+  test "extract_existing_pin_options keeps a boolean integrity" do
+    temp_importmap = create_temp_importmap(<<~PINS)
+      pin "package1", integrity: false
+      pin "package2", to: "https://cdn/package2@1.0.0/index.js", preload: false, integrity: true
+      pin 'package3', integrity: true # @1.0.0
+    PINS
+    packager = Importmap::Packager.new(temp_importmap)
+
+    assert_equal({ integrity: false }, extract_options_for_package(packager, "package1"))
+    assert_equal({ preload: false, to: "https://cdn/package2@1.0.0/index.js", integrity: true },
+                 extract_options_for_package(packager, "package2"))
+    assert_equal({ integrity: true }, extract_options_for_package(packager, "package3"))
+  end
+
+  test "pin_for and vendored_pin_for keep a boolean integrity" do
+    assert_equal %(pin "react", to: "https://cdn/react", integrity: false),
+                 @packager.pin_for("react", "https://cdn/react", integrity: false)
+    assert_equal %(pin "react", preload: false, integrity: true),
+                 @packager.pin_for("react", preloads: ["false"], integrity: true)
+    assert_equal %(pin "react", integrity: false # @17.0.2),
+                 @packager.vendored_pin_for("react", "https://cdn/react@17.0.2", integrity: false)
+    assert_equal %(pin "react"), @packager.pin_for("react", integrity: nil)
+  end
+
   test "extract_existing_pin_options with multiple options" do
     temp_importmap = create_temp_importmap('pin "package1", to: "path.js", preload: false, integrity: "sha384-abcdef1234567890"')
     packager = Importmap::Packager.new(temp_importmap)

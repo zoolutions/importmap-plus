@@ -10,6 +10,9 @@ class Importmap::Packager
   PIN_REGEX = /#{Importmap::Map::PIN_REGEX}(.*)/.freeze # :nodoc:
   PRELOAD_OPTION_REGEXP = /preload:\s*(\[[^\]]+\]|true|false|["'][^"']*["'])/.freeze # :nodoc:
   TO_OPTION_REGEXP = /to:\s*["']([^"']*)["']/.freeze # :nodoc:
+  # Only the booleans: a hash string is tied to the file it was computed for,
+  # so a rewrite that changes the URL has to drop it.
+  INTEGRITY_OPTION_REGEXP = /integrity:\s*(true|false)\b/.freeze # :nodoc:
   REMOTE_URL_REGEXP = %r{\Ahttps?://}.freeze # :nodoc:
 
   PROVIDER_HOSTS = {
@@ -103,11 +106,12 @@ class Importmap::Packager
     end
   end
 
-  def pin_for(package, url = nil, preloads: nil)
+  def pin_for(package, url = nil, preloads: nil, integrity: nil)
     to = url ? %(, to: "#{url}") : ""
     preload_param = preload(preloads)
+    integrity_param = integrity.nil? ? "" : %(, integrity: #{integrity})
 
-     %(pin "#{package}") + to + preload_param
+    %(pin "#{package}") + to + preload_param + integrity_param
   end
 
   # The pin line for a vendored download. The version comment also records
@@ -117,7 +121,7 @@ class Importmap::Packager
   #   pin "luxon" # @3.7.2
   #   pin "luxon" # @3.7.2 (esm.run, minified)
   #
-  def vendored_pin_for(package, url, preloads = nil, minify: false)
+  def vendored_pin_for(package, url, preloads = nil, minify: false, integrity: nil)
     filename = package_filename(package)
     version  = extract_package_version_from(url)
     to = "#{package}.js" != filename ? filename : nil
@@ -126,7 +130,7 @@ class Importmap::Packager
     provenance << provider_for_url(url) if provider_for_url(url) && provider_for_url(url) != DEFAULT_PROVIDER
     provenance << "minified" if minify
 
-    pin_for(package, to, preloads: preloads) + %( # #{version}) + (provenance.any? ? %( (#{provenance.join(", ")})) : "")
+    pin_for(package, to, preloads: preloads, integrity: integrity) + %( # #{version}) + (provenance.any? ? %( (#{provenance.join(", ")})) : "")
   end
 
   # What the pin's version comment says a vendored package was built with:
@@ -241,6 +245,10 @@ class Importmap::Packager
 
           if (to_match = options_part.match(TO_OPTION_REGEXP))
             options[:to] = to_match[1]
+          end
+
+          if (integrity_match = options_part.match(INTEGRITY_OPTION_REGEXP))
+            options[:integrity] = integrity_match[1] == "true"
           end
 
           package_options[package_name] = options if options.any?
