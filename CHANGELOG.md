@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.1.0
+
+### Added
+
+- **Version locks.** `bin/importmap pin luxon@3.7.2 --lock`, or
+  `bin/importmap lock luxon` for a package already pinned, records the lock
+  in the version comment — `pin "luxon" # @3.7.2 (locked)` — and `update`
+  and a plain `pin` skip the package from then on, saying so. A remote pin
+  gains the comment too, carrying the version from its URL. `pin --force`
+  moves a locked package and keeps the lock at the new version; `--no-lock`
+  drops it; `bin/importmap unlock luxon` removes it without touching the
+  file. `pristine` still redownloads a locked package, at the locked
+  version. Only the packages named on the command line are locked, never
+  the dependencies a CDN resolves with them.
+- **`outdated` shows locks.** A new Locked column marks packages held at
+  their version, and the command exits 1 only when an unlocked package is
+  outdated, so CI stays green for the versions the app chose.
+- **`integrity: true` and `integrity: false` survive a rewrite.** An
+  `update`, `pristine` or `pin` used to drop the option; only an integrity
+  hash, which belongs to the old file, is still removed when the URL changes.
+
 ## 1.0.0
 
 First release of importmap-plus, a drop-in replacement for

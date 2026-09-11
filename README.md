@@ -1,6 +1,6 @@
 # importmap-plus
 
-A drop-in replacement for [importmap-rails](https://github.com/rails/importmap-rails) with better vendoring: `bin/importmap pin --minify`, `--from esm.run` for jsDelivr's bundled builds, and a pin comment that remembers which CDN a package came from so later updates go back to it. Everything else is importmap-rails, constants included, so an app switches by changing one line in its `Gemfile`.
+A drop-in replacement for [importmap-rails](https://github.com/rails/importmap-rails) with better vendoring: `bin/importmap pin --minify`, `--from esm.run` for jsDelivr's bundled builds, `--lock` to hold a package at a version, and a pin comment that remembers all of it so later updates respect it. Everything else is importmap-rails, constants included, so an app switches by changing one line in its `Gemfile`.
 
 **Install this gem or importmap-rails, never both** — they define the same `Importmap::` constants and the same engine.
 
@@ -164,7 +164,7 @@ pin "react", to: "https://ga.jspm.io/npm:react@19.1.0/index.js"
 
 Remote pins are respected from then on — no `--remote` flag needed. When a remote-pinned package is pinned again or picked up by `./bin/importmap update` (whether directly or as a dependency of another package), the pin stays remote: the URL is re-resolved from the same CDN provider it already points to (`ga.jspm.io`, `unpkg.com`, `cdn.jsdelivr.net`, `cdn.skypack.dev`, or `esm.sh`) instead of being replaced with a download. Pins pointing at any other host are left completely untouched and reported as skipped, and `./bin/importmap pristine` skips remote pins since there is nothing to redownload.
 
-Options on existing pins, like `preload: false`, are preserved when a pin is rewritten. An explicit `integrity:` value is dropped when the URL changes, since the old hash would no longer match — see the SRI section below for pinning fresh integrity hashes.
+Options on existing pins, like `preload: false` and `integrity: false`, are preserved when a pin is rewritten. An explicit `integrity:` hash is dropped when the URL changes, since the old hash would no longer match — see the SRI section below for pinning fresh integrity hashes.
 
 ### Loading bundles from esm.run
 
@@ -197,6 +197,24 @@ pin "react" # @19.1.0 (unpkg)
 ```
 
 `./bin/importmap update` and `./bin/importmap pristine` read it and go back to the same CDN — an esm.run bundle stays a bundle, an unpkg download stays on unpkg — and so does `pin` when you leave out `--from`. Pass `--from` to move a package to another CDN; an explicit `--from` moves a remote pin too, which is otherwise re-resolved from the CDN it already points at.
+
+### Locking a package at a version
+
+Some packages you want to hold: a major you haven't migrated to yet, a release that broke something. Pass `--lock` when pinning, or lock what is already pinned, and the version comment says so:
+
+```bash
+./bin/importmap pin luxon@3.7.2 --lock
+./bin/importmap lock @hotwired/stimulus
+./bin/importmap unlock luxon
+```
+
+```ruby
+pin "luxon" # @3.7.2 (locked)
+pin "@hotwired/stimulus", to: "@hotwired--stimulus.js" # @3.2.2 (esm.run, locked)
+pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: false # @2.2.0 (locked)
+```
+
+A locked package is skipped by `./bin/importmap update` and by a plain `pin` of the same package, each saying so. `pin luxon@4.0.0 --force` moves it and keeps the lock at the new version; `pin luxon@4.0.0 --lock` does the same; `--no-lock` moves it and drops the lock. `pristine` redownloads a locked package at the version it is locked at. Only the packages you name are locked — the dependencies a CDN resolves alongside them keep floating. `outdated` still lists a locked package that has a newer version, marked in its Locked column, but doesn't count it as drift: it exits 1 only when an unlocked package is outdated.
 
 ### Minifying vendored packages
 
@@ -440,7 +458,7 @@ end
 ## Checking for outdated or vulnerable packages
 
 Importmap for Rails provides two commands to check your pinned packages:
-- `./bin/importmap outdated` checks the NPM registry for new versions
+- `./bin/importmap outdated` checks the NPM registry for new versions. A [locked](#locking-a-package-at-a-version) package is listed with `yes` in the Locked column and doesn't make the command exit 1 — only an unlocked outdated package does.
 - `./bin/importmap audit` checks the NPM registry for known security issues
 
 ## Supporting legacy browsers such as Safari on iOS 15

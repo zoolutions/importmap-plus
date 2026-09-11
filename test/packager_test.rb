@@ -554,13 +554,113 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       RUBY
       packager = Importmap::Packager.new(importmap_path)
 
-      assert_equal({ version: "17.0.2", provider: nil, minified: false }, packager.pin_provenance("react"))
-      assert_equal({ version: "3.7.2", provider: "esm.run", minified: true }, packager.pin_provenance("luxon"))
-      assert_equal({ version: "2.2.0", provider: "unpkg", minified: false }, packager.pin_provenance("md5"))
-      assert_equal({ version: "11.2.4", provider: nil, minified: true }, packager.pin_provenance("choices.js"))
+      assert_equal({ version: "17.0.2", provider: nil, minified: false, locked: false }, packager.pin_provenance("react"))
+      assert_equal({ version: "3.7.2", provider: "esm.run", minified: true, locked: false }, packager.pin_provenance("luxon"))
+      assert_equal({ version: "2.2.0", provider: "unpkg", minified: false, locked: false }, packager.pin_provenance("md5"))
+      assert_equal({ version: "11.2.4", provider: nil, minified: true, locked: false }, packager.pin_provenance("choices.js"))
       assert_nil packager.pin_provenance("application")
       assert_nil packager.pin_provenance("not-pinned")
     end
+  end
+
+  test "pin_provenance reads a lock back, including the reserved range form" do
+    packager = Importmap::Packager.new(create_temp_importmap(<<~RUBY))
+      pin "react" # @17.0.2 (locked)
+      pin "luxon", preload: false # @3.7.2 (esm.run, minified, locked)
+      pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: false # @2.2.0 (locked)
+      pin "chart.js" # @4.4.0 (unpkg, locked: ~4.4)
+      pin "stimulus-use" # @0.53.1 (esm.run)
+    RUBY
+
+    assert_equal({ version: "17.0.2", provider: nil, minified: false, locked: true }, packager.pin_provenance("react"))
+    assert_equal({ version: "3.7.2", provider: "esm.run", minified: true, locked: true }, packager.pin_provenance("luxon"))
+    assert_equal({ version: "2.2.0", provider: nil, minified: false, locked: true }, packager.pin_provenance("md5"))
+    assert_equal({ version: "4.4.0", provider: "unpkg", minified: false, locked: true }, packager.pin_provenance("chart.js"))
+    assert_equal({ version: "0.53.1", provider: "esm.run", minified: false, locked: false }, packager.pin_provenance("stimulus-use"))
+  end
+
+  test "vendored_pin_for and pin_for record a lock in the version comment" do
+    assert_equal %(pin "react" # @17.0.2 (locked)),
+                 @packager.vendored_pin_for("react", "https://ga.jspm.io/npm:react@17.0.2/index.js", locked: true)
+    assert_equal %(pin "luxon", preload: false # @3.7.2 (esm.run, minified, locked)),
+                 @packager.vendored_pin_for("luxon", "https://cdn.jsdelivr.net/npm/luxon@3.7.2/+esm", false, minify: true, locked: true)
+    assert_equal %(pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: false # @2.2.0 (locked)),
+                 @packager.pin_for("md5", "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preloads: ["false"], locked: true)
+    assert_equal %(pin "md5", to: "https://cdn.example.com/md5.js"),
+                 @packager.pin_for("md5", "https://cdn.example.com/md5.js", locked: true)
+  end
+
+  test "locked? and locked_pins" do
+    packager = Importmap::Packager.new(create_temp_importmap(<<~RUBY))
+      pin "react" # @17.0.2 (locked)
+      pin "@hotwired/stimulus", to: "@hotwired--stimulus.js" # @3.2.2 (esm.run, locked)
+      pin "apexcharts/core", to: "apexcharts--core.js" # @7.1.0 (locked)
+      pin "luxon" # @3.7.2
+      pin "application"
+    RUBY
+
+    assert packager.locked?("react")
+    assert packager.locked?("@hotwired/stimulus")
+    assert_not packager.locked?("luxon")
+    assert_not packager.locked?("application")
+    assert_not packager.locked?("not-pinned")
+    assert_equal %w[react @hotwired/stimulus apexcharts/core], packager.locked_pins
+  end
+
+  test "locked_pin_line adds the marker without touching the rest of the line" do
+    packager = Importmap::Packager.new(create_temp_importmap(<<~RUBY))
+      pin "react" # @17.0.2
+      pin "luxon", preload: false # @3.7.2 (esm.run, minified)
+      pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: false
+      pin 'charenc', preload: true, integrity: false #@0.0.2
+      pin "@hotwired/stimulus", to: "@hotwired--stimulus.js" # @3.2.2
+      pin "already" # @1.0.0 (locked)
+    RUBY
+
+    assert_equal %(pin "react" # @17.0.2 (locked)), packager.locked_pin_line("react")
+    assert_equal %(pin "luxon", preload: false # @3.7.2 (esm.run, minified, locked)), packager.locked_pin_line("luxon")
+    assert_equal %(pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: false # @2.2.0 (locked)),
+                 packager.locked_pin_line("md5")
+    assert_equal %(pin 'charenc', preload: true, integrity: false # @0.0.2 (locked)), packager.locked_pin_line("charenc")
+    assert_equal %(pin "@hotwired/stimulus", to: "@hotwired--stimulus.js" # @3.2.2 (locked)),
+                 packager.locked_pin_line("@hotwired/stimulus")
+    assert_equal %(pin "already" # @1.0.0 (locked)), packager.locked_pin_line("already")
+  end
+
+  test "locked_pin_line returns nil when there is no version to lock at" do
+    packager = Importmap::Packager.new(create_temp_importmap(<<~RUBY))
+      pin "custom", to: "https://cdn.example.com/custom.js"
+      pin "application"
+      pin "local", to: "local.js", preload: false
+    RUBY
+
+    assert_nil packager.locked_pin_line("custom")
+    assert_nil packager.locked_pin_line("application")
+    assert_nil packager.locked_pin_line("local")
+    assert_nil packager.locked_pin_line("not-pinned")
+  end
+
+  test "unlocked_pin_line removes the marker" do
+    packager = Importmap::Packager.new(create_temp_importmap(<<~RUBY))
+      pin "luxon", preload: false # @3.7.2 (esm.run, minified, locked)
+      pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js" # @2.2.0 (locked)
+      pin "chart.js" # @4.4.0 (locked: ~4.4)
+      pin "react" # @17.0.2
+    RUBY
+
+    assert_equal %(pin "luxon", preload: false # @3.7.2 (esm.run, minified)), packager.unlocked_pin_line("luxon")
+    assert_equal %(pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js" # @2.2.0), packager.unlocked_pin_line("md5")
+    assert_equal %(pin "chart.js" # @4.4.0), packager.unlocked_pin_line("chart.js")
+    assert_equal %(pin "react" # @17.0.2), packager.unlocked_pin_line("react")
+    assert_nil packager.unlocked_pin_line("not-pinned")
+  end
+
+  test "extract_existing_pin_options ignores the lock comment" do
+    packager = Importmap::Packager.new(create_temp_importmap(<<~RUBY))
+      pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: false # @2.2.0 (locked)
+    RUBY
+
+    assert_equal({ preload: false, to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js" }, extract_options_for_package(packager, "md5"))
   end
 
   private

@@ -44,6 +44,12 @@ class Importmap::Packager
   #   pin "luxon" # @3.7.2
   #   pin "luxon" # @3.7.2 (esm.run, minified)
   PIN_PROVENANCE_REGEXP = /#\s*@([^\s(]+)(?:\s+\(([^)]*)\))?/.freeze # :nodoc:
+  # A lock is one more detail in that list, always last:
+  #   pin "luxon" # @3.7.2 (esm.run, minified, locked)
+  # "locked: <range>" is reserved for range locks, so it is read as a lock
+  # today rather than mistaken for a provider name.
+  LOCK_DETAIL        = "locked".freeze # :nodoc:
+  LOCK_DETAIL_REGEXP = /\Alocked(?::\s*(.+))?\z/.freeze # :nodoc:
   DEFAULT_PROVIDER = "jspm.io".freeze # :nodoc:
 
   Error        = Class.new(StandardError)
@@ -106,46 +112,82 @@ class Importmap::Packager
     end
   end
 
-  def pin_for(package, url = nil, preloads: nil, integrity: nil)
+  # A remote pin has no version comment unless it is locked; then the version
+  # in its URL is written out so the lock has something to hold:
+  #
+  #   pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js" # @2.2.0 (locked)
+  #
+  def pin_for(package, url = nil, preloads: nil, integrity: nil, locked: false)
     to = url ? %(, to: "#{url}") : ""
     preload_param = preload(preloads)
     integrity_param = integrity.nil? ? "" : %(, integrity: #{integrity})
+    version = extract_package_version_from(url.to_s) if locked
 
-    %(pin "#{package}") + to + preload_param + integrity_param
+    %(pin "#{package}") + to + preload_param + integrity_param + (version ? provenance_comment(version, locked: true) : "")
   end
 
   # The pin line for a vendored download. The version comment also records
-  # the CDN when it isn't jspm and whether the file was minified, so a later
-  # update or pristine can do the same again:
+  # the CDN when it isn't jspm, whether the file was minified and whether the
+  # version is locked, so a later update or pristine can do the same again:
   #
   #   pin "luxon" # @3.7.2
-  #   pin "luxon" # @3.7.2 (esm.run, minified)
+  #   pin "luxon" # @3.7.2 (esm.run, minified, locked)
   #
-  def vendored_pin_for(package, url, preloads = nil, minify: false, integrity: nil)
+  def vendored_pin_for(package, url, preloads = nil, minify: false, integrity: nil, locked: false)
     filename = package_filename(package)
     version  = extract_package_version_from(url)
     to = "#{package}.js" != filename ? filename : nil
 
-    provenance = []
-    provenance << provider_for_url(url) if provider_for_url(url) && provider_for_url(url) != DEFAULT_PROVIDER
-    provenance << "minified" if minify
-
-    pin_for(package, to, preloads: preloads, integrity: integrity) + %( # #{version}) + (provenance.any? ? %( (#{provenance.join(", ")})) : "")
+    pin_for(package, to, preloads: preloads, integrity: integrity) +
+      provenance_comment(version, provider: provider_for_url(url), minified: minify, locked: locked)
   end
 
-  # What the pin's version comment says a vendored package was built with:
-  # { version:, provider:, minified: }, or nil for a pin without one.
+  # What the pin's version comment says a package was built with:
+  # { version:, provider:, minified:, locked: }, or nil for a pin without one.
   def pin_provenance(package)
+    provenance_of(pin_line_for(package))
+  end
+
+  # The line that pins +package+, without its newline, or nil.
+  def pin_line_for(package)
     return unless @importmap_path.exist?
 
-    line = importmap.lines.find { |candidate| candidate.match?(Importmap::Map.pin_line_regexp_for(package)) }
-    match = line&.match(PIN_PROVENANCE_REGEXP)
-    return unless match
+    importmap.lines.find { |candidate| candidate.match?(Importmap::Map.pin_line_regexp_for(package)) }&.chomp
+  end
 
-    details = match[2].to_s.split(",").map(&:strip)
-    minified = details.delete("minified") ? true : false
+  def locked?(package)
+    pin_provenance(package)&.dig(:locked) || false
+  end
 
-    { version: match[1], provider: details.first, minified: minified }
+  # The import-map keys of every locked pin, in file order.
+  def locked_pins
+    return [] unless @importmap_path.exist?
+
+    importmap.lines.filter_map do |line|
+      name = line.strip[PIN_REGEX, 1]
+      name if name && provenance_of(line)&.dig(:locked)
+    end
+  end
+
+  # The pin line with a lock added — to the version comment it has, or as a
+  # new comment carrying the version from its URL. Nothing else on the line is
+  # touched. Nil when the pin has no version to lock at, or isn't there.
+  def locked_pin_line(package)
+    line = pin_line_for(package)
+    return unless line
+
+    if line.match?(PIN_PROVENANCE_REGEXP)
+      rewrite_provenance(line) { |details| without_lock(details) << LOCK_DETAIL }
+    elsif (version = extract_package_version_from((extract_existing_pin_options(package)[package] || {})[:to].to_s))
+      line + provenance_comment(version, locked: true)
+    end
+  end
+
+  # The pin line with its lock removed; an empty detail list drops its parens.
+  def unlocked_pin_line(package)
+    line = pin_line_for(package)
+
+    rewrite_provenance(line) { |details| without_lock(details) } if line
   end
 
   def packaged?(package)
@@ -229,6 +271,43 @@ class Importmap::Packager
   end
 
   private
+    def provenance_of(line)
+      match = line&.match(PIN_PROVENANCE_REGEXP)
+      return unless match
+
+      details  = match[2].to_s.split(",").map(&:strip)
+      minified = details.delete("minified") ? true : false
+      locked   = without_lock(details).size != details.size
+
+      { version: match[1], provider: without_lock(details).first, minified: minified, locked: locked }
+    end
+
+    def without_lock(details)
+      details.reject { |detail| detail.match?(LOCK_DETAIL_REGEXP) }
+    end
+
+    # " # @3.7.2 (esm.run, minified, locked)" — the details in their fixed
+    # order, the parens only when there is something to say.
+    def provenance_comment(version, provider: nil, minified: false, locked: false)
+      details = []
+      details << provider if provider && provider != DEFAULT_PROVIDER
+      details << "minified" if minified
+      details << LOCK_DETAIL if locked
+
+      %( # @#{version.to_s.delete_prefix("@")}) + (details.any? ? %( (#{details.join(", ")})) : "")
+    end
+
+    # Rewrites only the version comment of +line+, handing the block the
+    # current details and writing back what it returns.
+    def rewrite_provenance(line)
+      line.sub(PIN_PROVENANCE_REGEXP) do
+        version = $1
+        details = yield($2.to_s.split(",").map(&:strip))
+
+        "# @#{version}" + (details.any? ? " (#{details.join(", ")})" : "")
+      end
+    end
+
     def build_package_options_lookup(lines)
       lines.each_with_object({}) do |line, package_options|
         match = line.strip.match(PIN_REGEX)
