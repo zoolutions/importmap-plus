@@ -56,8 +56,9 @@ class InstallerTest < ActiveSupport::TestCase
 
         Dir.chdir(app_dir) do
           gemfile = File.read("Gemfile")
+          # rails new adds importmap-rails; this gem replaces it, never joins it.
           gemfile.gsub!(/^gem "importmap-rails".*/, "")
-          gemfile << %(gem "importmap-rails", path: #{File.expand_path("..", __dir__).inspect}\n)
+          gemfile << %(gem "importmap-plus", path: #{File.expand_path("..", __dir__).inspect}\n)
           if Rails::VERSION::PRE == "alpha"
             gemfile.gsub!(/^gem "rails".*/, "")
             gemfile << %(gem "rails", path: #{Gem.loaded_specs["rails"].full_gem_path.inspect}\n)
