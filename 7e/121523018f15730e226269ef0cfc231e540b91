@@ -1,0 +1,21 @@
+lib/importmap/minifier.rb
+  s_1f111bb50e3faf::t_2458a674506246 1-67
+test/minifier_test.rb
+  s_1f111bb50e3faf::t_e040f71cfdf01b 1-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7e121523018f15730e226269ef0cfc231e540b91",
+  "prompts": {},
+  "sessions": {
+    "s_1f111bb50e3faf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0b385fa-b81c-4099-9f9f-7b7fce0a75b2",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
