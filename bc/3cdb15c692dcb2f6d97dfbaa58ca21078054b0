@@ -1,0 +1,23 @@
+bin/release
+  s_1f111bb50e3faf::t_a0fe40000f876b 2-11,13-16,18-68,72-100
+.github/workflows/release.yml
+  s_1f111bb50e3faf::t_17f3851203b409 1-72
+CHANGELOG.md
+  s_1f111bb50e3faf::t_a9e92037412cf2 1-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "bc3cdb15c692dcb2f6d97dfbaa58ca21078054b0",
+  "prompts": {},
+  "sessions": {
+    "s_1f111bb50e3faf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0b385fa-b81c-4099-9f9f-7b7fce0a75b2",
+        "model": "claude-opus-5"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
