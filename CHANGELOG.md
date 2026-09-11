@@ -15,7 +15,8 @@ First release of importmap-plus, a drop-in replacement for
   transform-only, so bare import specifiers stay exactly as the CDN resolved
   them and the import map keeps resolving them. `pristine --minify` does the
   same for everything already vendored. Plenty of packages publish unminified
-  ESM (pdfjs-dist, choices.js, luxon), and no CDN minifies them for you.
+  ESM (pdfjs-dist, choices.js, luxon), and a CDN serving package files
+  hands them out as published.
 - **`--from esm.run`** pins jsDelivr's bundled builds instead of a package's
   own dist file. A bundle references its dependencies as absolute
   `/npm/dep@1.2.3/+esm` imports, which resolve only on jsDelivr; those are

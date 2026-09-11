@@ -12,28 +12,35 @@ name: Release
 #   A gem that does not exist yet is registered as a *pending* trusted
 #   publisher from https://rubygems.org/trusted_publishers/new — that is what
 #   makes the very first push work without a key.
+#
+# Every action below is pinned to a reviewed commit, not a moving tag: the
+# push job can mint a RubyGems token, so a tag that someone re-points must
+# not be able to run different code here.
 on:
   release:
     types: [ published ]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to publish (defaults to the latest release)"
-        required: false
+        description: "Release tag to publish, e.g. v1.0.0"
+        required: true
 
 permissions:
   contents: read
+
+env:
+  RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:
   test:
     name: Test before publishing
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          ref: ${{ env.RELEASE_TAG }}
 
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
         with:
           ruby-version: "3.4"
           bundler-cache: true
@@ -51,22 +58,23 @@ jobs:
       # Trusted publishing mints a short-lived RubyGems token from this.
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          ref: ${{ env.RELEASE_TAG }}
 
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
         with:
           ruby-version: "3.4"
           bundler-cache: true
 
       - name: Verify the tag matches Importmap::VERSION
+        # The tag reaches the shell through the environment, never through
+        # ${{ }} interpolation inside the script, so its characters are data.
         run: |
-          tag="${{ github.event.inputs.tag || github.ref_name }}"
           version="v$(ruby -r ./lib/importmap/version -e 'print Importmap::VERSION')"
-          if [ "$tag" != "$version" ]; then
-            echo "Tag $tag does not match $version from lib/importmap/version.rb" >&2
+          if [ "$RELEASE_TAG" != "$version" ]; then
+            echo "Tag $RELEASE_TAG does not match $version from lib/importmap/version.rb" >&2
             exit 1
           fi
 
-      - uses: rubygems/release-gem@v1
+      - uses: rubygems/release-gem@7f9650160c1a4e7989fdc9855807bdbd421d8b6b # v1.4.1
