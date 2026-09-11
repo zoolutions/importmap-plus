@@ -22,8 +22,14 @@ class Importmap::Packager
   ESM_RUN_PROVIDER    = "esm.run".freeze # :nodoc:
   ESM_RUN_CDN         = "https://cdn.jsdelivr.net/npm/".freeze # :nodoc:
   ESM_RUN_URL_REGEXP  = %r{\Ahttps://cdn\.jsdelivr\.net/npm/.+/\+esm\z}.freeze # :nodoc:
-  ESM_RUN_IMPORT_REGEXP = %r{(["'])/npm/((?:@[^/"'@]+/)?[^/"'@]+)@([^/"']+)((?:/[^"']*?)?)/\+esm\1}.freeze # :nodoc:
-  PACKAGE_SPEC_REGEXP = %r{\A(@?[^@/]+(?:/[^@/]+)?)(?:@([^/]+))?(/.+)?\z}.freeze # :nodoc:
+  # An esm.run bundle's own imports: `from"/npm/dep@1.2.3/+esm"`, `import"…"`,
+  # `import("…")`, `export … from"…"`. Anchored on the keyword so an ordinary
+  # string that happens to look like a bundle URL is left alone.
+  ESM_RUN_IMPORT_REGEXP =
+    %r{((?:\bfrom|\bimport)\s*\(?\s*)(["'])/npm/((?:@[^/"'@]+/)?[^/"'@]+)@([^/"']+)((?:/[^"']*?)?)/\+esm\2}.freeze # :nodoc:
+  # name[@version][/subpath] — a leading "@" distinguishes a scoped name
+  # (@scope/pkg) from an unscoped name with a subpath (apexcharts/core).
+  PACKAGE_SPEC_REGEXP = %r{\A(@[^@/]+/[^@/]+|[^@/]+)(?:@([^/]+))?(/.+)?\z}.freeze # :nodoc:
   # The version comment on a vendored pin, plus what it was built with:
   #   pin "luxon" # @3.7.2
   #   pin "luxon" # @3.7.2 (esm.run, minified)
@@ -146,6 +152,22 @@ class Importmap::Packager
     packages.to_h do |package|
       [package, all_package_options[package] || {}]
     end
+  end
+
+  # Drops the cached import map so a read after a write sees the new file:
+  # pinning an esm.run bundle appends pins and then asks the map what its
+  # dependencies still need.
+  def reload!
+    @importmap = nil
+    self
+  end
+
+  # The provenance a pin would record for +url+, shaped like #pin_provenance
+  # returns, so a caller can tell whether the existing pin already says this.
+  def provenance_for(url, minify: false)
+    provider = provider_for_url(url)
+
+    { provider: provider == DEFAULT_PROVIDER ? nil : provider, minified: minify ? true : false }
   end
 
   def remote_pin?(package)
@@ -306,9 +328,9 @@ class Importmap::Packager
       dependencies = {}
 
       rewritten = source.gsub(ESM_RUN_IMPORT_REGEXP) do
-        quote, name, version, subpath = $1, $2, $3, $4.to_s
+        keyword, quote, name, version, subpath = $1, $2, $3, $4, $5.to_s
         dependencies["#{name}#{subpath}"] ||= "#{ESM_RUN_CDN}#{name}@#{version}#{subpath}/+esm"
-        "#{quote}#{name}#{subpath}#{quote}"
+        "#{keyword}#{quote}#{name}#{subpath}#{quote}"
       end
 
       [rewritten, dependencies.to_a]

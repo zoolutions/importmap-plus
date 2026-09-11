@@ -249,6 +249,47 @@ class CommandsTest < ActiveSupport::TestCase
     assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/charenc.js")
   end
 
+  test "pin command with --from esm.run pins a shared dependency once" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "stimulus-use@0.53.1", "stimulus-autocomplete@3.1.0", "--from", "esm.run")
+
+    assert_includes out, 'Pinning "@hotwired/stimulus"'
+    assert_includes out, 'Keeping existing pin for "@hotwired/stimulus"'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_equal 1, content.scan(/^pin "@hotwired\/stimulus"/).size
+  end
+
+  test "pin command with an explicit --from moves a remote pin to that CDN" do
+    importmap_config('pin "md5", to: "https://ga.jspm.io/npm:md5@2.2.0/md5.js", preload: false')
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0", "--from", "unpkg")
+
+    assert_includes out, 'Pinning "md5" to https://unpkg.com/md5@2.2.0/md5.js'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, 'pin "md5", to: "https://unpkg.com/md5@2.2.0/md5.js", preload: false'
+    assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/md5.js")
+  end
+
+  test "pristine command with --from records the new CDN in the pin" do
+    importmap_config("")
+    run_importmap_command("pin", "md5@2.2.0")
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), 'pin "md5" # @2.2.0'
+
+    out, _err = run_importmap_command("pristine", "--from", "esm.run")
+
+    assert_includes out, 'Downloading "md5" to vendor/javascript/md5.js from https://cdn.jsdelivr.net/npm/md5@2.2.0/+esm'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, 'pin "md5" # @2.2.0 (esm.run)'
+
+    out, _err = run_importmap_command("update")
+
+    assert_includes out, "https://cdn.jsdelivr.net/npm/md5@2.3.0/+esm"
+  end
+
   test "pin command with --from esm.run and --remote pins the bundle URL without downloading" do
     importmap_config("")
 

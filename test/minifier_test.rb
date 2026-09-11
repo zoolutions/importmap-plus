@@ -22,6 +22,23 @@ class Importmap::MinifierTest < ActiveSupport::TestCase
     end
   end
 
+  test "finds a Windows .cmd shim, which is how npm installs these tools there" do
+    Dir.mktmpdir do |dir|
+      Dir.chdir(dir) do
+        FileUtils.mkdir_p("node_modules/.bin")
+        File.write("node_modules/.bin/importmap-fake-minifier.CMD", "@echo off\n")
+        File.chmod(0755, "node_modules/.bin/importmap-fake-minifier.CMD")
+
+        assert_nil Importmap::Minifier.executable_for("importmap-fake-minifier")
+
+        Gem.stub(:win_platform?, true) do
+          assert_equal File.expand_path("node_modules/.bin/importmap-fake-minifier.CMD"),
+                       Importmap::Minifier.executable_for("importmap-fake-minifier")
+        end
+      end
+    end
+  end
+
   test "minifies with the detected tool and keeps bare import specifiers intact" do
     skip "no JavaScript minifier installed (bun, esbuild or terser)" unless Importmap::Minifier.available?
 

@@ -186,7 +186,7 @@ pin "luxon" # @3.7.2 (esm.run)
 pin "react" # @19.1.0 (unpkg)
 ```
 
-`./bin/importmap update` and `./bin/importmap pristine` read it and go back to the same CDN — an esm.run bundle stays a bundle, an unpkg download stays on unpkg — and so does `pin` when you leave out `--from`. Pass `--from` to move a package to another CDN.
+`./bin/importmap update` and `./bin/importmap pristine` read it and go back to the same CDN — an esm.run bundle stays a bundle, an unpkg download stays on unpkg — and so does `pin` when you leave out `--from`. Pass `--from` to move a package to another CDN; an explicit `--from` moves a remote pin too, which is otherwise re-resolved from the CDN it already points at.
 
 ### Minifying vendored packages
 
@@ -199,10 +199,12 @@ Pinning "luxon" to vendor/javascript/luxon.js via download from https://ga.jspm.
 
 The first of [bun](https://bun.sh), [esbuild](https://esbuild.github.io) or [terser](https://terser.org) found in `node_modules/.bin` or on your `PATH` is used, always in transform-only mode so bare import specifiers are left exactly as the CDN resolved them. The pin records it (`pin "luxon" # @3.7.2 (minified)`, or `(esm.run, minified)` for a bundle), and from then on `update`, `pristine` and a plain `pin` keep minifying that package; `--no-minify` turns it off again, and `./bin/importmap pristine --minify` minifies everything you have vendored in one go.
 
-To use a different minifier, assign anything that responds to `call(source)` and returns the minified source:
+To use a different minifier, assign anything that responds to `call(source)` and returns the minified source. `bin/importmap` loads `config/application.rb` but not your initializers, so the assignment has to happen there (or in a file it requires):
 
 ```ruby
-# config/initializers/importmap.rb — only read by bin/importmap
+# config/application.rb
+require "importmap/packager"
+
 Importmap::Packager.minifier = ->(source) { MyMinifier.minify(source) }
 ```
 

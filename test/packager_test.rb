@@ -284,6 +284,28 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     ], requested
   end
 
+  test "import from esm.run keeps an unscoped subpath out of the package name" do
+    requested = []
+    resolved = Class.new do
+      def code() "200" end
+      def body() { "version" => "7.1.0" }.to_json end
+    end.new
+
+    Net::HTTP.stub(:get_response, ->(uri) { requested << uri.to_s; resolved }) do
+      result = @packager.import("apexcharts/core", "@scope/pkg/sub", from: "esm.run")
+
+      assert_equal({
+        "apexcharts/core" => "https://cdn.jsdelivr.net/npm/apexcharts@7.1.0/core/+esm",
+        "@scope/pkg/sub"  => "https://cdn.jsdelivr.net/npm/@scope/pkg@7.1.0/sub/+esm"
+      }, result[:imports])
+    end
+
+    assert_equal [
+      "https://data.jsdelivr.com/v1/packages/npm/apexcharts/resolved",
+      "https://data.jsdelivr.com/v1/packages/npm/@scope/pkg/resolved"
+    ], requested
+  end
+
   test "import from esm.run returns nil for a package jsDelivr doesn't know" do
     missing = Class.new { def code() "404" end }.new
 
@@ -323,6 +345,56 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       assert_includes vendored, %(import("crypt"))
       assert_no_match %r{["']/npm/}, vendored
     end
+  end
+
+  test "download only rewrites an esm.run bundle's module specifiers" do
+    bundle = %(import a from"/npm/charenc@0.0.2/+esm";const u="/npm/sneaky@1.0.0/+esm";export default[a,u])
+    response = Class.new do
+      define_method(:code) { "200" }
+      define_method(:body) { bundle }
+    end.new
+
+    Dir.mktmpdir do |vendor_dir|
+      packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+      dependencies = Net::HTTP.stub(:get_response, response) do
+        packager.download("md5", "https://cdn.jsdelivr.net/npm/md5@2.2.0/+esm")
+      end
+
+      assert_equal [ [ "charenc", "https://cdn.jsdelivr.net/npm/charenc@0.0.2/+esm" ] ], dependencies
+
+      vendored = File.read(Pathname.new(vendor_dir).join("md5.js"))
+      assert_includes vendored, %(import a from"charenc")
+      assert_includes vendored, %(const u="/npm/sneaky@1.0.0/+esm")
+    end
+  end
+
+  test "reload! drops the cached import map so a pin written now is seen next" do
+    Dir.mktmpdir do |dir|
+      importmap_path = Pathname.new(dir).join("importmap.rb")
+      File.write(importmap_path, %(pin "react" # @17.0.2\n))
+      packager = Importmap::Packager.new(importmap_path)
+
+      assert packager.packaged?("react")
+      assert_not packager.packaged?("md5")
+
+      File.write(importmap_path, %(pin "react" # @17.0.2\npin "md5" # @2.2.0\n))
+      assert_not packager.packaged?("md5"), "expected the import map to be memoized"
+
+      packager.reload!
+      assert packager.packaged?("md5")
+    end
+  end
+
+  test "provenance_for describes what a pin for this URL would record" do
+    assert_equal({ provider: nil, minified: false },
+                 @packager.provenance_for("https://ga.jspm.io/npm:react@17.0.2/index.js"))
+    assert_equal({ provider: nil, minified: true },
+                 @packager.provenance_for("https://ga.jspm.io/npm:react@17.0.2/index.js", minify: true))
+    assert_equal({ provider: "esm.run", minified: false },
+                 @packager.provenance_for("https://cdn.jsdelivr.net/npm/luxon@3.7.2/+esm"))
+    assert_equal({ provider: "unpkg", minified: false },
+                 @packager.provenance_for("https://unpkg.com/react@17.0.2/index.js"))
   end
 
   test "download with minify runs the minifier and records it in the file header" do

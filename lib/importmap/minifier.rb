@@ -24,15 +24,24 @@ class Importmap::Minifier
     end
 
     def executable_for(tool)
-      local = File.expand_path(File.join("node_modules", ".bin", tool))
-      return local if File.executable?(local)
+      directories = [ File.expand_path(File.join("node_modules", ".bin")), *ENV["PATH"].to_s.split(File::PATH_SEPARATOR) ]
 
-      ENV["PATH"].to_s.split(File::PATH_SEPARATOR).each do |directory|
-        candidate = File.join(directory, tool)
-        return candidate if File.file?(candidate) && File.executable?(candidate)
+      directories.each do |directory|
+        command_extensions.each do |extension|
+          candidate = File.join(directory, "#{tool}#{extension}")
+          return candidate if File.file?(candidate) && File.executable?(candidate)
+        end
       end
 
       nil
+    end
+
+    # On Windows npm installs these tools as .cmd shims, so the bare name
+    # never resolves. Elsewhere the extensionless name is the only candidate.
+    def command_extensions
+      return [ "" ] unless Gem.win_platform?
+
+      [ "", *ENV.fetch("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(";") ]
     end
   end
 
