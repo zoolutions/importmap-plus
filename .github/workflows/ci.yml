@@ -62,6 +62,11 @@ jobs:
         run: |
           rm -f $BUNDLE_GEMFILE.lock
 
+      # bun is the minifier the --minify command tests reach for; without one
+      # on the runner those tests skip and CI never exercises minification.
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+
       - name: Install Ruby
         uses: ruby/setup-ruby@v1
         with:

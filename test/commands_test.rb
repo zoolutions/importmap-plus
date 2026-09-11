@@ -313,6 +313,16 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes File.read("#{@tmpdir}/dummy/vendor/javascript/md5.js"), %(from"charenc")
   end
 
+  test "pin command keeps a subpath package on its CDN when the spec carries a version" do
+    importmap_config("")
+    run_importmap_command("pin", "md5@2.2.0", "--from", "esm.run")
+
+    out, _err = run_importmap_command("pin", "md5@2.3.0")
+
+    assert_includes out, "https://cdn.jsdelivr.net/npm/md5@2.3.0/+esm"
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), 'pin "md5" # @2.3.0 (esm.run)'
+  end
+
   test "pristine command redownloads esm.run packages from esm.run" do
     importmap_config("")
     run_importmap_command("pin", "md5@2.2.0", "--from", "esm.run")
