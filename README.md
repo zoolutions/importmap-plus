@@ -220,7 +220,7 @@ Importmap::Packager.minifier = ->(source) { MyMinifier.minify(source) }
 
 ## Subresource Integrity (SRI)
 
-For enhanced security, importmap-rails supports [Subresource Integrity (SRI)](https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity) hashes for packages loaded from external CDNs.
+For enhanced security, importmap-plus supports [Subresource Integrity (SRI)](https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity) hashes for packages loaded from external CDNs.
 
 ### Automatic integrity for local assets
 
@@ -304,7 +304,7 @@ Modern browsers will automatically validate these integrity hashes when loading 
 
 ## Preloading pinned modules
 
-To avoid the waterfall effect where the browser has to load one file after another before it can get to the deepest nested import, importmap-rails uses [modulepreload links](https://developers.google.com/web/updates/2017/12/modulepreload) by default. If you don't want to preload a dependency, because you want to load it on-demand for efficiency, append `preload: false` to the pin.
+To avoid the waterfall effect where the browser has to load one file after another before it can get to the deepest nested import, importmap-plus uses [modulepreload links](https://developers.google.com/web/updates/2017/12/modulepreload) by default. If you don't want to preload a dependency, because you want to load it on-demand for efficiency, append `preload: false` to the pin.
 
 Example:
 
