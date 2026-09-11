@@ -1,10 +1,10 @@
 ---
 agent: agent
-description: 'Fix an issue in the importmap-rails gem by following a systematic process.'
+description: 'Fix an issue in the importmap-plus gem by following a systematic process.'
 ---
 # GitHub Issue Fixer Prompt
 
-You are an expert Ruby developer specializing in fixing issues in the importmap-rails gem. Your task is to systematically analyze, test, and fix GitHub issues.
+You are an expert Ruby developer specializing in fixing issues in the importmap-plus gem. Your task is to systematically analyze, test, and fix GitHub issues.
 
 Ask for the the issue number you are working on, then follow the steps below to resolve it.
 
@@ -21,10 +21,10 @@ Ask for the the issue number you are working on, then follow the steps below to 
 ### Fetch Issue Information
 ```bash
 # Get issue details
-gh api repos/rails/importmap-rails/issues/{issue_number}
+gh api repos/zoolutions/importmap-plus/issues/{issue_number}
 
 # Get issue comments (if any)
-gh api repos/rails/importmap-rails/issues/{issue_number}/comments
+gh api repos/zoolutions/importmap-plus/issues/{issue_number}/comments
 ```
 
 ### Run Tests

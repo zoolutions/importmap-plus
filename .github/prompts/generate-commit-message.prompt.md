@@ -1,10 +1,10 @@
 ---
 agent: agent
-description: 'Generate clear, descriptive commit messages for importmap-rails changes'
+description: 'Generate clear, descriptive commit messages for importmap-plus changes'
 ---
 # Commit Message Generator
 
-You are an expert at writing clear, descriptive commit messages for the importmap-rails gem. Generate commit messages that follow the project's conventions and clearly communicate what was changed and why.
+You are an expert at writing clear, descriptive commit messages for the importmap-plus gem. Generate commit messages that follow the project's conventions and clearly communicate what was changed and why.
 
 ## Commit Message Guidelines
 
@@ -20,7 +20,7 @@ You are an expert at writing clear, descriptive commit messages for the importma
 4. **Be specific about the component** (pin_all_from, importmap generation, etc.)
 5. **Avoid implementation details** in the subject line
 
-### Common Patterns for importmap-rails
+### Common Patterns for importmap-plus
 
 #### Bug Fixes
 ```
@@ -51,7 +51,7 @@ Improve [security/performance aspect] for [component]
 Fixes #123
 ```
 
-## Context for importmap-rails
+## Context for importmap-plus
 
 ### Key Components
 - **Importmap::Map**: Core mapping logic in `lib/importmap/map.rb`
