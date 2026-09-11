@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    importmap-rails (2.2.3)
+    importmap-plus (1.0.0)
       actionpack (>= 6.0.0)
       activesupport (>= 6.0.0)
       railties (>= 6.0.0)
@@ -256,6 +256,7 @@ PLATFORMS
   arm64-darwin-22
   arm64-darwin-23
   arm64-darwin-24
+  arm64-darwin-27
   x86_64-darwin-20
   x86_64-darwin-21
   x86_64-darwin-22
@@ -265,7 +266,7 @@ DEPENDENCIES
   appraisal
   byebug
   capybara
-  importmap-rails!
+  importmap-plus!
   minitest-mock
   propshaft (>= 1.2.0)
   rails

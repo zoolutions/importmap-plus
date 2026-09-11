@@ -10,7 +10,7 @@ end
 
 say "Create application.js module as entrypoint"
 create_file Rails.root.join("app/javascript/application.js") do <<-JS
-// Configure your import map in config/importmap.rb. Read more: https://github.com/rails/importmap-rails
+// Configure your import map in config/importmap.rb. Read more: https://github.com/zoolutions/importmap-plus
 JS
 end
 
