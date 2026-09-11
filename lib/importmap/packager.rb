@@ -50,6 +50,15 @@ class Importmap::Packager
   singleton_class.attr_accessor :esm_run_resolver
   self.esm_run_resolver = URI("https://data.jsdelivr.com/v1/packages/npm/")
 
+  # CDNs reset connections and rate-limit bursts. Each request is tried this
+  # many times, pausing retry_wait × attempt between tries, before it fails.
+  singleton_class.attr_accessor :retry_attempts, :retry_wait
+  self.retry_attempts = 3
+  self.retry_wait = 0.5
+
+  RETRYABLE_ERRORS = [ SocketError, SystemCallError, Timeout::Error, EOFError, OpenSSL::SSL::SSLError, Net::ProtocolError ].freeze # :nodoc:
+  RETRYABLE_CODES = %w[ 429 500 502 503 504 ].freeze # :nodoc:
+
   # Anything responding to #call(source) => String. Defaults to the first of
   # bun, esbuild or terser found on the machine.
   singleton_class.attr_writer :minifier
@@ -252,9 +261,35 @@ class Importmap::Packager
     end
 
     def post_json(body)
-      Net::HTTP.post(self.class.endpoint, body.to_json, "Content-Type" => "application/json")
+      with_retries("posting to #{self.class.endpoint}") do
+        Net::HTTP.post(self.class.endpoint, body.to_json, "Content-Type" => "application/json")
+      end
+    rescue HTTPError
+      raise
     rescue => error
       raise HTTPError, "Unexpected transport error (#{error.class}: #{error.message})"
+    end
+
+    # Runs the request again on a reset connection, a timeout or a 429/5xx,
+    # a bounded number of times with a growing pause, so one flaky hop turns
+    # into a slower success instead of a failed pin.
+    def with_retries(description)
+      attempts = 0
+
+      loop do
+        attempts += 1
+
+        begin
+          response = yield
+          return response unless attempts < self.class.retry_attempts && RETRYABLE_CODES.include?(response.code.to_s)
+        rescue *RETRYABLE_ERRORS => error
+          unless attempts < self.class.retry_attempts
+            raise HTTPError, "Unexpected transport error #{description} (#{error.class}: #{error.message})"
+          end
+        end
+
+        sleep self.class.retry_wait * attempts
+      end
     end
 
     def normalize_provider(name)
@@ -303,7 +338,7 @@ class Importmap::Packager
     end
 
     def download_package_file(package, url, minify: false)
-      response = Net::HTTP.get_response(URI(url))
+      response = with_retries("downloading #{url}") { Net::HTTP.get_response(URI(url)) }
 
       if response.code == "200"
         source = response.body.dup.force_encoding("UTF-8")
@@ -359,7 +394,7 @@ class Importmap::Packager
       uri.path += "#{name}/resolved"
       uri.query = "specifier=#{URI.encode_www_form_component(requested)}" if requested
 
-      response = Net::HTTP.get_response(uri)
+      response = with_retries("resolving #{uri}") { Net::HTTP.get_response(uri) }
 
       case response.code
       when "200"
@@ -371,8 +406,6 @@ class Importmap::Packager
       end
     rescue JSON::ParserError
       raise HTTPError, "Unexpected response from #{uri}"
-    rescue SocketError, SystemCallError, Timeout::Error, OpenSSL::SSL::SSLError => error
-      raise HTTPError, "Unexpected transport error (#{error.class}: #{error.message})"
     end
 
     def remove_sourcemap_comment_from(source)

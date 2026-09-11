@@ -422,6 +422,61 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     Importmap::Packager.minifier = original_minifier
   end
 
+  test "download retries a reset connection before giving up" do
+    attempts = 0
+    response = Class.new do
+      def code() "200" end
+      def body() "export default 1" end
+    end.new
+    flaky = ->(_uri) { attempts += 1; raise Errno::ECONNRESET, "SSL_connect" if attempts < 3; response }
+
+    without_retry_wait do
+      Dir.mktmpdir do |vendor_dir|
+        packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+        Net::HTTP.stub(:get_response, flaky) { packager.download("react", "https://ga.jspm.io/npm:react@17.0.2/index.js") }
+
+        assert_equal 3, attempts
+        assert_includes File.read(Pathname.new(vendor_dir).join("react.js")), "export default 1"
+      end
+    end
+  end
+
+  test "download gives up on a connection that keeps resetting" do
+    attempts = 0
+    broken = ->(_uri) { attempts += 1; raise Errno::ECONNRESET, "SSL_connect" }
+
+    without_retry_wait do
+      Dir.mktmpdir do |vendor_dir|
+        packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+        error = Net::HTTP.stub(:get_response, broken) do
+          assert_raises(Importmap::Packager::HTTPError) { packager.download("react", "https://ga.jspm.io/npm:react@17.0.2/index.js") }
+        end
+
+        assert_equal Importmap::Packager.retry_attempts, attempts
+        assert_match(/Connection reset|SSL_connect/, error.message)
+        assert_not File.exist?(Pathname.new(vendor_dir).join("react.js"))
+      end
+    end
+  end
+
+  test "import retries a rate-limited response" do
+    responses = [
+      Class.new { def code() "429" end; def body() "" end }.new,
+      Class.new { def code() "200" end; def body() { "map" => { "imports" => { "react" => "https://ga.jspm.io/npm:react@17.0.2/index.js" } } }.to_json end }.new
+    ]
+    attempts = 0
+
+    without_retry_wait do
+      Net::HTTP.stub(:post, ->(*) { attempts += 1; responses.shift }) do
+        assert_equal "https://ga.jspm.io/npm:react@17.0.2/index.js", @packager.import("react@17.0.2")[:imports]["react"]
+      end
+    end
+
+    assert_equal 2, attempts
+  end
+
   test "vendored_pin_for records a non-default CDN and minification in the version comment" do
     assert_equal %(pin "react" # @17.0.2), @packager.vendored_pin_for("react", "https://ga.jspm.io/npm:react@17.0.2/index.js")
     assert_equal %(pin "react" # @17.0.2 (minified)),
@@ -452,4 +507,13 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       assert_nil packager.pin_provenance("not-pinned")
     end
   end
+
+  private
+    def without_retry_wait
+      original = Importmap::Packager.retry_wait
+      Importmap::Packager.retry_wait = 0
+      yield
+    ensure
+      Importmap::Packager.retry_wait = original
+    end
 end
