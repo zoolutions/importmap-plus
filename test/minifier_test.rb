@@ -29,7 +29,8 @@ class Importmap::MinifierTest < ActiveSupport::TestCase
         File.write("node_modules/.bin/importmap-fake-minifier.CMD", "@echo off\n")
         File.chmod(0755, "node_modules/.bin/importmap-fake-minifier.CMD")
 
-        assert_nil Importmap::Minifier.executable_for("importmap-fake-minifier")
+        # Windows finds it without the stub, which is the point of the stub.
+        assert_nil Importmap::Minifier.executable_for("importmap-fake-minifier") unless Gem.win_platform?
 
         Gem.stub(:win_platform?, true) do
           assert_equal File.expand_path("node_modules/.bin/importmap-fake-minifier.CMD"),

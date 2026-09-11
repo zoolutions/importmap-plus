@@ -24,7 +24,11 @@ class Importmap::Packager
   ESM_RUN_URL_REGEXP  = %r{\Ahttps://cdn\.jsdelivr\.net/npm/.+/\+esm\z}.freeze # :nodoc:
   # An esm.run bundle's own imports: `from"/npm/dep@1.2.3/+esm"`, `import"…"`,
   # `import("…")`, `export … from"…"`. Anchored on the keyword so an ordinary
-  # string that happens to look like a bundle URL is left alone.
+  # string that happens to look like a bundle URL is left alone. What it does
+  # not do is parse JavaScript, so the same text inside a string or a comment
+  # would still be rewritten — a jsDelivr bundle is esbuild output whose only
+  # surviving comment is the banner, and a root-relative /npm/ URL is
+  # meaningless anywhere but in one of its own imports.
   ESM_RUN_IMPORT_REGEXP =
     %r{((?:\bfrom|\bimport)\s*\(?\s*)(["'])/npm/((?:@[^/"'@]+/)?[^/"'@]+)@([^/"']+)((?:/[^"']*?)?)/\+esm\2}.freeze # :nodoc:
   # name[@version][/subpath] — a leading "@" distinguishes a scoped name
