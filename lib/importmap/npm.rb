@@ -1,8 +1,11 @@
 require "net/http"
 require "uri"
 require "json"
+require "importmap/http_retries"
 
 class Importmap::Npm
+  include Importmap::HttpRetries
+
   PIN_REGEX = /#{Importmap::Map::PIN_REGEX}.*/.freeze # :nodoc:
 
   Error     = Class.new(StandardError)
@@ -88,9 +91,13 @@ class Importmap::Npm
       request["Content-Type"] = "application/json"
 
       response = begin
-        Net::HTTP.start(uri.hostname, uri.port, use_ssl: true) { |http|
-          http.request(request)
-        }
+        with_retries("fetching #{uri}") do
+          Net::HTTP.start(uri.hostname, uri.port, use_ssl: true) { |http|
+            http.request(request)
+          }
+        end
+      rescue HTTPError
+        raise
       rescue => error
         raise HTTPError, "Unexpected transport error (#{error.class}: #{error.message})"
       end
@@ -137,7 +144,11 @@ class Importmap::Npm
     end
 
     def post_json(uri, body)
-      Net::HTTP.post(uri, body.to_json, "Content-Type" => "application/json")
+      with_retries("posting to #{uri}") do
+        Net::HTTP.post(uri, body.to_json, "Content-Type" => "application/json")
+      end
+    rescue HTTPError
+      raise
     rescue => error
       raise HTTPError, "Unexpected transport error (#{error.class}: #{error.message})"
     end
