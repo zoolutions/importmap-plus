@@ -1,0 +1,66 @@
+docs/config/initializers/rack_attack.rb
+  s_7f508d8614d6df::t_82ce0f44597814 41-43,46-48
+docs/.claude/skills/write-docs-page/SKILL.md
+  s_7f508d8614d6df::t_c2aa5898b68057 88
+docs/AGENTS.md
+  s_7f508d8614d6df::t_a17a3b7c85089d 103
+.github/workflows/docs-ci.yml
+  s_7f508d8614d6df::t_6159f0ca669304 5-7,14-18,23-27
+docs/app/views/docs/pages/integrity.rb
+  s_7f508d8614d6df::t_5fd4b93337b143 39
+docs/app/views/docs/pages/how_import_maps_work.rb
+  s_7f508d8614d6df::t_222487d063d048 107-109
+docs/app/views/docs/pages/esm_run.rb
+  s_7f508d8614d6df::t_6214ad1caf763c 64
+  s_7f508d8614d6df::t_a53f43a40afedb 85-86
+docs/.gitattributes
+  s_7f508d8614d6df::t_666f854c780d8d 5
+docs/app/views/docs/pages/pinning.rb
+  s_7f508d8614d6df::t_245be80c20c69b 116-122,124
+docs/spec/requests/mcp_spec.rb
+  s_7f508d8614d6df::t_8018cd8de58201 15,20-22
+docs/config/bundler-audit.yml
+  s_7f508d8614d6df::t_540630377de958 4
+docs/.gitignore
+  s_7f508d8614d6df::t_e20ee26fc73bff 28
+docs/Dockerfile
+  s_7f508d8614d6df::t_459cd380b8c2e9 84-87
+docs/config/routes.rb
+  s_7f508d8614d6df::t_4de7fdce2f63af 5-8
+docs/spec/requests/docs_spec.rb
+  s_7f508d8614d6df::t_9f29101a8ba2c8 15-18
+docs/app/views/docs/pages/caching.rb
+  s_7f508d8614d6df::t_18d4609dba3861 43-49,52-53,56
+docs/app/views/docs/pages/composing.rb
+  s_7f508d8614d6df::t_0a92718bf3fe3e 24-29
+docs/app/views/docs/pages/configuration.rb
+  s_7f508d8614d6df::t_96039c2e638162 22-24
+  s_7f508d8614d6df::t_e054a32de258da 46
+  s_7f508d8614d6df::t_ee14b820c538f1 70-74
+docs/Rakefile
+  s_7f508d8614d6df::t_1e27bc2eedd0a8 13
+docs/app/views/docs/pages/preloading.rb
+  s_7f508d8614d6df::t_c734c3914f1b1c 25-28
+  s_7f508d8614d6df::t_753a5430298dd8 70-71
+  s_7f508d8614d6df::t_bdd13f893c4431 46-47
+docs/lib/tasks/build_css.rake
+  s_7f508d8614d6df::t_47ca21c33fda0d 13
+docs/lib/tasks/docs_kit_og.rake
+  s_7f508d8614d6df::t_47ca21c33fda0d 28-30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d994f21d4662d4b3edc2b0473667f0f0d3d56935",
+  "prompts": {},
+  "sessions": {
+    "s_7f508d8614d6df": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "372ec33a-7695-43b2-9b3c-1058e62da8a7",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
