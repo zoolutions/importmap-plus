@@ -74,7 +74,7 @@ Investigation tells you what the codebase says; this finds what the REQUEST does
 <Ordered, small. Tests before the code they cover. Exact files. For upstream-owned files, the additive shape of the change.>
 
 ## Verification gates
-- `bin/test test/<file>_test.rb` — green
+- `bundle exec ruby -Itest test/<file>_test.rb` — green
 - `bundle exec rake test` — green, with a minifier installed so `--minify` cases run
 - `cd docs && bundle exec rake lint && bundle exec rspec` — if docs changed
 - <the manual check: `bin/importmap <cmd>` in test/dummy and the resulting `config/importmap.rb` line>

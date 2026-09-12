@@ -2,7 +2,7 @@
 description: "Use when a PR needs a full review pass — resolves merge conflicts with the base first, then fixes CI failures, then addresses unresolved review comments. Conflicts first so CI diagnoses the post-merge reality; failures before comments because comment fixes trigger new CI runs that bury the original failures."
 model: opus
 argument-hint: "PR number (e.g., 5 or #5)"
-allowed-tools: Bash(gh pr list:*), Bash(gh pr view:*), Bash(gh pr checks:*), Bash(gh pr checkout:*), Bash(gh pr diff:*), Bash(gh pr comment:*), Bash(gh api:*), Bash(gh run view:*), Bash(git log:*), Bash(git blame:*), Bash(git diff:*), Bash(git status:*), Bash(git switch:*), Bash(git fetch:*), Bash(git merge:*), Bash(git merge-tree:*), Bash(git rev-parse:*), Bash(git push:*), Bash(git commit:*), Bash(git add:*), Bash(git checkout:*), Bash(bundle exec:*), Bash(bundle install:*), Bash(bin/test:*), Bash(BUNDLE_GEMFILE=*), Bash(bun install:*), Bash(cd:*), Read, Write, Edit, Glob, Grep, Agent
+allowed-tools: Bash(gh pr list:*), Bash(gh pr view:*), Bash(gh pr checks:*), Bash(gh pr checkout:*), Bash(gh pr diff:*), Bash(gh pr comment:*), Bash(gh api:*), Bash(gh run view:*), Bash(git log:*), Bash(git blame:*), Bash(git diff:*), Bash(git status:*), Bash(git switch:*), Bash(git fetch:*), Bash(git merge:*), Bash(git merge-tree:*), Bash(git rev-parse:*), Bash(git push:*), Bash(git commit:*), Bash(git add:*), Bash(git checkout:*), Bash(bundle exec:*), Bash(bundle install:*), Bash(BUNDLE_GEMFILE=*), Bash(bun install:*), Bash(cd:*), Read, Write, Edit, Glob, Grep, Agent
 ---
 
 # Review GitHub PR (full pass): $ARGUMENTS
@@ -68,7 +68,7 @@ gh pr view <PR> --json mergeable,mergeStateStatus,baseRefName
    - **`lib/importmap/packager.rb`, `commands.rb`, `npm.rb`**: the fork's hot files; both sides likely added to the same method. Keep both additions, in the order the base has them, and re-run the touched tests before trusting it.
 4. Run the gates BEFORE pushing the merge, scoped to what the conflict touched — at minimum:
    ```bash
-   bin/test test/<touched>_test.rb
+   bundle exec ruby -Itest test/<touched>_test.rb
    bundle exec rake test                                   # the live command tests if commands/packager/npm were involved
    cd docs && bundle exec rake lint && bundle exec rspec   # if docs/ was involved (its CI is a separate workflow)
    ```

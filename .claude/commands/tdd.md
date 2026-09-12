@@ -61,7 +61,7 @@ Exact versions in live tests. Assert on the printed sentence and on the file lef
 ### Step 2: Run it — verify FAIL
 
 ```bash
-bin/test test/packager_test.rb -n /preload:\ false/
+bundle exec ruby -Itest test/packager_test.rb -n /preload:\ false/
 ```
 
 The failure must be the missing behaviour (`NoMethodError`, a wrong string), not a broken fixture or a typo. This confirms the test runs, tests the right thing, and the behaviour doesn't already exist.
@@ -73,7 +73,7 @@ The smallest change — in a fork-only collaborator if it is more than a few lin
 ### Step 4: Run it — verify PASS
 
 ```bash
-bin/test test/packager_test.rb -n /preload:\ false/
+bundle exec ruby -Itest test/packager_test.rb -n /preload:\ false/
 ```
 
 ### Step 5: Refactor

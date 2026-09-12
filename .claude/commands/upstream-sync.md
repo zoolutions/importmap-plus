@@ -2,7 +2,7 @@
 description: "Merge a new rails/importmap-rails release into this fork: fetch the tag, merge it on a sync branch, resolve conflicts per the per-file rules, bump Importmap::UPSTREAM_VERSION, port upstream's changelog, re-sync the docs pages that describe upstream behaviour, and open a PR."
 model: opus
 argument-hint: "upstream version to merge (e.g. 2.3.0); empty = latest upstream tag"
-allowed-tools: Bash(git fetch:*), Bash(git tag:*), Bash(git ls-remote:*), Bash(git switch:*), Bash(git merge:*), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Bash(git add:*), Bash(git rm:*), Bash(git checkout:*), Bash(git commit:*), Bash(git push:*), Bash(gh pr create:*), Bash(gh release view:*), Bash(bundle install:*), Bash(bundle exec:*), Bash(bin/test:*), Bash(BUNDLE_GEMFILE=*), Bash(cd:*), Read, Write, Edit, Glob, Grep, Agent
+allowed-tools: Bash(git fetch:*), Bash(git tag:*), Bash(git ls-remote:*), Bash(git switch:*), Bash(git merge:*), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Bash(git add:*), Bash(git rm:*), Bash(git checkout:*), Bash(git commit:*), Bash(git push:*), Bash(gh pr create:*), Bash(gh release view:*), Bash(bundle install:*), Bash(bundle exec:*), Bash(BUNDLE_GEMFILE=*), Bash(cd:*), Read, Write, Edit, Glob, Grep, Agent
 ---
 
 # Upstream Sync: $ARGUMENTS

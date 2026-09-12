@@ -2,7 +2,7 @@
 description: Review a GitHub pull request on zoolutions/importmap-plus for code quality, project patterns and fork constraints
 model: opus
 argument-hint: "PR number or URL (e.g. 5 or https://github.com/zoolutions/importmap-plus/pull/5)"
-allowed-tools: Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh pr checks:*), Bash(gh api:*), Bash(git diff:*), Bash(git log:*), Bash(git fetch:*), Bash(bin/test:*), Bash(bundle exec:*), Read, Grep, Glob
+allowed-tools: Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh pr checks:*), Bash(gh api:*), Bash(git diff:*), Bash(git log:*), Bash(git fetch:*), Bash(bundle exec:*), Read, Grep, Glob
 ---
 
 # PR Review
@@ -14,7 +14,7 @@ Review the PR for pattern compliance, fork-constraint violations and real bugs. 
 1. `gh pr view <N> --json title,body,baseRefName,headRefName,files,mergeable` and `gh pr diff <N>` — read the body's "Deviations & judgment calls" section first if it has one
 2. Classify each changed file: request path, command path, tests, docs, fork-only, upstream-owned (`git diff --name-status upstream/main main` lists the upstream-owned modified set)
 3. Check fork constraints (blocking), then patterns, then bugs
-4. Run the touched tests locally when feasible: `gh pr checkout`-free via `git fetch origin pull/<N>/head && git worktree add /tmp/pr-<N> FETCH_HEAD`, then `bin/test test/<file>_test.rb` inside it
+4. Run the touched tests locally when feasible: `gh pr checkout`-free via `git fetch origin pull/<N>/head && git worktree add /tmp/pr-<N> FETCH_HEAD`, then `bundle exec ruby -Itest test/<file>_test.rb` inside it
 5. Output the structured review
 
 ## Fork constraints (check first — these block merge regardless of code quality)
@@ -59,7 +59,7 @@ Logic on the wrong side of that line is the most common finding.
 ## Test and lint verification
 
 ```bash
-bin/test test/<touched>_test.rb          # in the PR worktree
+bundle exec ruby -Itest test/<touched>_test.rb          # in the PR worktree
 bundle exec rake test                    # if the change is in commands/packager/npm — live CDN tests
 cd docs && bundle exec rake lint && bundle exec rspec   # if docs/ changed
 gh pr checks <N>                         # every matrix cell, plus "Build & test" when docs/ changed

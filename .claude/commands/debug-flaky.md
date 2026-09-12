@@ -2,7 +2,7 @@
 description: "Use when a CI test failure looks intermittent — takes a failed Actions run, PR, or test path; drives evidence → reproduction → root cause → stress-proofed fix → knowledge capture. Never masks with skip/retry/sleep. Knows this suite's two real flake sources: live CDNs and per-test process isolation."
 model: opus
 argument-hint: "Actions run URL/ID, PR number, or test path (e.g. test/commands_test.rb)"
-allowed-tools: Bash(gh run view:*), Bash(gh run download:*), Bash(gh pr view:*), Bash(gh pr checks:*), Bash(gh api:*), Bash(gh issue list:*), Bash(gh issue view:*), Bash(gh issue create:*), Bash(gh issue edit:*), Bash(gh label list:*), Bash(gh label create:*), Bash(git log:*), Bash(git diff:*), Bash(git show:*), Bash(git blame:*), Bash(bin/test:*), Bash(bundle exec:*), Bash(bundle install:*), Bash(BUNDLE_GEMFILE=*), Bash(curl:*), Read, Write, Edit, Glob, Grep, Agent
+allowed-tools: Bash(gh run view:*), Bash(gh run download:*), Bash(gh pr view:*), Bash(gh pr checks:*), Bash(gh api:*), Bash(gh issue list:*), Bash(gh issue view:*), Bash(gh issue create:*), Bash(gh issue edit:*), Bash(gh label list:*), Bash(gh label create:*), Bash(git log:*), Bash(git diff:*), Bash(git show:*), Bash(git blame:*), Bash(bundle exec:*), Bash(bundle install:*), Bash(BUNDLE_GEMFILE=*), Bash(curl:*), Read, Write, Edit, Glob, Grep, Agent
 ---
 
 # Debug Flaky Test: $ARGUMENTS
@@ -45,9 +45,9 @@ From the failing job's log extract ALL of:
 
 "Intermittent across builds" is compatible with "deterministic on any given commit".
 
-1. Run the test on the run's commit 3×: `bin/test <file> -n /<name>/`. Fails every time → regression. Find the commit pair: `git log` the test and the code under test.
-2. Same cell locally? `BUNDLE_GEMFILE=gemfiles/rails_<v>_<pipeline>.gemfile ASSETS_PIPELINE=<pipeline> bin/test <file>`. Fails only there → compatibility break, fix as a regression.
-3. Is a minifier installed locally? If the test is a `--minify` case it may have been **skipping** locally and only running in CI (bun is installed there). `bin/test <file> -v` shows S for skipped.
+1. Run the test on the run's commit 3×: `bundle exec ruby -Itest <file> -n /<name>/`. Fails every time → regression. Find the commit pair: `git log` the test and the code under test.
+2. Same cell locally? `BUNDLE_GEMFILE=gemfiles/rails_<v>_<pipeline>.gemfile ASSETS_PIPELINE=<pipeline> bundle exec ruby -Itest <file>`. Fails only there → compatibility break, fix as a regression.
+3. Is a minifier installed locally? If the test is a `--minify` case it may have been **skipping** locally and only running in CI (bun is installed there). `bundle exec ruby -Itest <file> -v` shows S for skipped.
 
 ## Phase 4: Classify the signature
 
@@ -66,7 +66,7 @@ Stop at the first rung that reproduces; the rung narrows the class.
 
 ```bash
 # 1. Exact: same seed as the failing run, same cell
-BUNDLE_GEMFILE=gemfiles/rails_<v>_<p>.gemfile ASSETS_PIPELINE=<p> bin/test <file> --seed <N>
+BUNDLE_GEMFILE=gemfiles/rails_<v>_<p>.gemfile ASSETS_PIPELINE=<p> bundle exec ruby -Itest <file> --seed <N>
 
 # 2. Whole suite with the seed (order dependence)
 bundle exec rake test TESTOPTS="--seed <N>"
@@ -74,7 +74,7 @@ bundle exec rake test TESTOPTS="--seed <N>"
 # 3. Stress loop; exits non-zero if ANY run failed
 status=0
 for i in 1 2 3 4 5 6 7 8 9 10; do
-  bin/test <file> -n /<name>/ || { echo "FAIL i=$i"; status=1; }
+  bundle exec ruby -Itest <file> -n /<name>/ || { echo "FAIL i=$i"; status=1; }
 done
 exit "$status"
 ```

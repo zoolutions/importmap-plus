@@ -2,7 +2,7 @@
 description: "Drive a set of open PRs to merge-ready, one at a time, in a given order. Auto-resolves the recurring CHANGELOG and docs/Gemfile.lock conflicts, runs /github-review-pr (conflicts, CI failures, review comments) on each, then waits for the user to merge before syncing and advancing to the next. Handles stacked PRs (a PR based on another PR's branch)."
 model: opus
 argument-hint: "ordered PR list (e.g. '5 6 7'); optional 'automerge' to enable gh auto-merge; empty = auto-discover your open PRs"
-allowed-tools: Bash(gh pr list:*), Bash(gh pr view:*), Bash(gh pr checks:*), Bash(gh pr diff:*), Bash(gh pr comment:*), Bash(gh pr merge:*), Bash(gh pr edit:*), Bash(gh api:*), Bash(gh run view:*), Bash(git:*), Bash(bundle:*), Bash(bundle exec:*), Bash(bin/test:*), Bash(bun install:*), Bash(cd:*), Read, Write, Edit, Glob, Grep, Agent, Skill, TaskCreate, TaskUpdate, TaskGet, TaskList, ScheduleWakeup
+allowed-tools: Bash(gh pr list:*), Bash(gh pr view:*), Bash(gh pr checks:*), Bash(gh pr diff:*), Bash(gh pr comment:*), Bash(gh pr merge:*), Bash(gh pr edit:*), Bash(gh api:*), Bash(gh run view:*), Bash(git:*), Bash(bundle:*), Bash(bundle exec:*), Bash(bun install:*), Bash(cd:*), Read, Write, Edit, Glob, Grep, Agent, Skill, TaskCreate, TaskUpdate, TaskGet, TaskList, ScheduleWakeup
 ---
 
 # Finish PRs (ordered merge-ready loop): $ARGUMENTS

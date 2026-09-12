@@ -39,8 +39,8 @@ This is a **maintained fork that still tracks upstream**. The `upstream` remote 
 
 ```bash
 bundle exec rake test                                   # full suite (talks to live CDNs: jspm, jsDelivr, npm registry)
-bin/test test/packager_test.rb                          # one file
-bin/test test/commands_test.rb -n /minify/              # tests matching a name pattern
+bundle exec ruby -Itest test/packager_test.rb           # one file (bin/test, upstream's rails/plugin/test runner, runs 0 tests on Rails 8.1 — don't use it)
+bundle exec ruby -Itest test/commands_test.rb -n /minify/   # tests matching a name pattern
 BUNDLE_GEMFILE=gemfiles/rails_7.1_sprockets.gemfile bundle install && \
 BUNDLE_GEMFILE=gemfiles/rails_7.1_sprockets.gemfile ASSETS_PIPELINE=sprockets bundle exec rake test   # one CI matrix cell
 bundle exec appraisal generate                          # regenerate gemfiles/ after editing Appraisals

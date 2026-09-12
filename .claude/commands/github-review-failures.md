@@ -2,7 +2,7 @@
 description: "Use when CI checks are failing on a PR — fetches failure logs, diagnoses root causes, implements fixes, and pushes until CI is green."
 model: sonnet
 argument-hint: "PR number (e.g., 5 or #5)"
-allowed-tools: Bash(gh pr view:*), Bash(gh pr checks:*), Bash(gh pr diff:*), Bash(gh api:*), Bash(gh run view:*), Bash(git log:*), Bash(git diff:*), Bash(git push:*), Bash(git commit:*), Bash(git add:*), Bash(bundle exec:*), Bash(bundle install:*), Bash(bin/test:*), Bash(BUNDLE_GEMFILE=*), Bash(cd:*), Read, Write, Edit, Glob, Grep, Agent
+allowed-tools: Bash(gh pr view:*), Bash(gh pr checks:*), Bash(gh pr diff:*), Bash(gh api:*), Bash(gh run view:*), Bash(git log:*), Bash(git diff:*), Bash(git push:*), Bash(git commit:*), Bash(git add:*), Bash(bundle exec:*), Bash(bundle install:*), Bash(BUNDLE_GEMFILE=*), Bash(cd:*), Read, Write, Edit, Glob, Grep, Agent
 ---
 
 # Fix GitHub CI Failures: $ARGUMENTS
@@ -100,9 +100,9 @@ Only if ALL of these hold: it is in `commands_test.rb` or an `*_integration_test
 3. **Verify locally**, in the failing cell's configuration when the failure is cell-specific:
 
 ```bash
-bin/test test/<failing>_test.rb -n /<test name>/
+bundle exec ruby -Itest test/<failing>_test.rb -n /<test name>/
 BUNDLE_GEMFILE=gemfiles/rails_7.1_sprockets.gemfile bundle install
-BUNDLE_GEMFILE=gemfiles/rails_7.1_sprockets.gemfile ASSETS_PIPELINE=sprockets bin/test test/<failing>_test.rb
+BUNDLE_GEMFILE=gemfiles/rails_7.1_sprockets.gemfile ASSETS_PIPELINE=sprockets bundle exec ruby -Itest test/<failing>_test.rb
 bundle exec rake test                                     # before pushing
 cd docs && bundle exec rake lint && bundle exec rspec     # docs failures
 ```

@@ -2,7 +2,7 @@
 description: "Executes the full autonomous engineering workflow with verification. Use when implementing a complete feature, tackling a GitHub issue, or running an end-to-end development cycle on importmap-plus."
 model: opus
 argument-hint: "GitHub issue number/URL, a docs/plans/*.md path, or a feature description"
-allowed-tools: Bash(gh issue view:*), Bash(gh search:*), Bash(gh issue list:*), Bash(gh pr create:*), Bash(gh pr view:*), Bash(bundle exec:*), Bash(bundle install:*), Bash(bin/test:*), Bash(BUNDLE_GEMFILE=*), Bash(git:*), Bash(cd:*), Read, Write, Edit, Glob, Grep, Agent
+allowed-tools: Bash(gh issue view:*), Bash(gh search:*), Bash(gh issue list:*), Bash(gh pr create:*), Bash(gh pr view:*), Bash(bundle exec:*), Bash(bundle install:*), Bash(BUNDLE_GEMFILE=*), Bash(git:*), Bash(cd:*), Read, Write, Edit, Glob, Grep, Agent
 ---
 
 # LFG — Full Autonomous Workflow
@@ -91,7 +91,7 @@ For each logical unit:
 ### 4.1: Write the failing test first
 
 ```bash
-bin/test test/packager_test.rb -n /provenance/
+bundle exec ruby -Itest test/packager_test.rb -n /provenance/
 ```
 
 Watch it fail for the right reason. A test that fails with `NoMethodError` on the thing you're about to write is fine; one that fails because the fixture is wrong is not.
@@ -115,7 +115,7 @@ Once green, tidy — within the fork-cost rule (`.claude/rules/striving-for-exce
 ### 4.4: Validate
 
 ```bash
-bin/test test/<touched>_test.rb
+bundle exec ruby -Itest test/<touched>_test.rb
 ```
 
 ### 4.5: Repeat

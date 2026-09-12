@@ -2,7 +2,7 @@
 description: "Use when a PR has unresolved review comments that need responses — evaluates each comment against the codebase and the fork's constraints, implements valid fixes, pushes back on incorrect suggestions, and resolves all threads."
 model: sonnet
 argument-hint: "PR number (e.g., 5 or #5)"
-allowed-tools: Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh pr comment:*), Bash(gh api:*), Bash(git log:*), Bash(git blame:*), Bash(git push:*), Bash(git commit:*), Bash(git add:*), Bash(bundle exec:*), Bash(bin/test:*), Bash(cd:*), Read, Write, Edit, Glob, Grep, Agent
+allowed-tools: Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh pr comment:*), Bash(gh api:*), Bash(git log:*), Bash(git blame:*), Bash(git push:*), Bash(git commit:*), Bash(git add:*), Bash(bundle exec:*), Bash(cd:*), Read, Write, Edit, Glob, Grep, Agent
 ---
 
 # Review GitHub PR Comments: $ARGUMENTS
@@ -95,7 +95,7 @@ No unresolved threads → report and stop.
 1. Edit
 2. Verify:
    ```bash
-   bin/test test/<relevant>_test.rb
+   bundle exec ruby -Itest test/<relevant>_test.rb
    bundle exec rake test                                   # if commands/packager/npm changed
    cd docs && bundle exec rake lint && bundle exec rspec   # if docs/ changed
    ```

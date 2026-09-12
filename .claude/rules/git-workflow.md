@@ -51,7 +51,7 @@ Small, focused commits — one logical change each. Test before committing.
 ## Pre-commit checklist
 
 ```bash
-bin/test test/<the files you touched>_test.rb   # fast loop
+bundle exec ruby -Itest test/<the files you touched>_test.rb   # fast loop
 bundle exec rake test                            # before pushing — the command tests need the network
 cd docs && bundle exec rake lint && bundle exec rspec   # only if docs/ changed
 ```
