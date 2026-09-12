@@ -254,4 +254,27 @@ class Importmap::NpmTest < ActiveSupport::TestCase
   ensure
     Importmap::HttpRetries.wait = original_wait
   end
+
+  test "outdated packages carries a registry error instead of a latest version" do
+    response = { "error" => "Not found" }.to_json
+
+    @npm.stub(:get_json, response) do
+      outdated_packages = @npm.outdated_packages
+
+      assert_equal 1, outdated_packages.size
+      assert_equal "md5", outdated_packages[0].name
+      assert_equal "Not found", outdated_packages[0].error
+      assert_nil outdated_packages[0].latest_version
+    end
+  end
+
+  test "outdated packages reports a response it can't parse" do
+    @npm.stub(:get_json, "<html>Bad gateway</html>") do
+      outdated_packages = @npm.outdated_packages
+
+      assert_equal 1, outdated_packages.size
+      assert_equal "Response error", outdated_packages[0].error
+      assert_nil outdated_packages[0].latest_version
+    end
+  end
 end

@@ -30,6 +30,17 @@
   `update`, `pristine` or `pin` used to drop the option; only an integrity
   hash, which belongs to the old file, is still removed when the URL changes.
 
+### Fixed
+
+- **`update` no longer re-pins a package the registry couldn't be checked
+  for.** A package whose registry lookup came back unusable has no latest
+  version, so nothing established that it moved — but `update` re-pinned it
+  anyway, letting a blip re-resolve the pin against the CDN and carry it to
+  a version nobody asked for. Those packages are now reported —
+  `Couldn't check "md5": Response error` — and left where they are; naming
+  one stops the command, the same as naming a package with no pin. Inherited
+  from importmap-rails, where a bare `update` has always behaved this way.
+
 ## 1.0.0
 
 First release of importmap-plus, a drop-in replacement for

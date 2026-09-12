@@ -38,6 +38,11 @@ class Views::Docs::Pages::Updating < DocsUI::Page
         anything is updated — a typo shouldn't half-update an import map. Names
         together with `--all` are rejected.
 
+        A package the registry couldn't be asked about is reported and left where it
+        is: nothing established that a newer version exists, so re-pinning it would
+        let a registry blip re-resolve it against the CDN. When you named it, that
+        stops the command, the same as a name with no pin.
+
         A package is re-resolved together with the dependencies its CDN lists for it,
         so those move as well, keeping their own pin options. Each package comes back
         from the CDN its pin comment names ([Provenance](/docs/provenance)); a remote
@@ -52,6 +57,9 @@ class Views::Docs::Pages::Updating < DocsUI::Page
         "md5" is already up to date (2.3.0)
         Can't tell whether "application" is outdated: its pin has no version
         No outdated packages found
+
+        $ ./bin/importmap update
+        Couldn't check "md5": Response error
       SHELL
     end
   end
@@ -74,7 +82,9 @@ class Views::Docs::Pages::Updating < DocsUI::Page
       md <<~'MD'
         Both `outdated` and `update` only see pins with a version: a `# @x.y.z`
         comment or a CDN URL with `@x.y.z` in it. A vendored file whose pin has no
-        version is reported as ignored.
+        version is reported as ignored. When the registry can't answer for a
+        package, `outdated` prints the reason in the Latest column and `update`
+        leaves that package alone.
       MD
     end
   end

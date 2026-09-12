@@ -132,11 +132,16 @@ class Importmap::Commands < Thor
       exit 1
     end
 
-    outdated_packages = npm.outdated_packages(only: packages.presence)
-    exit 1 unless every_package_known?(packages, outdated_packages)
+    # A package the registry couldn't answer for has no latest_version, so
+    # nothing established that it moved: re-pinning would let a blip
+    # re-resolve the pin against the CDN and carry it somewhere new.
+    outdated_packages, unchecked_packages = npm.outdated_packages(only: packages.presence).partition(&:latest_version)
+    unchecked_packages.each { |p| puts %(Couldn't check "#{p.name}": #{p.error}) }
+
+    exit 1 unless every_package_known?(packages, outdated_packages, unchecked_packages)
 
     if outdated_packages.empty?
-      puts "No outdated packages found"
+      puts "No outdated packages found" if unchecked_packages.empty?
     elsif (names = without_locked_updates(outdated_packages.map(&:name), force: options[:force])).empty?
       puts "Nothing to update (every outdated package is locked; pass --force)"
     else
@@ -262,11 +267,13 @@ class Importmap::Commands < Thor
       %(Skipping "#{package}" (locked at #{packager.pin_provenance(package)[:version]}; run bin/importmap unlock #{package} or pass --force))
     end
 
-    # Says why a named package won't be updated. A name with no pin at all
-    # is a typo until proven otherwise, so nothing is updated in that case.
-    def every_package_known?(names, outdated_packages)
+    # Says why a named package won't be updated. A name with no pin at all is
+    # a typo until proven otherwise, and one the registry couldn't be asked
+    # about is unresolved, so nothing is updated in either case.
+    def every_package_known?(names, outdated_packages, unchecked_packages)
       versioned = npm.packages_with_versions.to_h
       outdated  = outdated_packages.map(&:name)
+      unchecked = unchecked_packages.map(&:name)
 
       names.map do |name|
         key = packager.package_key_for(name)
@@ -274,6 +281,8 @@ class Importmap::Commands < Thor
 
         if !packager.packaged?(key)
           puts %(Couldn't find a pin for "#{name}")
+          next false
+        elsif unchecked.include?(package)
           next false
         elsif outdated.include?(package)
           next true

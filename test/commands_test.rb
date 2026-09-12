@@ -655,7 +655,62 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "md5" # @2.2.0 (esm.run, locked)\n)
   end
 
+  test "update command leaves a package alone when the registry couldn't be checked" do
+    importmap_config('pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js"')
+    stub_registry_error("Response error")
+
+    out, _err = run_importmap_command("update")
+
+    assert_includes out, %(Couldn't check "md5": Response error)
+    assert_not_includes out, "Pinning"
+    assert_not_includes out, "No outdated packages found"
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), "md5@2.2.0"
+  end
+
+  test "update command with a named package the registry couldn't be checked for updates nothing" do
+    importmap_config(<<~PINS)
+      pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js"
+      pin "luxon", to: "https://cdn.jsdelivr.net/npm/luxon@3.0.0/build/es6/luxon.mjs"
+    PINS
+    stub_registry_error("Not found")
+
+    out, _err = run_importmap_command_expecting_failure("update", "md5")
+
+    assert_includes out, %(Couldn't check "md5": Not found)
+    assert_not_includes out, "is already up to date"
+    assert_not_includes out, "Pinning"
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, "md5@2.2.0"
+    assert_includes content, "luxon@3.0.0"
+  end
+
   private
+    # The registry answering with an error body is the case under test and the
+    # live registry won't produce it: a missing package is a 404, which raises
+    # before the body is read. Stub the one method that talks to the registry
+    # and leave every layer above it — outdated_packages, update, the pin
+    # rewriting — running for real.
+    def stub_registry_error(message)
+      path = "#{@tmpdir}/dummy/bin/importmap"
+
+      File.write(path, <<~RUBY)
+        #!/usr/bin/env ruby
+
+        require_relative "../config/application"
+        require "importmap/npm"
+
+        class Importmap::Npm
+          private def get_package(package)
+            { "error" => #{message.inspect} }
+          end
+        end
+
+        require "importmap/commands"
+      RUBY
+      FileUtils.chmod(0755, path)
+    end
+
     def run_importmap_command_expecting_failure(command, *args)
       status = nil
       out, err = capture_subprocess_io { status = system("bin/importmap", command, *args) }
