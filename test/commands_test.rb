@@ -657,11 +657,11 @@ class CommandsTest < ActiveSupport::TestCase
 
   test "update command leaves a package alone when the registry couldn't be checked" do
     importmap_config('pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js"')
-    stub_registry_errors("md5" => "Response error")
+    stub_registry_failures("md5" => "Unexpected error response 500: Service unavailable")
 
     out, _err = run_importmap_command_expecting_failure("update")
 
-    assert_includes out, %(Couldn't check "md5": Response error)
+    assert_includes out, %(Couldn't check "md5": Unexpected error response 500: Service unavailable)
     assert_not_includes out, "Pinning"
     assert_not_includes out, "No outdated packages found"
     assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), "md5@2.2.0"
@@ -672,11 +672,11 @@ class CommandsTest < ActiveSupport::TestCase
       pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js"
       pin "luxon", to: "https://cdn.jsdelivr.net/npm/luxon@3.0.0/build/es6/luxon.mjs"
     PINS
-    stub_registry_errors("md5" => "Not found")
+    stub_registry_failures("md5" => "Unexpected error response 404: Not found")
 
     out, _err = run_importmap_command_expecting_failure("update", "md5", "luxon")
 
-    assert_includes out, %(Couldn't check "md5": Not found)
+    assert_includes out, %(Couldn't check "md5": Unexpected error response 404: Not found)
     assert_not_includes out, "is already up to date"
     assert_not_includes out, 'Pinning "md5"'
     assert_includes out, 'Pinning "luxon"'
@@ -687,13 +687,28 @@ class CommandsTest < ActiveSupport::TestCase
     assert_not_includes content, "luxon@3.0.0"
   end
 
+  test "outdated command reports a package the registry couldn't answer for" do
+    importmap_config(<<~PINS)
+      pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js"
+      pin "luxon", to: "https://cdn.jsdelivr.net/npm/luxon@3.0.0/build/es6/luxon.mjs"
+    PINS
+    stub_registry_failures("md5" => "Unexpected error response 500: Service unavailable")
+
+    out, _err = run_importmap_command_expecting_failure("outdated")
+
+    assert_match(/\| md5\s+\| 2\.2\.0\s+\| Unexpected error response 500: Service unavailable\s+\|/, out)
+    assert_match(/\| luxon\s+\| 3\.0\.0\s+\| 3\.\d+\.\d+\s+\|/, out)
+    assert_includes out, "2 outdated packages found"
+  end
+
   private
-    # The registry answering with an error body is the case under test and the
-    # live registry won't produce it: a missing package is a 404, which raises
-    # before the body is read. Stub the one method that talks to the registry
-    # for the packages named, and leave every layer above it — outdated_packages,
-    # update, the pin rewriting — running for real.
-    def stub_registry_errors(errors)
+    # A registry that can't answer for a package is the case under test, and
+    # the live registry won't produce it on demand. Stub the one method that
+    # talks to it, per package by URI path, so get_package's own error
+    # handling and every layer above it — outdated_packages, outdated,
+    # update, the pin rewriting — still run for real. Packages not named
+    # here go to the live registry, which is what the mixed cases rely on.
+    def stub_registry_failures(failures)
       path = "#{@tmpdir}/dummy/bin/importmap"
 
       File.write(path, <<~RUBY)
@@ -702,11 +717,12 @@ class CommandsTest < ActiveSupport::TestCase
         require_relative "../config/application"
         require "importmap/npm"
 
-        REGISTRY_ERRORS = #{errors.inspect}
+        REGISTRY_FAILURES = #{failures.inspect}
 
         Importmap::Npm.prepend(Module.new do
-          private def get_package(package)
-            REGISTRY_ERRORS.key?(package) ? { "error" => REGISTRY_ERRORS[package] } : super
+          private def get_json(uri)
+            message = REGISTRY_FAILURES[uri.path.delete_prefix("/")]
+            message ? raise(Importmap::Npm::HTTPError, message) : super
           end
         end)
 

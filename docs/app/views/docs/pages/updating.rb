@@ -38,11 +38,11 @@ class Views::Docs::Pages::Updating < DocsUI::Page
         anything is updated — a typo shouldn't half-update an import map. Names
         together with `--all` are rejected.
 
-        A package the registry couldn't be asked about is reported and left where it
-        is: nothing established that a newer version exists, so re-pinning it would
-        let a registry blip re-resolve it against the CDN. Every other package still
-        updates, and the command exits 1 so a script knows it didn't do all it was
-        asked.
+        A package the registry couldn't answer for — a 404, a 5xx, a connection that
+        kept resetting — is reported and left where it is: nothing established that a
+        newer version exists, so re-pinning it would let a registry blip re-resolve it
+        against the CDN. Every other package still updates, and the command exits 1
+        so a script knows it didn't do all it was asked.
 
         A package is re-resolved together with the dependencies its CDN lists for it,
         so those move as well, keeping their own pin options. Each package comes back
@@ -84,11 +84,23 @@ class Views::Docs::Pages::Updating < DocsUI::Page
           2 outdated packages found (1 locked)
       SHELL
       md <<~'MD'
+        A package the registry couldn't answer for is listed with the reason where
+        its latest version would go:
+      MD
+      DocsUI::Code(<<~SHELL, lexer: :console)
+        | Package | Current | Latest                                     | Locked |
+        |---------|---------|--------------------------------------------|--------|
+        | md5     | 2.2.0   | Unexpected error response 500: Service un… |        |
+      SHELL
+      md <<~'MD'
         Both `outdated` and `update` only see pins with a version: a `# @x.y.z`
         comment or a CDN URL with `@x.y.z` in it. A vendored file whose pin has no
-        version is reported as ignored. When the registry can't answer for a
-        package, `outdated` prints the reason in the Latest column and `update`
-        leaves that package alone.
+        version is reported as ignored.
+
+        A registry that won't answer for one package doesn't end the run: the
+        lookup is retried, and if it still fails that package alone is reported —
+        `outdated` prints the reason in its Latest column, `update` leaves the pin
+        where it is — while every other package is checked as usual.
       MD
     end
   end

@@ -93,6 +93,11 @@ class Importmap::Npm
       JSON.parse(response)
     rescue JSON::ParserError
       nil
+    rescue HTTPError => error
+      # One package the registry won't answer for shouldn't end the run: the
+      # caller records it as unchecked, so the rest are still reported on.
+      # with_retries has already spent its attempts by the time we get here.
+      { "error" => error.message }
     end
 
     def get_json(uri)

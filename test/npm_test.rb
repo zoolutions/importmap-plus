@@ -150,11 +150,11 @@ class Importmap::NpmTest < ActiveSupport::TestCase
     Importmap::HttpRetries.wait = 0
 
     Net::HTTP.stub(:start, response, client) do
-      e = assert_raises(Importmap::Npm::HTTPError) do
-        @npm.outdated_packages
-      end
+      outdated_packages = @npm.outdated_packages
 
-      assert_equal "Unexpected error response 500: {\"message\":\"Service unavailable\"}", e.message
+      assert_equal 1, outdated_packages.size
+      assert_equal "Unexpected error response 500: {\"message\":\"Service unavailable\"}", outdated_packages[0].error
+      assert_nil outdated_packages[0].latest_version
       client.verify
     end
   ensure
@@ -242,14 +242,17 @@ class Importmap::NpmTest < ActiveSupport::TestCase
     Importmap::HttpRetries.wait = original_wait
   end
 
-  test "outdated packages gives up on a registry that keeps resetting" do
+  test "outdated packages reports a registry that keeps resetting" do
     broken = ->(*, **) { raise Errno::ECONNRESET, "SSL_connect" }
     original_wait = Importmap::HttpRetries.wait
     Importmap::HttpRetries.wait = 0
 
     Net::HTTP.stub(:start, broken) do
-      error = assert_raises(Importmap::Npm::HTTPError) { @npm.outdated_packages }
-      assert_match(/SSL_connect/, error.message)
+      outdated_packages = @npm.outdated_packages
+
+      assert_equal 1, outdated_packages.size
+      assert_match(/SSL_connect/, outdated_packages[0].error)
+      assert_nil outdated_packages[0].latest_version
     end
   ensure
     Importmap::HttpRetries.wait = original_wait
@@ -275,6 +278,23 @@ class Importmap::NpmTest < ActiveSupport::TestCase
       assert_equal 1, outdated_packages.size
       assert_equal "Response error", outdated_packages[0].error
       assert_nil outdated_packages[0].latest_version
+    end
+  end
+
+  test "outdated packages asks about every package when one can't be reached" do
+    npm = Importmap::Npm.new(file_fixture("locked_import_map.rb"))
+    answers = ->(uri) {
+      raise Importmap::Npm::HTTPError, "Unexpected error response 404: Not found" if uri.path == "/md5"
+
+      { "dist-tags" => { "latest" => "99.0.0" } }.to_json
+    }
+
+    npm.stub(:get_json, answers) do
+      outdated_packages = npm.outdated_packages
+
+      assert_equal %w[luxon md5 react], outdated_packages.map(&:name)
+      assert_equal "Unexpected error response 404: Not found", outdated_packages.find { |p| p.name == "md5" }.error
+      assert_equal %w[99.0.0 99.0.0], outdated_packages.reject(&:error).map(&:latest_version)
     end
   end
 end
