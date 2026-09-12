@@ -38,6 +38,12 @@ class Views::Docs::Pages::Updating < DocsUI::Page
         anything is updated — a typo shouldn't half-update an import map. Names
         together with `--all` are rejected.
 
+        A package the registry couldn't answer for — a 404, a 5xx, a connection that
+        kept resetting — is reported and left where it is: nothing established that a
+        newer version exists, so re-pinning it would let a registry blip re-resolve it
+        against the CDN. Every other package still updates, and the command exits 1
+        so a script knows it didn't do all it was asked.
+
         A package is re-resolved together with the dependencies its CDN lists for it,
         so those move as well, keeping their own pin options. Each package comes back
         from the CDN its pin comment names ([Provenance](/docs/provenance)); a remote
@@ -52,6 +58,12 @@ class Views::Docs::Pages::Updating < DocsUI::Page
         "md5" is already up to date (2.3.0)
         Can't tell whether "application" is outdated: its pin has no version
         No outdated packages found
+
+        $ ./bin/importmap update md5 luxon
+        Couldn't check "md5": Response error
+        Pinning "luxon" to https://cdn.jsdelivr.net/npm/luxon@3.7.2/build/es6/luxon.mjs
+        $ echo $?
+        1
       SHELL
     end
   end
@@ -72,9 +84,23 @@ class Views::Docs::Pages::Updating < DocsUI::Page
           2 outdated packages found (1 locked)
       SHELL
       md <<~'MD'
+        A package the registry couldn't answer for is listed with the reason where
+        its latest version would go:
+      MD
+      DocsUI::Code(<<~SHELL, lexer: :console)
+        | Package | Current | Latest                                     | Locked |
+        |---------|---------|--------------------------------------------|--------|
+        | md5     | 2.2.0   | Unexpected error response 500: Service un… |        |
+      SHELL
+      md <<~'MD'
         Both `outdated` and `update` only see pins with a version: a `# @x.y.z`
         comment or a CDN URL with `@x.y.z` in it. A vendored file whose pin has no
         version is reported as ignored.
+
+        A registry that won't answer for one package doesn't end the run: the
+        lookup is retried, and if it still fails that package alone is reported —
+        `outdated` prints the reason in its Latest column, `update` leaves the pin
+        where it is — while every other package is checked as usual.
       MD
     end
   end

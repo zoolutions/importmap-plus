@@ -21,9 +21,12 @@ class Importmap::NpmIntegrationTest < ActiveSupport::TestCase
     original_base_uri = Importmap::Npm.base_uri
     Importmap::Npm.base_uri = URI("https://invalid.error")
 
-    assert_raises(Importmap::Npm::HTTPError) do
-      npm.outdated_packages
-    end
+    outdated_packages = npm.outdated_packages
+
+    assert_equal(1, outdated_packages.size)
+    assert_equal("md5", outdated_packages[0].name)
+    assert_match(/invalid\.error/, outdated_packages[0].error)
+    assert_nil(outdated_packages[0].latest_version)
   ensure
     Importmap::Npm.base_uri = original_base_uri
   end
