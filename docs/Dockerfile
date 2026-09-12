@@ -19,11 +19,14 @@ ARG RUBY_VERSION=3.4.2
 # bun, and an older bun can't read a newer lockfile version.
 ARG BUN_VERSION=1.4.0
 
-# bun arrives as a binary copied out of its own official image, pinned by tag.
-# The alternative the scaffold shipped — `curl -fsSL https://bun.sh/install |
-# bash` — runs a mutable remote script as root, so whatever that URL serves at
-# build time lands in the image.
-FROM docker.io/oven/bun:${BUN_VERSION}-slim AS bun
+# bun arrives as a binary copied out of its own official image, pinned by
+# digest. The alternative the scaffold shipped — `curl -fsSL
+# https://bun.sh/install | bash` — runs a mutable remote script as root, so
+# whatever that URL serves at build time lands in the image. A bare tag is the
+# same weakness one step removed: tags are mutable, digests are not. The tag is
+# kept alongside it for readability and must be bumped WITH the digest:
+#   docker buildx imagetools inspect docker.io/oven/bun:<version>-slim
+FROM docker.io/oven/bun:${BUN_VERSION}-slim@sha256:e0ee68d16ccb9927bf02aa7dd8fd4bf3369ee6d46da04faa72b05ce8bfd135f6 AS bun
 
 FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
 
