@@ -17,6 +17,7 @@ class Importmap::Commands < Thor
   option :minify, type: :boolean, desc: "Minify the vendored download with bun, esbuild or terser"
   option :lock, type: :boolean, desc: "Lock the pin at this version; update, pin and pristine leave it there until unlocked"
   option :force, type: :boolean, default: false, desc: "Re-pin locked packages, keeping each lock at the new version"
+  option :vendor, type: :boolean, default: false, desc: "Vendor the download even when it looks like it needs sibling files; converts a pin kept remote back"
   def pin(*packages)
     packages = without_locked(packages, lock: options[:lock], force: options[:force])
     # jspm resolves a package together with its dependencies; --lock and
@@ -28,7 +29,8 @@ class Importmap::Commands < Thor
 
       pin_package(package, url, preload: options[:preload], remote: options[:remote], env: options[:env],
                                 minify: options[:minify], from: options[:from],
-                                lock: requested.include?(package) ? options[:lock] : nil)
+                                lock: requested.include?(package) ? options[:lock] : nil,
+                                vendor: requested.include?(package) && options[:vendor])
     end
   end
 
@@ -71,7 +73,10 @@ class Importmap::Commands < Thor
 
         puts %(Downloading "#{package}" to #{packager.vendor_path}/#{package}.js from #{url}#{" (minified)" if minify})
 
-        pin_esm_run_dependencies packager.download(package, url, minify: minify), minify: minify
+        # pristine restores what each pin already says, so a package vendored
+        # before the single-file check existed — or on purpose with --vendor —
+        # is downloaded again rather than converted. pin is where that is decided.
+        pin_esm_run_dependencies packager.download(package, url, minify: minify, force: true), minify: minify
         record_provenance(package, url, minify) if provenance_changed?(package, url, minify)
       end
     end
@@ -175,30 +180,39 @@ class Importmap::Commands < Thor
 
     # A lock outlives a rewrite unless the caller says otherwise, so update
     # and --force re-lock at the version they move to.
-    def pin_package(package, url, preload: nil, remote: false, env: "production", minify: nil, from: nil, lock: nil)
+    def pin_package(package, url, preload: nil, remote: false, env: "production", minify: nil, from: nil, lock: nil, vendor: false)
       existing_options = packager.extract_existing_pin_options(package)[package] || {}
       preload = existing_options[:preload] if preload.nil?
       integrity = existing_options[:integrity]
       locked = lock.nil? ? packager.locked?(package) : lock
+      # A pin vendored on purpose stays vendored: without this an update would
+      # inspect the download again, refuse it again, and quietly undo --vendor.
+      vendor ||= packager.vendored?(package)
       existing_url = existing_options[:to] if existing_options[:to].to_s.match?(Importmap::Packager::REMOTE_URL_REGEXP)
 
-      if existing_url
+      if existing_url && !vendor
         repin_remote_package(package, url, existing_url, preload, env: env, from: from, integrity: integrity, locked: locked)
       elsif remote
         pin_remote_package(package, url, preload, integrity: integrity, locked: locked)
       else
-        pin_vendored_package(package, url, preload, minify: minify, integrity: integrity, locked: locked)
+        pin_vendored_package(package, url, preload, minify: minify, integrity: integrity, locked: locked, vendor: vendor)
       end
     end
 
-    def pin_vendored_package(package, url, preload, minify: nil, integrity: nil, locked: false)
+    # Nothing is said about a download until it has arrived and been found fit
+    # to serve on its own, so a package kept remote reports that and only that.
+    def pin_vendored_package(package, url, preload, minify: nil, integrity: nil, locked: false, vendor: false)
       minify = vendored_minified?(package) if minify.nil?
+
+      begin
+        dependencies = packager.download(package, url, minify: minify, force: vendor)
+      rescue Importmap::Packager::Unvendorable => error
+        return pin_remote_package(package, url, preload, integrity: integrity, locked: locked, kept_remote: error.reasons)
+      end
 
       puts %(Pinning "#{package}" to #{packager.vendor_path}/#{package}.js via download from #{url}#{" (minified)" if minify})
 
-      dependencies = packager.download(package, url, minify: minify)
-
-      update_importmap_with_pin(package, packager.vendored_pin_for(package, url, preload, minify: minify, integrity: integrity, locked: locked))
+      update_importmap_with_pin(package, packager.vendored_pin_for(package, url, preload, minify: minify, integrity: integrity, locked: locked, vendored: vendor))
       report_lock(package) if locked
 
       pin_esm_run_dependencies(dependencies, preload: preload, minify: minify)
@@ -370,6 +384,7 @@ class Importmap::Commands < Thor
 
       update_importmap_with_pin(package, packager.vendored_pin_for(package, url, existing_options[:preload],
                                                                    minify: minify, integrity: existing_options[:integrity],
+                                                                   vendored: packager.vendored?(package),
                                                                    locked: packager.locked?(package)))
     end
 
@@ -397,12 +412,18 @@ class Importmap::Commands < Thor
       packager.pin_provenance(packager.package_key_for(spec))&.dig(:provider)
     end
 
-    def pin_remote_package(package, url, preload, integrity: nil, locked: false)
-      puts %(Pinning "#{package}" to #{url})
+    # +kept_remote+ is the reasons a download just turned out not to stand on
+    # its own; without it the reason the pin already records is carried over, so
+    # update and a plain pin don't drop it.
+    def pin_remote_package(package, url, preload, integrity: nil, locked: false, kept_remote: nil)
+      puts %(Pinning "#{package}" to #{url}#{" (kept remote: #{kept_remote.join(" and ")})" if kept_remote})
+
+      remote = kept_remote&.first || packager.remote_reason(package)
 
       packager.remove_existing_package_file(package)
 
-      update_importmap_with_pin(package, packager.pin_for(package, url, preloads: preload, integrity: integrity, locked: locked))
+      update_importmap_with_pin(package, packager.pin_for(package, url, preloads: preload, integrity: integrity,
+                                                           locked: locked, remote: remote))
       report_lock(package) if locked
     end
 

@@ -11,6 +11,7 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
   def content
     vendoring
     choosing_a_cdn
+    cant_be_vendored_alone
     remote_pins
     custom_urls
     options_survive
@@ -69,6 +70,71 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
         go back to it — an unpkg download stays on unpkg through `update` and
         `pristine`. Pass `--from` again to move a package to another CDN. See
         [Provenance](/docs/provenance).
+      MD
+    end
+  end
+
+  def cant_be_vendored_alone
+    DocsUI::Section("Packages that can't be vendored alone",
+                    description: "Pinned to the CDN instead of downloaded, with the reason on the pin.") do
+      md <<~'MD'
+        A vendored package is exactly one file, served under a digested asset path.
+        Plenty of packages ship a file that expects the rest of the package beside
+        it — it imports a sibling by relative path, spawns a worker, or reads
+        `import.meta.url` to find its own directory. Downloaded on its own, every one
+        of those references 404s in the browser, and you find out on the page.
+
+        `pin` reads what it downloaded before writing anything to
+        `vendor/javascript`. A file that can't stand alone is pinned to its CDN URL
+        instead, and the pin comment records why:
+      MD
+      DocsUI::Code(<<~SHELL, lexer: :console)
+        $ ./bin/importmap pin @popperjs/core@2.11.8
+        Pinning "@popperjs/core" to https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js (kept remote: relative imports)
+      SHELL
+      DocsUI::Code(<<~RUBY, filename: "config/importmap.rb")
+        pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js" # @2.11.8 (remote: relative imports)
+      RUBY
+      md <<~'MD'
+        From then on the pin behaves like any other remote pin: `pin` and `update`
+        re-resolve it from the same CDN and keep the reason, and `pristine` skips it.
+        The vendored file an app already has is never removed by a refusal — the
+        download is inspected before anything on disk is touched.
+
+        Five things are looked for, and all of them are reported:
+      MD
+      DocsUI::Table(
+        [ "Reason", "What was found" ],
+        [
+          [ [ :code, "relative imports" ], [ :md, 'An `import` or `export` from `"./x"` or `"../x"` — a sibling file that was never downloaded.' ] ],
+          [ [ :code, "dynamic imports" ], [ :md, "An `import()` of something other than a string literal, so what it loads isn't knowable here." ] ],
+          [ [ :code, "workers" ], [ :md, "`new Worker(…)` or `new SharedWorker(…)`. A worker is fetched as its own script and never goes through the import map." ] ],
+          [ [ :code, "import.meta.url" ], [ :md, "The file asking for its own URL, which is a digested asset path, not the directory the package was published to." ] ],
+          [ [ :code, "wasm" ], [ :md, "A string naming a `.wasm` binary, fetched at runtime from a path that isn't there." ] ]
+        ]
+      )
+      md <<~'MD'
+        The check reads the source with regular expressions rather than parsing
+        JavaScript, so the same text inside a string or a comment counts too. That
+        direction is deliberate: a false positive leaves you with a working remote
+        pin. When you know better, `--vendor` downloads the package anyway:
+      MD
+      DocsUI::Code(<<~SHELL, lexer: :console)
+        $ ./bin/importmap pin @popperjs/core@2.11.8 --vendor
+        Pinning "@popperjs/core" to vendor/javascript/@popperjs/core.js via download from https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js
+      SHELL
+      DocsUI::Code(<<~RUBY, filename: "config/importmap.rb")
+        pin "@popperjs/core", to: "@popperjs--core.js" # @2.11.8 (vendored)
+      RUBY
+      md <<~'MD'
+        `--vendor` also converts a pin that was kept remote back to a download. The
+        `vendored` mark is what makes the override stick: without it the next
+        `update` would inspect the new download, refuse it again and quietly undo
+        your decision.
+
+        Packages an app already vendored before this check existed are left alone;
+        nothing is rewritten behind your back. Run `bin/importmap pristine` and they
+        are downloaded again exactly as their pins say.
       MD
     end
   end

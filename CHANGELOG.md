@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.2.0
+
+### Added
+
+- **`pin` keeps a package remote when its file can't stand alone, and says
+  why.** A vendored package is one file served under a digested asset path,
+  but plenty of packages ship a file that imports a sibling by relative path,
+  spawns a `Worker`, reads `import.meta.url` or fetches a `.wasm` binary —
+  every one of those 404s in the browser, and importmap-rails vendors it
+  anyway. `pin` now reads the download before writing anything to
+  `vendor/javascript`; a file that needs more than itself is pinned to its CDN
+  URL and the reason goes on the pin:
+
+  ```
+  $ bin/importmap pin @popperjs/core@2.11.8
+  Pinning "@popperjs/core" to https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js (kept remote: relative imports)
+  ```
+  ```ruby
+  pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js" # @2.11.8 (remote: relative imports)
+  ```
+
+  The pin then behaves like any other remote pin — `pin` and `update`
+  re-resolve it from the same CDN and keep the reason, `pristine` skips it.
+  `pin --vendor` downloads the package anyway and records `(vendored)` on the
+  pin, so a later `update` doesn't undo the override; it also converts a pin
+  that was kept remote back to a download. Packages an app already vendored
+  are left exactly as they are, and `pristine` still redownloads them.
+
+### Fixed
+
+- **A failed download no longer deletes the file an app already has.**
+  `pin` and `pristine` removed `vendor/javascript/<package>.js` before
+  fetching, so a CDN that answered 500 — or, now, a file that can't be
+  vendored — left the app with no file at all. The existing file is replaced
+  only once the new one has arrived and been found fit to serve.
+
 ## 1.1.0
 
 ### Added
