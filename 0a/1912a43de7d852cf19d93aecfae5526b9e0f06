@@ -1,0 +1,31 @@
+docs/config/deploy.yml
+  s_7f508d8614d6df::t_e85f1ad667d58b 87-91
+.github/workflows/deploy-docs.yml
+  s_7f508d8614d6df::t_0240805a10913a 22-26
+docs/.dash/secrets
+  s_7f508d8614d6df::t_b26eeda2680b2c 5-19
+docs/Dockerfile
+  s_7f508d8614d6df::t_71d0bbe1426214 50-51,53-54,60
+  s_7f508d8614d6df::t_29c359c53b8a85 18,20-27
+  s_7f508d8614d6df::t_df35b036dfa006 55-59,61
+  s_7f508d8614d6df::t_6c6fdf89a2561f 14-16,19
+  s_7f508d8614d6df::t_e403170832ac10 101-105
+docs/app/assets/stylesheets/application.tailwind.css
+  s_7f508d8614d6df::t_0fac535d9093dd 3-8,10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "0a1912a43de7d852cf19d93aecfae5526b9e0f06",
+  "prompts": {},
+  "sessions": {
+    "s_7f508d8614d6df": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "372ec33a-7695-43b2-9b3c-1058e62da8a7",
+        "model": "claude-opus-5"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
