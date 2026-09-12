@@ -60,10 +60,12 @@ If the merge stops on a conflict:
 - **`CHANGELOG.md`** — union. Both sides inserted bullets under the same `### Added` (or `### Changed` / `### Fixed`) beneath the next-version heading. For the plain same-anchor shape, strip the markers keeping both blocks:
 
   ```bash
-  perl -0pi -e 's/^<<<<<<< HEAD\n//mg; s/^\|\|\|\|\|\|\| [^\n]*\n=======\n//mg; s/^>>>>>>> [^\n]*\n//mg;' CHANGELOG.md
+  perl -0pi -e 's/^<<<<<<< [^\n]*\n//mg; s/^\|\|\|\|\|\|\| [^\n]*\n(?:(?!^=======$).)*?^=======\n//mgs; s/^=======\n//mg; s/^>>>>>>> [^\n]*\n//mg;' CHANGELOG.md
   ```
 
-  Then **read the result**: no markers left (`grep -n '^<<<<<<<\|^=======\|^>>>>>>>\|^|||||||' CHANGELOG.md`), this PR's bullets present once, no duplicated `###` subheading, nothing from the base dropped. The perl is a fast path, not a substitute for reading; any other shape is resolved by hand.
+  The middle substitution drops the base section of a diff3-style conflict (`merge.conflictstyle = diff3` or `zdiff3`, which this repo's conflicts show); the third drops the bare `=======` of git's default two-way style. Run both — you do not know which style the machine is configured for, and the default style leaves a bare `=======` that the diff3 pattern never matches.
+
+  Then **read the result**: no markers left (`grep -n '^<<<<<<<\|^=======\|^>>>>>>>\|^|||||||' CHANGELOG.md`), this PR's bullets present once, no duplicated `###` subheading, nothing from the base dropped. Note the third substitution also eats a setext `=======` underline anywhere in the file, so the grep is not optional. The perl is a fast path, not a substitute for reading; any other shape is resolved by hand.
 
 - **`docs/Gemfile.lock`** — take the base's side, then regenerate: `git checkout origin/<base> -- docs/Gemfile.lock && (cd docs && bundle install)`. Confirm the only resulting change is the `importmap-plus (X.Y.Z)` pin and whatever this PR's `docs/Gemfile` edits imply.
 

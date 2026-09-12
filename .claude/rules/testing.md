@@ -28,7 +28,11 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     flaky = ->(_uri) { attempts += 1; raise Errno::ECONNRESET, "SSL_connect" if attempts < 3; response }
 
     without_retry_wait do
-      Net::HTTP.stub(:get_response, flaky) { @packager.download("react", "https://ga.jspm.io/npm:react@17.0.2/index.js") }
+      Dir.mktmpdir do |vendor_dir|
+        packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+        Net::HTTP.stub(:get_response, flaky) { packager.download("react", "https://ga.jspm.io/npm:react@17.0.2/index.js") }
+      end
     end
 
     assert_equal 3, attempts
@@ -36,7 +40,7 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
 end
 ```
 
-A stubbed response is a tiny object with `code` and `body` — no `Net::HTTPResponse` construction. `without_retry_wait` (in `packager_test.rb`) zeroes `HttpRetries.wait` and restores it in `ensure`; any test that sets a class-level accessor (`Packager.endpoint`, `Npm.base_uri`, `HttpRetries.attempts`) restores it the same way or it leaks into later tests.
+Three things that example is doing on purpose. A stubbed response is a tiny object with `code` and `body` — no `Net::HTTPResponse` construction. Anything that **writes** takes a `vendor_path` inside `Dir.mktmpdir`; the default is the real `vendor/javascript`, so a download without it leaves `test/dummy/vendor/javascript/react.js` in the working tree. And `without_retry_wait` (in `packager_test.rb`) zeroes `HttpRetries.wait` and restores it in `ensure` — any test that sets a class-level accessor (`Packager.endpoint`, `Npm.base_uri`, `HttpRetries.attempts`) restores it the same way or it leaks into later tests.
 
 ## Where each kind of test lives
 

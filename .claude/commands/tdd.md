@@ -33,13 +33,17 @@ Pick the file by what's under test — stubbed unit test by default:
 ```ruby
 # test/packager_test.rb
 test "update keeps preload: false when re-pinning a vendored package" do
-  @packager = Importmap::Packager.new(file_fixture("preload_false_import_map.rb"))
+  packager = Importmap::Packager.new(create_temp_importmap(<<~RUBY))
+    pin "md5", preload: false # @2.1.0
+  RUBY
 
-  line = @packager.vendored_pin_for("md5", "https://ga.jspm.io/npm:md5@2.2.0/md5.js", false)
+  line = packager.vendored_pin_for("md5", "https://ga.jspm.io/npm:md5@2.2.0/md5.js", false)
 
   assert_equal 'pin "md5", preload: false # @2.2.0', line
 end
 ```
+
+`create_temp_importmap` (a private helper in `packager_test.rb`) writes a Tempfile and returns its path — reach for it when the pin line under test is one or two lines. `file_fixture("…_import_map.rb")` is for shapes reused across tests, and the file must already exist under `test/fixtures/files/`; it raises if not.
 
 Only when the behaviour IS the CLI's contract with a real CDN response, a live case:
 

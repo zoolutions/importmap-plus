@@ -48,7 +48,7 @@ The minifier runs on a temp file with a fixed name, so package names never reach
 
 ### Subresource integrity
 
-- `enable_integrity!` computes `sha384` over the asset the resolver serves; a `pin` may pass `integrity: "sha384-…"` for a remote asset or `false` to opt out.
+- `enable_integrity!` only turns integrity on (`@integrity = true`). The hash itself comes from the asset pipeline through `resolver.asset_integrity`, so the algorithm is the pipeline's: Sprockets ships it, and Propshaft computes nothing until the app sets `config.assets.integrity_hash_algorithm`. A `pin` may instead pass a literal `integrity: "sha384-…"` for a remote asset, or `false` to opt out. Never state an algorithm the app controls.
 - The helper emits `integrity` on `<script type="importmap">` entries and modulepreload links. A change to `build_integrity_hash` or `resolve_integrity_value` must be covered under BOTH asset pipelines (`ASSETS_PIPELINE` branches).
 - Never compute an integrity hash over content fetched at render time — the request path does no I/O beyond the resolver.
 

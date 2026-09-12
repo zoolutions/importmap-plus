@@ -67,20 +67,22 @@ gh pr checks <N>                         # every matrix cell, plus "Build & test
 
 ## Output format
 
+Every line below is a template, not an example finding — cite only what you verified in this diff.
+
 ```
 ## Files requiring manual review
 
 | File | Reason |
 |---|---|
-| lib/importmap/packager.rb | regex change to PIN_PROVENANCE_REGEXP — verify read-back of existing pins |
+| `<file>` | why a human should read it: a regex the whole pin contract runs through, a rewrite path with no test |
 
 ## Fork-constraint violations
 
-- (none) / `lib/importmap/map.rb:72` — `pin` gained a keyword importmap-rails rejects
+- (none), or one line per violation: `<file>:<line>` — which constraint from the table, and what it breaks
 
 ## Critical issues
 
-- `lib/importmap/commands.rb:131` — `update` path drops `preload: false` (no test covers it)
+- `<file>:<line>` — one sentence naming the defect and the input that triggers it
 
 ## Suggestions (non-blocking)
 

@@ -46,10 +46,11 @@ def measure(label, n)
   printf "%-28s %8.1f µs/call  %6d objs/call\n", label, t / n * 1_000_000, allocs
 end
 
+# clear_cache is private (map.rb), hence send — the cold numbers are the point.
 measure("to_json (cached)", n)             { map.to_json(resolver: resolver) }
-measure("to_json (cold)", n)               { map.clear_cache; map.to_json(resolver: resolver) }
-measure("preloaded_module_paths (cold)", n) { map.clear_cache; map.preloaded_module_paths(resolver: resolver) }
-measure("digest (cold)", n)                { map.clear_cache; map.digest(resolver: resolver) }
+measure("to_json (cold)", n)               { map.send(:clear_cache); map.to_json(resolver: resolver) }
+measure("preloaded_module_paths (cold)", n) { map.send(:clear_cache); map.preloaded_module_paths(resolver: resolver) }
+measure("digest (cold)", n)                { map.send(:clear_cache); map.digest(resolver: resolver) }
 ```
 
 ### 2. Baseline `main`
