@@ -611,6 +611,63 @@ class CommandsTest < ActiveSupport::TestCase
     assert_not_includes content, "photoswipe@5.3.0"
   end
 
+  test "update command with no names re-pins the subpath key, not the package name" do
+    importmap_config('pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5.3.0/dist/photoswipe-lightbox.esm.js"')
+
+    out, _err = run_importmap_command("update")
+
+    assert_includes out, 'Pinning "photoswipe/lightbox"'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_match %r{^pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5\.4\.\d+/dist/photoswipe-lightbox\.esm\.js"$}, content
+    assert_not_includes content, "photoswipe@5.3.0"
+    assert_no_match %r{^pin "photoswipe"}, content
+  end
+
+  test "update command with --all re-pins every key carrying an outdated package" do
+    importmap_config(<<~PINS)
+      pin "photoswipe", to: "https://ga.jspm.io/npm:photoswipe@5.3.0/dist/photoswipe.esm.js"
+      pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5.3.0/dist/photoswipe-lightbox.esm.js"
+    PINS
+
+    out, _err = run_importmap_command("update", "--all")
+
+    assert_includes out, 'Pinning "photoswipe"'
+    assert_includes out, 'Pinning "photoswipe/lightbox"'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_match %r{^pin "photoswipe", to: "https://ga.jspm.io/npm:photoswipe@5\.4\.\d+/dist/photoswipe\.esm\.js"$}, content
+    assert_match %r{^pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5\.4\.\d+/dist/photoswipe-lightbox\.esm\.js"$}, content
+    assert_not_includes content, "photoswipe@5.3.0"
+    assert_equal 2, content.lines.count { |line| line.start_with?("pin ") }
+  end
+
+  test "update command leaves a local pin that shares a namespace with an outdated package" do
+    importmap_config(<<~PINS)
+      pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js"
+      pin "md5/helpers", to: "md5/helpers.js"
+    PINS
+
+    out, _err = run_importmap_command("update")
+
+    assert_includes out, 'Pinning "md5"'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, "md5@2.3.0"
+    assert_includes content, %(pin "md5/helpers", to: "md5/helpers.js")
+  end
+
+  test "update command re-resolves a remote subpath pin from the CDN it is on" do
+    importmap_config('pin "photoswipe/lightbox", to: "https://cdn.jsdelivr.net/npm/photoswipe@5.3.0/dist/photoswipe-lightbox.esm.js"')
+
+    out, _err = run_importmap_command("update")
+
+    assert_includes out, 'Pinning "photoswipe/lightbox"'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_match %r{^pin "photoswipe/lightbox", to: "https://cdn\.jsdelivr\.net/npm/photoswipe@5\.4\.\d+/dist/photoswipe-lightbox\.esm\.js"$}, content
+  end
+
   test "update command reports a name whose package is pinned under another key" do
     importmap_config('pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5.3.0/dist/photoswipe-lightbox.esm.js"')
 

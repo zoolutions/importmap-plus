@@ -155,8 +155,26 @@ class Importmap::Packager
     importmap.lines.find { |candidate| candidate.match?(Importmap::Map.pin_line_regexp_for(package)) }&.chomp
   end
 
+  # The version a pin declares, in its provenance comment or in the CDN URL it
+  # points at, or nil when it names none — as one of the app's own files
+  # doesn't. Only a pin with a version can be told to be outdated.
+  def pin_version(package)
+    provenance = pin_provenance(package)
+    return provenance[:version] if provenance
+
+    to = (extract_existing_pin_options(package)[package] || {})[:to]
+    extract_package_version_from(to.to_s)&.delete_prefix("@")
+  end
+
   def locked?(package)
     pin_provenance(package)&.dig(:locked) || false
+  end
+
+  # The import-map keys of every pin, in file order.
+  def pinned_packages
+    return [] unless @importmap_path.exist?
+
+    importmap.lines.filter_map { |line| line.strip[PIN_REGEX, 1] }
   end
 
   # The import-map keys of every locked pin, in file order.
@@ -268,6 +286,16 @@ class Importmap::Packager
   # and "@hotwired/stimulus".
   def package_name_for(spec)
     spec.to_s.match(PACKAGE_SPEC_REGEXP)&.captures&.first || spec.to_s
+  end
+
+  # The spec that asks a CDN for +key+ at +version+. A version belongs on the
+  # package name, ahead of the subpath: "photoswipe/lightbox" at "@5.4.4" is
+  # "photoswipe@5.4.4/lightbox", where "photoswipe/lightbox@5.4.4" is a path
+  # no CDN has.
+  def package_spec_for(key, version)
+    name, _requested, subpath = key.to_s.match(PACKAGE_SPEC_REGEXP)&.captures
+
+    name ? "#{name}#{version}#{subpath}" : "#{key}#{version}"
   end
 
   def remove_existing_package_file(package)

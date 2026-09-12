@@ -598,6 +598,48 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
                  @packager.pin_for("md5", "https://cdn.example.com/md5.js", locked: true)
   end
 
+  test "pinned_packages lists every import-map key in file order" do
+    packager = Importmap::Packager.new(create_temp_importmap(<<~RUBY))
+      pin "react" # @17.0.2
+      pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5.3.0/dist/photoswipe-lightbox.esm.js"
+      pin '@hotwired/stimulus', to: "@hotwired--stimulus.js" # @3.2.2
+      pin_all_from "app/javascript/controllers", under: "controllers"
+    RUBY
+
+    assert_equal %w[react photoswipe/lightbox @hotwired/stimulus], packager.pinned_packages
+  end
+
+  test "pinned_packages is empty without an importmap" do
+    assert_empty Importmap::Packager.new("tmp/does-not-exist.rb").pinned_packages
+  end
+
+  test "pin_version reads the version from a comment or a CDN URL, and nowhere else" do
+    packager = Importmap::Packager.new(create_temp_importmap(<<~RUBY))
+      pin "react" # @17.0.2 (locked)
+      pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js"
+      pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5.3.0/dist/photoswipe-lightbox.esm.js"
+      pin "md5/helpers", to: "md5/helpers.js"
+      pin "application"
+    RUBY
+
+    assert_equal "17.0.2", packager.pin_version("react")
+    assert_equal "2.2.0", packager.pin_version("md5")
+    assert_equal "5.3.0", packager.pin_version("photoswipe/lightbox")
+    assert_nil packager.pin_version("md5/helpers")
+    assert_nil packager.pin_version("application")
+    assert_nil packager.pin_version("not-pinned")
+  end
+
+  test "package_spec_for puts the version ahead of the subpath" do
+    packager = Importmap::Packager.new(create_temp_importmap(""))
+
+    assert_equal "photoswipe@5.4.4/lightbox", packager.package_spec_for("photoswipe/lightbox", "@5.4.4")
+    assert_equal "md5@2.3.0", packager.package_spec_for("md5", "@2.3.0")
+    assert_equal "@hotwired/stimulus@3.2.2/webpack-helpers",
+                 packager.package_spec_for("@hotwired/stimulus/webpack-helpers", "@3.2.2")
+    assert_equal "photoswipe/lightbox", packager.package_spec_for("photoswipe/lightbox", nil)
+  end
+
   test "locked? and locked_pins" do
     packager = Importmap::Packager.new(create_temp_importmap(<<~RUBY))
       pin "react" # @17.0.2 (locked)
