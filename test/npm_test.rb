@@ -70,6 +70,19 @@ class Importmap::NpmTest < ActiveSupport::TestCase
     assert_equal [["luxon", "3.7.2"], ["md5", "2.2.0"], ["react", "17.0.2"]], npm.packages_with_versions.sort
   end
 
+  test "outdated_packages with only: asks the registry about those packages alone" do
+    npm = Importmap::Npm.new(file_fixture("locked_import_map.rb"))
+    response = { "dist-tags" => { "latest" => "99.0.0" } }.to_json
+    asked = []
+
+    npm.stub(:get_json, ->(uri) { asked << uri.path; response }) do
+      outdated_packages = npm.outdated_packages(only: ["md5", "react/subpath"])
+
+      assert_equal %w[md5 react], outdated_packages.map(&:name)
+      assert_equal %w[/md5 /react], asked.sort
+    end
+  end
+
   test "handles scoped package with nested path" do
     npm = Importmap::Npm.new(file_fixture("scoped_package_with_nested_path_import_map.rb"))
     packages = npm.packages_with_versions
