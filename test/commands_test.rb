@@ -526,10 +526,98 @@ class CommandsTest < ActiveSupport::TestCase
 
     out, _err = run_importmap_command("update")
 
-    assert_includes out, 'Skipping "md5" (locked at 2.2.0; run bin/importmap unlock md5)'
-    assert_includes out, "Nothing to update (every outdated package is locked)"
+    assert_includes out, 'Skipping "md5" (locked at 2.2.0; run bin/importmap unlock md5 or pass --force)'
+    assert_includes out, "Nothing to update (every outdated package is locked; pass --force)"
     assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"),
                     %(pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: true # @2.2.0 (locked)\n)
+  end
+
+  test "update command with --force updates a locked package and keeps the lock" do
+    importmap_config('pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: true # @2.2.0 (locked)')
+
+    out, _err = run_importmap_command("update", "--force")
+
+    assert_includes out, 'Locked "md5" at 2.3.0'
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"),
+                    %(pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.3.0/md5.js", preload: true # @2.3.0 (locked)\n)
+  end
+
+  test "update command with named packages updates only those" do
+    importmap_config(<<~PINS)
+      pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: false
+      pin "luxon", to: "https://cdn.jsdelivr.net/npm/luxon@3.0.0/build/es6/luxon.mjs"
+    PINS
+
+    out, _err = run_importmap_command("update", "md5")
+
+    assert_includes out, 'Pinning "md5"'
+    assert_not_includes out, "luxon"
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, %(pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.3.0/md5.js", preload: false\n)
+    assert_includes content, %(pin "luxon", to: "https://cdn.jsdelivr.net/npm/luxon@3.0.0/build/es6/luxon.mjs"\n)
+  end
+
+  test "update command with --all updates every outdated package" do
+    FileUtils.cp("#{__dir__}/fixtures/files/outdated_import_map.rb", "#{@tmpdir}/dummy/config/importmap.rb")
+
+    out, _err = run_importmap_command("update", "--all")
+
+    assert_includes out, 'Pinning "md5"'
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), "md5@2.3.0"
+  end
+
+  test "update command rejects names together with --all" do
+    FileUtils.cp("#{__dir__}/fixtures/files/outdated_import_map.rb", "#{@tmpdir}/dummy/config/importmap.rb")
+
+    out, _err = run_importmap_command_expecting_failure("update", "md5", "--all")
+
+    assert_includes out, "Pass package names or --all, not both"
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), "md5@2.2.0"
+  end
+
+  test "update command reports a named package that isn't pinned and updates nothing" do
+    FileUtils.cp("#{__dir__}/fixtures/files/outdated_import_map.rb", "#{@tmpdir}/dummy/config/importmap.rb")
+
+    out, _err = run_importmap_command_expecting_failure("update", "md5", "nope")
+
+    assert_includes out, %(Couldn't find a pin for "nope")
+    assert_not_includes out, "Pinning"
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), "md5@2.2.0"
+  end
+
+  test "update command reports named packages that are up to date or have no version" do
+    importmap_config(<<~PINS)
+      pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.3.0/md5.js"
+      pin "application"
+    PINS
+
+    out, _err = run_importmap_command("update", "md5", "application")
+
+    assert_includes out, %("md5" is already up to date (2.3.0))
+    assert_includes out, %(Can't tell whether "application" is outdated: its pin has no version)
+    assert_includes out, "No outdated packages found"
+  end
+
+  test "update command with a subpath name re-pins that key" do
+    importmap_config('pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5.3.0/dist/photoswipe-lightbox.esm.js"')
+
+    out, _err = run_importmap_command("update", "photoswipe/lightbox")
+
+    assert_includes out, 'Pinning "photoswipe/lightbox"'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_match %r{^pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5\.4\.\d+/dist/photoswipe-lightbox\.esm\.js"$}, content
+    assert_not_includes content, "photoswipe@5.3.0"
+  end
+
+  test "update command reports a name whose package is pinned under another key" do
+    importmap_config('pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5.3.0/dist/photoswipe-lightbox.esm.js"')
+
+    out, _err = run_importmap_command_expecting_failure("update", "photoswipe")
+
+    assert_includes out, %(Couldn't find a pin for "photoswipe")
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), "photoswipe@5.3.0"
   end
 
   test "outdated command shows locked packages and exits 0 when nothing unlocked is outdated" do
