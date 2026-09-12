@@ -19,8 +19,13 @@ class Importmap::Npm
     @vendor_path    = Pathname.new(vendor_path)
   end
 
-  def outdated_packages
-    packages_with_versions.each_with_object([]) do |(package, current_version), outdated_packages|
+  # With +only:+, just those packages are looked up; names may carry a
+  # subpath (apexcharts/core), which the registry doesn't know about.
+  def outdated_packages(only: nil)
+    wanted = only&.map { |name| extract_base_package_name(name) }
+    candidates = wanted ? packages_with_versions.select { |package, _| wanted.include?(package) } : packages_with_versions
+
+    candidates.each_with_object([]) do |(package, current_version), outdated_packages|
       outdated_package = OutdatedPackage.new(name: package, current_version: current_version)
 
       if !(response = get_package(package))
@@ -51,21 +56,25 @@ class Importmap::Npm
     end.sort_by { |p| [p.name, p.severity] }
   end
 
+  # Memoized: a command that asks twice would otherwise report the
+  # unversioned packages twice.
   def packages_with_versions
-    # We cannot use the name after "pin" because some dependencies are loaded from inside packages
-    # Eg. pin "buffer", to: "https://ga.jspm.io/npm:@jspm/core@2.0.0-beta.19/nodelibs/browser/buffer.js"
-    with_versions = importmap.scan(/^pin .*(?<=npm:|npm\/|skypack\.dev\/|unpkg\.com\/|esm\.sh\/|esm\.sh\/\*)([^@\/]+)@(\d+\.\d+\.\d+(?:[^\/\s"']*))/) |
-      importmap.scan(/#{PIN_REGEX} #.*@(\d+\.\d+\.\d+(?:[^\s]*)).*$/)
+    @packages_with_versions ||= begin
+      # We cannot use the name after "pin" because some dependencies are loaded from inside packages
+      # Eg. pin "buffer", to: "https://ga.jspm.io/npm:@jspm/core@2.0.0-beta.19/nodelibs/browser/buffer.js"
+      with_versions = importmap.scan(/^pin .*(?<=npm:|npm\/|skypack\.dev\/|unpkg\.com\/|esm\.sh\/|esm\.sh\/\*)([^@\/]+)@(\d+\.\d+\.\d+(?:[^\/\s"']*))/) |
+        importmap.scan(/#{PIN_REGEX} #.*@(\d+\.\d+\.\d+(?:[^\s]*)).*$/)
 
-    with_versions.map! do |package, version|
-      [extract_base_package_name(package), version]
-    end.uniq!
+      with_versions.map! do |package, version|
+        [extract_base_package_name(package), version]
+      end.uniq!
 
-    vendored_packages_without_version(with_versions).each do |package, path|
-      $stdout.puts "Ignoring #{package} (#{path}) since no version is specified in the importmap"
+      vendored_packages_without_version(with_versions).each do |package, path|
+        $stdout.puts "Ignoring #{package} (#{path}) since no version is specified in the importmap"
+      end
+
+      with_versions
     end
-
-    with_versions
   end
 
   private
