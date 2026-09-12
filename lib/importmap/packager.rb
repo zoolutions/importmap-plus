@@ -263,6 +263,13 @@ class Importmap::Packager
     name ? "#{name}#{subpath}" : spec.to_s
   end
 
+  # The package a spec or key belongs to, as the registry knows it:
+  # "photoswipe/lightbox" and "@hotwired/stimulus@3" are pins of "photoswipe"
+  # and "@hotwired/stimulus".
+  def package_name_for(spec)
+    spec.to_s.match(PACKAGE_SPEC_REGEXP)&.captures&.first || spec.to_s
+  end
+
   def remove_existing_package_file(package)
     FileUtils.rm_rf vendored_package_path(package)
   end

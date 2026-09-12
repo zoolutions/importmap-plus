@@ -123,22 +123,30 @@ class Importmap::Commands < Thor
     end
   end
 
-  desc "update", "Update outdated package pins"
-  def update
-    if (outdated_packages = npm.outdated_packages).any?
-      packages = without_locked_updates(outdated_packages.map(&:name))
+  desc "update [*PACKAGES]", "Update outdated package pins"
+  option :all, type: :boolean, default: false, desc: "Update every outdated package (the default when no names are given)"
+  option :force, type: :boolean, default: false, desc: "Update locked packages too, keeping each lock at the new version"
+  def update(*packages)
+    if packages.any? && options[:all]
+      puts "Pass package names or --all, not both"
+      exit 1
+    end
 
-      if packages.empty?
-        puts "Nothing to update (every outdated package is locked)"
-      else
-        for_each_import_grouped_by_provider(packages, env: "production") do |package, url|
-          next if keep_locked_dependency(package, packages)
+    outdated_packages = npm.outdated_packages(only: packages.presence)
+    exit 1 unless every_package_known?(packages, outdated_packages)
 
-          pin_package(package, url)
-        end
-      end
-    else
+    if outdated_packages.empty?
       puts "No outdated packages found"
+    elsif (names = without_locked_updates(outdated_packages.map(&:name), force: options[:force])).empty?
+      puts "Nothing to update (every outdated package is locked; pass --force)"
+    else
+      keys = packages.any? ? requested_keys_for(packages, names) : names
+
+      for_each_import_grouped_by_provider(keys, env: "production") do |package, url|
+        next if keep_locked_dependency(package, keys)
+
+        pin_package(package, url)
+      end
     end
   end
 
@@ -236,20 +244,55 @@ class Importmap::Commands < Thor
       specs.reject do |spec|
         package = packager.package_key_for(spec)
 
-        packager.locked?(package).tap do |locked|
-          puts %(Skipping "#{package}" (locked at #{packager.pin_provenance(package)[:version]}; run bin/importmap unlock #{package} or pass --force)) if locked
-        end
+        packager.locked?(package).tap { |locked| puts skip_locked_message(package) if locked }
       end
     end
 
     # update sees npm names (apexcharts) where pins are import-map keys
     # (apexcharts/core), so a lock on any pin of the package holds it.
-    def without_locked_updates(names)
+    def without_locked_updates(names, force: false)
+      return names if force
+
       names.reject do |name|
-        (locked = locked_pin_covering(name)).tap do
-          puts %(Skipping "#{name}" (locked at #{packager.pin_provenance(locked)[:version]}; run bin/importmap unlock #{locked})) if locked
-        end
+        (locked = locked_pin_covering(name)).tap { puts skip_locked_message(locked) if locked }
       end
+    end
+
+    def skip_locked_message(package)
+      %(Skipping "#{package}" (locked at #{packager.pin_provenance(package)[:version]}; run bin/importmap unlock #{package} or pass --force))
+    end
+
+    # Says why a named package won't be updated. A name with no pin at all
+    # is a typo until proven otherwise, so nothing is updated in that case.
+    def every_package_known?(names, outdated_packages)
+      versioned = npm.packages_with_versions.to_h
+      outdated  = outdated_packages.map(&:name)
+
+      names.map do |name|
+        key = packager.package_key_for(name)
+        package = packager.package_name_for(key)
+
+        if !packager.packaged?(key)
+          puts %(Couldn't find a pin for "#{name}")
+          next false
+        elsif outdated.include?(package)
+          next true
+        elsif versioned.key?(package)
+          puts %("#{name}" is already up to date (#{versioned[package]}))
+        else
+          puts %(Can't tell whether "#{name}" is outdated: its pin has no version)
+        end
+
+        true
+      end.all?
+    end
+
+    # The registry knows a package by name and the import map by key: a pin of
+    # "photoswipe/lightbox" is outdated when "photoswipe" is. A named update
+    # re-pins the keys that were asked for, not the name the registry answered with.
+    def requested_keys_for(specs, outdated_names)
+      specs.map { |spec| packager.package_key_for(spec) }
+           .select { |key| outdated_names.include?(packager.package_name_for(key)) }
     end
 
     def locked_pin_covering(name)
