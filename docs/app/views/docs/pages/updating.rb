@@ -40,8 +40,9 @@ class Views::Docs::Pages::Updating < DocsUI::Page
 
         A package the registry couldn't be asked about is reported and left where it
         is: nothing established that a newer version exists, so re-pinning it would
-        let a registry blip re-resolve it against the CDN. When you named it, that
-        stops the command, the same as a name with no pin.
+        let a registry blip re-resolve it against the CDN. Every other package still
+        updates, and the command exits 1 so a script knows it didn't do all it was
+        asked.
 
         A package is re-resolved together with the dependencies its CDN lists for it,
         so those move as well, keeping their own pin options. Each package comes back
@@ -58,8 +59,11 @@ class Views::Docs::Pages::Updating < DocsUI::Page
         Can't tell whether "application" is outdated: its pin has no version
         No outdated packages found
 
-        $ ./bin/importmap update
+        $ ./bin/importmap update md5 luxon
         Couldn't check "md5": Response error
+        Pinning "luxon" to https://cdn.jsdelivr.net/npm/luxon@3.7.2/build/es6/luxon.mjs
+        $ echo $?
+        1
       SHELL
     end
   end

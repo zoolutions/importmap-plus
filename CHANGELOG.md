@@ -37,9 +37,9 @@
   version, so nothing established that it moved — but `update` re-pinned it
   anyway, letting a blip re-resolve the pin against the CDN and carry it to
   a version nobody asked for. Those packages are now reported —
-  `Couldn't check "md5": Response error` — and left where they are; naming
-  one stops the command, the same as naming a package with no pin. Inherited
-  from importmap-rails, where a bare `update` has always behaved this way.
+  `Couldn't check "md5": Response error` — and left where they are; every
+  other package still updates, and the command exits 1. Inherited from
+  importmap-rails, where a bare `update` has always behaved this way.
 
 ## 1.0.0
 

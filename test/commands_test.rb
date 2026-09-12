@@ -657,9 +657,9 @@ class CommandsTest < ActiveSupport::TestCase
 
   test "update command leaves a package alone when the registry couldn't be checked" do
     importmap_config('pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js"')
-    stub_registry_error("Response error")
+    stub_registry_errors("md5" => "Response error")
 
-    out, _err = run_importmap_command("update")
+    out, _err = run_importmap_command_expecting_failure("update")
 
     assert_includes out, %(Couldn't check "md5": Response error)
     assert_not_includes out, "Pinning"
@@ -667,31 +667,33 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), "md5@2.2.0"
   end
 
-  test "update command with a named package the registry couldn't be checked for updates nothing" do
+  test "update command updates the rest when a named package couldn't be checked" do
     importmap_config(<<~PINS)
       pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js"
       pin "luxon", to: "https://cdn.jsdelivr.net/npm/luxon@3.0.0/build/es6/luxon.mjs"
     PINS
-    stub_registry_error("Not found")
+    stub_registry_errors("md5" => "Not found")
 
-    out, _err = run_importmap_command_expecting_failure("update", "md5")
+    out, _err = run_importmap_command_expecting_failure("update", "md5", "luxon")
 
     assert_includes out, %(Couldn't check "md5": Not found)
     assert_not_includes out, "is already up to date"
-    assert_not_includes out, "Pinning"
+    assert_not_includes out, 'Pinning "md5"'
+    assert_includes out, 'Pinning "luxon"'
 
     content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
     assert_includes content, "md5@2.2.0"
-    assert_includes content, "luxon@3.0.0"
+    assert_match %r{^pin "luxon", to: "https://cdn.jsdelivr.net/npm/luxon@3\.\d+\.\d+/build/es6/luxon\.mjs"$}, content
+    assert_not_includes content, "luxon@3.0.0"
   end
 
   private
     # The registry answering with an error body is the case under test and the
     # live registry won't produce it: a missing package is a 404, which raises
     # before the body is read. Stub the one method that talks to the registry
-    # and leave every layer above it — outdated_packages, update, the pin
-    # rewriting — running for real.
-    def stub_registry_error(message)
+    # for the packages named, and leave every layer above it — outdated_packages,
+    # update, the pin rewriting — running for real.
+    def stub_registry_errors(errors)
       path = "#{@tmpdir}/dummy/bin/importmap"
 
       File.write(path, <<~RUBY)
@@ -700,11 +702,13 @@ class CommandsTest < ActiveSupport::TestCase
         require_relative "../config/application"
         require "importmap/npm"
 
-        class Importmap::Npm
+        REGISTRY_ERRORS = #{errors.inspect}
+
+        Importmap::Npm.prepend(Module.new do
           private def get_package(package)
-            { "error" => #{message.inspect} }
+            REGISTRY_ERRORS.key?(package) ? { "error" => REGISTRY_ERRORS[package] } : super
           end
-        end
+        end)
 
         require "importmap/commands"
       RUBY

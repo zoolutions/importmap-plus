@@ -134,7 +134,9 @@ class Importmap::Commands < Thor
 
     # A package the registry couldn't answer for has no latest_version, so
     # nothing established that it moved: re-pinning would let a blip
-    # re-resolve the pin against the CDN and carry it somewhere new.
+    # re-resolve the pin against the CDN and carry it somewhere new. Each
+    # pin is independent of the others, so the rest still update; the exit
+    # code says the command didn't do all it was asked.
     outdated_packages, unchecked_packages = npm.outdated_packages(only: packages.presence).partition(&:latest_version)
     unchecked_packages.each { |p| puts %(Couldn't check "#{p.name}": #{p.error}) }
 
@@ -153,6 +155,8 @@ class Importmap::Commands < Thor
         pin_package(package, url)
       end
     end
+
+    exit 1 if unchecked_packages.any?
   end
 
   desc "packages", "Print out packages with version numbers"
@@ -267,9 +271,10 @@ class Importmap::Commands < Thor
       %(Skipping "#{package}" (locked at #{packager.pin_provenance(package)[:version]}; run bin/importmap unlock #{package} or pass --force))
     end
 
-    # Says why a named package won't be updated. A name with no pin at all is
-    # a typo until proven otherwise, and one the registry couldn't be asked
-    # about is unresolved, so nothing is updated in either case.
+    # Says why a named package won't be updated. A name with no pin at all
+    # is a typo until proven otherwise, so nothing is updated in that case.
+    # One the registry couldn't be asked about was already reported and is
+    # no reason to hold back the others.
     def every_package_known?(names, outdated_packages, unchecked_packages)
       versioned = npm.packages_with_versions.to_h
       outdated  = outdated_packages.map(&:name)
@@ -282,9 +287,7 @@ class Importmap::Commands < Thor
         if !packager.packaged?(key)
           puts %(Couldn't find a pin for "#{name}")
           next false
-        elsif unchecked.include?(package)
-          next false
-        elsif outdated.include?(package)
+        elsif outdated.include?(package) || unchecked.include?(package)
           next true
         elsif versioned.key?(package)
           puts %("#{name}" is already up to date (#{versioned[package]}))
