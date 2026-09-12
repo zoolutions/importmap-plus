@@ -1,0 +1,30 @@
+name: Deploy docs
+
+# The docs site (docs/) is built and deployed by docs-kit's reusable workflow,
+# defined once for every zoolutions docs site. Its defaults already assume a
+# gem repo with the app at docs/: working_directory docs, dockerfile
+# docs/Dockerfile, build context the repo root (the app depends on the gem
+# through `path: ".."`). Fires on a published release, alongside release.yml,
+# so the docs go live with the gem.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+# The caller MUST grant packages: write — a reusable workflow can only narrow
+# the permissions it's given, never escalate.
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  deploy:
+    # Pinned to a reviewed commit, not @main: this call hands the workflow
+    # `packages: write` and every inherited secret, so a moving ref would let an
+    # unreviewed docs-kit change use them. Bump deliberately after reading the
+    # diff — `gh api repos/zoolutions/docs-kit/commits/main --jq .sha`.
+    uses: zoolutions/docs-kit/.github/workflows/deploy.yml@833b23a566f48956143df4fb8f5f224d843e1c37 # v-main 2026-08-30
+    with:
+      image: zoolutions/importmap-plus
+      service: importmap-plus
+    secrets: inherit
