@@ -113,15 +113,13 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
   def options_survive
     DocsUI::Section("Pin options survive a rewrite") do
       md <<~'MD'
-        When a pin is rewritten — by `pin`, `update` or `pristine` when its
-        provenance changes — `preload:` is carried over: `preload: false` and
-        `preload: "admin"` stay. An `integrity:` option is not: the line is rebuilt
-        without it, so re-add `integrity: true`, `integrity: false` or a fresh hash
-        after a rewrite; see [Subresource integrity](/docs/integrity). With
-        `enable_integrity!` on, a pin without the option gets its hash calculated
-        anyway, so most apps never notice.
+        When a pin is rewritten — by `pin`, `update` or `pristine` — the options on
+        it are carried over: `preload: false`, `preload: "admin"`, `integrity: true`
+        and `integrity: false` all stay. An explicit `integrity:` *hash* is dropped
+        when the URL changes, since the old hash would no longer match the new file;
+        see [Subresource integrity](/docs/integrity) for pinning fresh hashes.
 
-        Pins that a resolution touches only as dependencies keep `preload:` the
+        Pins that a resolution touches only as dependencies keep their options the
         same way. Pinning `md5` re-resolves `charenc` and `crypt` with it, but a
         `pin "crypt", preload: false` you wrote stays `preload: false`.
       MD
