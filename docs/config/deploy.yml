@@ -84,6 +84,8 @@ env:
   clear:
     RAILS_SERVE_STATIC_FILES: "true"
     RAILS_LOG_TO_STDOUT: "true"
-    # A stateless docs site: SECRET_KEY_BASE only signs cookies, so it's
-    # inlined (no user data at risk). Rotate with `bin/rails secret`.
-    SECRET_KEY_BASE: "9e3d2046e594841b3e19a0a1bae35eff9fe1e3e1a08562f0725f0741d66d2fb2f247f9b5999d11496cc1d4f85dd42372fc1515b999d40604b8b4ebcaf8068426"
+  secret:
+    # Resolved from .dash/secrets at deploy time, never from this file. The
+    # value that used to sit here in `clear` is in the git history and must be
+    # treated as burned — don't reinstate it.
+    - SECRET_KEY_BASE

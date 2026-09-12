@@ -19,7 +19,11 @@ permissions:
 
 jobs:
   deploy:
-    uses: zoolutions/docs-kit/.github/workflows/deploy.yml@main
+    # Pinned to a reviewed commit, not @main: this call hands the workflow
+    # `packages: write` and every inherited secret, so a moving ref would let an
+    # unreviewed docs-kit change use them. Bump deliberately after reading the
+    # diff — `gh api repos/zoolutions/docs-kit/commits/main --jq .sha`.
+    uses: zoolutions/docs-kit/.github/workflows/deploy.yml@833b23a566f48956143df4fb8f5f224d843e1c37 # v-main 2026-08-30
     with:
       image: zoolutions/importmap-plus
       service: importmap-plus

@@ -11,14 +11,24 @@
 # (Ruby + the installed bundle + the app), never the build toolchain
 # (build-essential, git, bun) — those live in the throwaway `build` stage.
 
+# Both versions are declared here, before the first FROM, so they are in the
+# global scope every FROM below reads. An ARG written after a FROM belongs to
+# that stage alone and expands to empty in the next one.
 ARG RUBY_VERSION=3.4.2
+# Keep in step with the repo-root .bun-version: bun.lock is written by the local
+# bun, and an older bun can't read a newer lockfile version.
+ARG BUN_VERSION=1.4.0
+
+# bun arrives as a binary copied out of its own official image, pinned by tag.
+# The alternative the scaffold shipped — `curl -fsSL https://bun.sh/install |
+# bash` — runs a mutable remote script as root, so whatever that URL serves at
+# build time lands in the image.
+FROM docker.io/oven/bun:${BUN_VERSION}-slim AS bun
+
 FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
 
 WORKDIR /app/docs
 
-# Keep in step with the repo-root .bun-version: bun.lock is written by the local
-# bun, and an older bun can't read a newer lockfile version.
-ARG BUN_VERSION=1.4.0
 ENV BUN_INSTALL="/usr/local/bun" \
     PATH="/usr/local/bun/bin:$PATH" \
     BUNDLE_DEPLOYMENT="0" \
@@ -37,11 +47,18 @@ RUN apt-get update -qq && \
 # --- Build stage (throwaway — its layers never reach the final image) ---------
 FROM base AS build
 
-# Toolchain to compile native gems + fetch bun. Skip the apt cleanup: this whole
-# stage is discarded.
+# Toolchain to compile native gems. Skip the apt cleanup: this whole stage is
+# discarded. (No unzip — that was the bun installer's, and bun is copied in now.)
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y build-essential git libyaml-dev pkg-config unzip
-RUN curl -fsSL https://bun.sh/install | bash -s -- "bun-v${BUN_VERSION}"
+    apt-get install --no-install-recommends -y build-essential git libyaml-dev pkg-config
+
+# PATH already points at /usr/local/bun/bin (base stage). bunx is a symlink to
+# the same binary upstream, and bin/build-css execs it, so recreate it here —
+# copying it from the image would carry a link into a directory its target
+# isn't in. Running both is the check that the copy landed where PATH expects,
+# so a moved upstream path fails here instead of deep in assets:precompile.
+COPY --from=bun /usr/local/bin/bun /usr/local/bun/bin/bun
+RUN ln -s bun /usr/local/bun/bin/bunx && bun --version && bunx --version
 
 # Copy the WHOLE repo (gem at /app, docs app at /app/docs): the gem is a path
 # dependency, so it has to be present before bundle install resolves it.
@@ -81,9 +98,11 @@ RUN groupadd --system --gid 1000 rails && \
     chown -R 1000:1000 /app/docs/log /app/docs/tmp
 USER 1000:1000
 
-# libjemalloc2 (installed in `base`) only takes effect when preloaded; the
-# builder is amd64 (config/deploy.yml), so the path is fixed.
-ENV LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libjemalloc.so.2"
+# libjemalloc2 (installed in `base`) only takes effect when preloaded. Named,
+# not pathed: the loader resolves it per architecture, so an arm64 build works
+# too. A hardcoded /usr/lib/x86_64-linux-gnu/... path makes every container
+# start on other architectures print "cannot be preloaded: ignored".
+ENV LD_PRELOAD="libjemalloc.so.2"
 
 EXPOSE 3000
 # Thruster fronts Puma (HTTP caching + compression + X-Sendfile). It listens on

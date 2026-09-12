@@ -1,8 +1,13 @@
 @import "tailwindcss";
 
-/* daisyUI — the theme list MUST match DocsKit.configuration.themes. */
+/* daisyUI — the theme list MUST match DocsKit.configuration.themes.
+   Both modifiers sit on `dark`: --default is what a visitor with no saved
+   choice gets, --prefersdark is what prefers-color-scheme: dark gets. The
+   scaffold put --prefersdark on `light`, which handed dark-scheme visitors the
+   light theme — the opposite of the site's dark default (themes.first in
+   config/initializers/docs_kit.rb, and the --default here). */
 @plugin "daisyui" {
-  themes: dark --default, light --prefersdark, synthwave, retro, cyberpunk,
+  themes: dark --default --prefersdark, light, synthwave, retro, cyberpunk,
     dracula, night, nord, sunset;
 }
 
