@@ -24,6 +24,8 @@ class Importmap::Commands < Thor
     requested = packages.map { |spec| packager.package_key_for(spec) }
 
     for_each_import_grouped_by_provider(packages, env: options[:env], from: options[:from]) do |package, url|
+      next if keep_locked_dependency(package, requested)
+
       pin_package(package, url, preload: options[:preload], remote: options[:remote], env: options[:env],
                                 minify: options[:minify], from: options[:from],
                                 lock: requested.include?(package) ? options[:lock] : nil)
@@ -130,6 +132,8 @@ class Importmap::Commands < Thor
         puts "Nothing to update (every outdated package is locked)"
       else
         for_each_import_grouped_by_provider(packages, env: "production") do |package, url|
+          next if keep_locked_dependency(package, packages)
+
           pin_package(package, url)
         end
       end
@@ -250,6 +254,15 @@ class Importmap::Commands < Thor
 
     def locked_pin_covering(name)
       packager.locked_pins.find { |key| key == name || key.start_with?("#{name}/") }
+    end
+
+    # A CDN resolves a package together with its dependencies. One the app has
+    # locked stays where it is: only a package named on the command line moves.
+    def keep_locked_dependency(package, requested)
+      return false if requested.include?(package) || !packager.locked?(package)
+
+      puts %(Keeping existing pin for "#{package}" (locked at #{packager.pin_provenance(package)[:version]}))
+      true
     end
 
     # pristine asks the CDN for the pinned version, so a locked package only

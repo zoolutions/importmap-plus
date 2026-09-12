@@ -178,7 +178,8 @@ class Importmap::Packager
 
     if line.match?(PIN_PROVENANCE_REGEXP)
       rewrite_provenance(line) { |details| without_lock(details) << LOCK_DETAIL }
-    elsif (version = extract_package_version_from((extract_existing_pin_options(package)[package] || {})[:to].to_s))
+    elsif (to = (extract_existing_pin_options(package)[package] || {})[:to].to_s).match?(REMOTE_URL_REGEXP) &&
+          (version = extract_package_version_from(to))
       line + provenance_comment(version, locked: true)
     end
   end

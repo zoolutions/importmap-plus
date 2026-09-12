@@ -632,11 +632,13 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       pin "custom", to: "https://cdn.example.com/custom.js"
       pin "application"
       pin "local", to: "local.js", preload: false
+      pin "versioned", to: "versioned@1.2.3.js"
     RUBY
 
     assert_nil packager.locked_pin_line("custom")
     assert_nil packager.locked_pin_line("application")
     assert_nil packager.locked_pin_line("local")
+    assert_nil packager.locked_pin_line("versioned")
     assert_nil packager.locked_pin_line("not-pinned")
   end
 

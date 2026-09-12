@@ -448,6 +448,29 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "charenc" # @0.0.2 (locked)\n)
   end
 
+  test "pin command leaves a locked dependency pin alone" do
+    importmap_config('pin "charenc" # @0.0.1 (locked)')
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0")
+
+    assert_includes out, 'Pinning "md5"'
+    assert_includes out, 'Keeping existing pin for "charenc" (locked at 0.0.1)'
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "charenc" # @0.0.1 (locked)\n)
+  end
+
+  test "update command leaves a locked dependency pin alone" do
+    importmap_config(<<~PINS)
+      pin "md5" # @2.2.0
+      pin "charenc" # @0.0.1 (locked)
+    PINS
+
+    out, _err = run_importmap_command("update")
+
+    assert_includes out, 'Pinning "md5"'
+    assert_includes out, 'Keeping existing pin for "charenc" (locked at 0.0.1)'
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "charenc" # @0.0.1 (locked)\n)
+  end
+
   test "lock command marks a vendored pin without downloading" do
     importmap_config('pin "md5" # @2.2.0 (esm.run)')
 
