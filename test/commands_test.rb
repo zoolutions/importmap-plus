@@ -108,6 +108,17 @@ class CommandsTest < ActiveSupport::TestCase
     assert_not_includes updated_content, "integrity:"
   end
 
+  test "update command preserves a boolean integrity option" do
+    importmap_config('pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: false, integrity: false')
+
+    out, _err = run_importmap_command("update")
+
+    assert_includes out, "Pinning"
+
+    updated_content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes updated_content, 'pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.3.0/md5.js", preload: false, integrity: false'
+  end
+
   test "update command handles packages with different quote styles" do
     importmap_config("pin 'md5', to: 'https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js', preload: false")
 
@@ -375,7 +386,197 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), 'pin "md5" # @2.2.0 (minified)'
   end
 
+  test "pin command with --lock records the lock in the pin" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0", "--lock")
+
+    assert_includes out, 'Locked "md5" at 2.2.0'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, %(pin "md5" # @2.2.0 (locked)\n)
+    assert_includes content, %(pin "charenc" # @0.0.2\n), "dependencies are not locked"
+  end
+
+  test "pin command with --lock and --remote locks the remote pin" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0", "--lock", "--remote")
+
+    assert_includes out, 'Locked "md5" at 2.2.0'
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"),
+                    %(pin "md5", to: "https://ga.jspm.io/npm:md5@2.2.0/md5.js" # @2.2.0 (locked)\n)
+  end
+
+  test "pin command skips a locked package" do
+    importmap_config('pin "md5", to: "https://ga.jspm.io/npm:md5@2.2.0/md5.js" # @2.2.0 (locked)')
+
+    out, _err = run_importmap_command("pin", "md5@2.3.0")
+
+    assert_includes out, 'Skipping "md5" (locked at 2.2.0; run bin/importmap unlock md5 or pass --force)'
+    assert_not_includes out, "Pinning"
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"),
+                    %(pin "md5", to: "https://ga.jspm.io/npm:md5@2.2.0/md5.js" # @2.2.0 (locked)\n)
+  end
+
+  test "pin command with --force re-pins a locked package and keeps the lock" do
+    importmap_config('pin "md5", to: "https://ga.jspm.io/npm:md5@2.2.0/md5.js" # @2.2.0 (locked)')
+
+    out, _err = run_importmap_command("pin", "md5@2.3.0", "--force")
+
+    assert_includes out, 'Locked "md5" at 2.3.0'
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"),
+                    %(pin "md5", to: "https://ga.jspm.io/npm:md5@2.3.0/md5.js" # @2.3.0 (locked)\n)
+  end
+
+  test "pin command with --lock re-locks at the new version and --no-lock drops the lock" do
+    importmap_config('pin "md5" # @2.2.0 (locked)')
+
+    run_importmap_command("pin", "md5@2.3.0", "--lock")
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "md5" # @2.3.0 (locked)\n)
+
+    run_importmap_command("pin", "md5@2.3.0", "--no-lock")
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "md5" # @2.3.0\n)
+  end
+
+  test "pin command with --from esm.run leaves a locked dependency pin alone" do
+    importmap_config('pin "charenc" # @0.0.2 (locked)')
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0", "--from", "esm.run")
+
+    assert_includes out, 'Keeping existing pin for "charenc"'
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "charenc" # @0.0.2 (locked)\n)
+  end
+
+  test "pin command leaves a locked dependency pin alone" do
+    importmap_config('pin "charenc" # @0.0.1 (locked)')
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0")
+
+    assert_includes out, 'Pinning "md5"'
+    assert_includes out, 'Keeping existing pin for "charenc" (locked at 0.0.1)'
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "charenc" # @0.0.1 (locked)\n)
+  end
+
+  test "update command leaves a locked dependency pin alone" do
+    importmap_config(<<~PINS)
+      pin "md5" # @2.2.0
+      pin "charenc" # @0.0.1 (locked)
+    PINS
+
+    out, _err = run_importmap_command("update")
+
+    assert_includes out, 'Pinning "md5"'
+    assert_includes out, 'Keeping existing pin for "charenc" (locked at 0.0.1)'
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "charenc" # @0.0.1 (locked)\n)
+  end
+
+  test "lock command marks a vendored pin without downloading" do
+    importmap_config('pin "md5" # @2.2.0 (esm.run)')
+
+    out, _err = run_importmap_command("lock", "md5")
+
+    assert_includes out, 'Locked "md5" at 2.2.0'
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "md5" # @2.2.0 (esm.run, locked)\n)
+    assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/md5.js")
+
+    out, _err = run_importmap_command("lock", "md5")
+
+    assert_includes out, '"md5" is already locked at 2.2.0'
+  end
+
+  test "lock command adds a version comment to a remote pin" do
+    importmap_config('pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: false')
+
+    run_importmap_command("lock", "md5")
+
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"),
+                    %(pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: false # @2.2.0 (locked)\n)
+  end
+
+  test "lock command reports pins it can't lock" do
+    importmap_config(<<~PINS)
+      pin "custom", to: "https://cdn.example.com/custom.js"
+      pin "md5" # @2.2.0
+    PINS
+
+    out, _err = run_importmap_command_expecting_failure("lock", "nope", "custom", "md5@2.3.0")
+
+    assert_includes out, %(Couldn't find a pin for "nope")
+    assert_includes out, %(Can't lock "custom": its pin has no version)
+    assert_includes out, %(Use "bin/importmap pin md5@2.3.0 --lock" to lock at a different version)
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "md5" # @2.2.0\n)
+  end
+
+  test "unlock command removes the marker" do
+    importmap_config('pin "md5" # @2.2.0 (esm.run, locked)')
+
+    out, _err = run_importmap_command("unlock", "md5")
+
+    assert_includes out, 'Unlocked "md5"'
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "md5" # @2.2.0 (esm.run)\n)
+
+    out, _err = run_importmap_command("unlock", "md5")
+
+    assert_includes out, %("md5" isn't locked)
+  end
+
+  test "update command skips locked packages" do
+    importmap_config('pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: true # @2.2.0 (locked)')
+
+    out, _err = run_importmap_command("update")
+
+    assert_includes out, 'Skipping "md5" (locked at 2.2.0; run bin/importmap unlock md5)'
+    assert_includes out, "Nothing to update (every outdated package is locked)"
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"),
+                    %(pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: true # @2.2.0 (locked)\n)
+  end
+
+  test "outdated command shows locked packages and exits 0 when nothing unlocked is outdated" do
+    importmap_config('pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: true # @2.2.0 (locked)')
+
+    out, _err = run_importmap_command("outdated")
+
+    assert_match(/\| md5\s+\| 2\.2\.0\s+\| \S+\s+\| yes\s+\|/, out)
+    assert_includes out, "1 outdated package found (1 locked)"
+  end
+
+  test "outdated command exits 1 when an unlocked package is outdated" do
+    FileUtils.cp("#{__dir__}/fixtures/files/outdated_import_map.rb", "#{@tmpdir}/dummy/config/importmap.rb")
+
+    out, _err = run_importmap_command_expecting_failure("outdated")
+
+    assert_includes out, "1 outdated package found\n"
+  end
+
+  test "pristine command redownloads a locked package and keeps the lock" do
+    importmap_config("")
+    run_importmap_command("pin", "md5@2.2.0", "--lock")
+
+    original = File.read("#{@tmpdir}/dummy/vendor/javascript/md5.js")
+    File.write("#{@tmpdir}/dummy/vendor/javascript/md5.js", "corrupted")
+
+    out, _err = run_importmap_command("pristine")
+
+    assert_includes out, 'Downloading "md5"'
+    assert_equal original, File.read("#{@tmpdir}/dummy/vendor/javascript/md5.js")
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "md5" # @2.2.0 (locked)\n)
+
+    run_importmap_command("pristine", "--from", "esm.run")
+
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "md5" # @2.2.0 (esm.run, locked)\n)
+  end
+
   private
+    def run_importmap_command_expecting_failure(command, *args)
+      status = nil
+      out, err = capture_subprocess_io { status = system("bin/importmap", command, *args) }
+
+      flunk "bin/importmap #{[command, *args].join(" ")} succeeded, expected a failure:\n#{out}#{err}" if status
+
+      [out, err]
+    end
+
     def minifier_available?
       require "importmap/minifier"
       Importmap::Minifier.available?
