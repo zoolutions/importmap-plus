@@ -49,6 +49,11 @@ class Views::Docs::Pages::Updating < DocsUI::Page
         from the CDN its pin comment names ([Provenance](/docs/provenance)); a remote
         pin is re-resolved from its provider and stays remote; a
         [locked](/docs/locking) package is skipped unless you pass `--force`.
+
+        The registry knows a package by name, the import map by key, and `update`
+        re-pins the keys. A `pin "photoswipe/lightbox"` is a pin of `photoswipe`, so
+        it is what moves when photoswipe does — no bare `pin "photoswipe"` appears
+        beside it. A package pinned under several keys has all of them re-pinned.
       MD
       DocsUI::Code(<<~SHELL, lexer: :console)
         $ ./bin/importmap update md5 nope

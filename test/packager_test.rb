@@ -598,6 +598,21 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
                  @packager.pin_for("md5", "https://cdn.example.com/md5.js", locked: true)
   end
 
+  test "pinned_packages lists every import-map key in file order" do
+    packager = Importmap::Packager.new(create_temp_importmap(<<~RUBY))
+      pin "react" # @17.0.2
+      pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5.3.0/dist/photoswipe-lightbox.esm.js"
+      pin '@hotwired/stimulus', to: "@hotwired--stimulus.js" # @3.2.2
+      pin_all_from "app/javascript/controllers", under: "controllers"
+    RUBY
+
+    assert_equal %w[react photoswipe/lightbox @hotwired/stimulus], packager.pinned_packages
+  end
+
+  test "pinned_packages is empty without an importmap" do
+    assert_empty Importmap::Packager.new("tmp/does-not-exist.rb").pinned_packages
+  end
+
   test "locked? and locked_pins" do
     packager = Importmap::Packager.new(create_temp_importmap(<<~RUBY))
       pin "react" # @17.0.2 (locked)

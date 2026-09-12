@@ -41,6 +41,15 @@
   they are; every other package still updates, and the command exits 1.
   Inherited from importmap-rails, where a bare `update` has always behaved
   this way.
+- **`update` re-pins a subpath pin instead of appending a bare one.** The
+  registry answers about `photoswipe`, the import map pins
+  `photoswipe/lightbox`, and a bare `update` or `update --all` used to re-pin
+  the name it was answered with: the subpath pin stayed at its old version and
+  a `pin "photoswipe"` was appended beside it — vendored, since a fresh pin
+  has no provenance to say otherwise. Every key carrying an outdated package
+  is now re-pinned, and a package pinned under several keys moves all of them.
+  Inherited from importmap-rails; `update photoswipe/lightbox` was fixed for
+  the named form in 1.1.0.
 - **A registry that won't answer for one package no longer ends the run.**
   A 404, a 5xx or a connection that kept resetting used to escape
   `outdated_packages` once the retries were spent, so `outdated` and

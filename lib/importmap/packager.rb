@@ -159,6 +159,13 @@ class Importmap::Packager
     pin_provenance(package)&.dig(:locked) || false
   end
 
+  # The import-map keys of every pin, in file order.
+  def pinned_packages
+    return [] unless @importmap_path.exist?
+
+    importmap.lines.filter_map { |line| line.strip[PIN_REGEX, 1] }
+  end
+
   # The import-map keys of every locked pin, in file order.
   def locked_pins
     return [] unless @importmap_path.exist?

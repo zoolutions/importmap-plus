@@ -147,7 +147,7 @@ class Importmap::Commands < Thor
     elsif (names = without_locked_updates(outdated_packages.map(&:name), force: options[:force])).empty?
       puts "Nothing to update (every outdated package is locked; pass --force)"
     else
-      keys = packages.any? ? requested_keys_for(packages, names) : names
+      keys = packages.any? ? requested_keys_for(packages, names) : outdated_keys_for(names)
 
       for_each_import_grouped_by_provider(keys, env: "production") do |package, url|
         next if keep_locked_dependency(package, keys)
@@ -305,6 +305,18 @@ class Importmap::Commands < Thor
     def requested_keys_for(specs, outdated_names)
       specs.map { |spec| packager.package_key_for(spec) }
            .select { |key| outdated_names.include?(packager.package_name_for(key)) }
+    end
+
+    # An outdated package is outdated in every pin that carries it, so a bare
+    # update re-pins those keys: "photoswipe" moving updates the app's
+    # "photoswipe/lightbox" pin rather than appending a bare one beside it. A
+    # name no pin's key names is one the version came from a URL that doesn't
+    # match its key (pin "buffer", to: ".../npm:jspm-core@..."); it is still
+    # the only handle there is, so it goes through as itself.
+    def outdated_keys_for(names)
+      keys = packager.pinned_packages.group_by { |key| packager.package_name_for(key) }
+
+      names.flat_map { |name| keys[name] || [ name ] }
     end
 
     def locked_pin_covering(name)
