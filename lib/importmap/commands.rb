@@ -309,12 +309,19 @@ class Importmap::Commands < Thor
 
     # An outdated package is outdated in every pin that carries it, so a bare
     # update re-pins those keys: "photoswipe" moving updates the app's
-    # "photoswipe/lightbox" pin rather than appending a bare one beside it. A
-    # name no pin's key names is one the version came from a URL that doesn't
-    # match its key (pin "buffer", to: ".../npm:jspm-core@..."); it is still
-    # the only handle there is, so it goes through as itself.
+    # "photoswipe/lightbox" pin rather than appending a bare one beside it.
+    #
+    # Only pins that declare a version count, the same ones outdated reports
+    # on. An app file pinned under a package's namespace — pin "md5/helpers",
+    # to: "md5/helpers.js" — names no version and is none of the registry's
+    # business; asking a CDN for it 404s the whole batch and nothing updates.
+    #
+    # A name no pin's key names is one whose version came from a URL that
+    # doesn't match its key (pin "buffer", to: ".../npm:jspm-core@..."); it is
+    # still the only handle there is, so it goes through as itself.
     def outdated_keys_for(names)
-      keys = packager.pinned_packages.group_by { |key| packager.package_name_for(key) }
+      keys = packager.pinned_packages.select { |key| packager.pin_version(key) }
+                                     .group_by { |key| packager.package_name_for(key) }
 
       names.flat_map { |name| keys[name] || [ name ] }
     end
@@ -419,7 +426,7 @@ class Importmap::Commands < Thor
 
     def resolve_url_from_provider(package, reference_url, provider, env:)
       version  = packager.extract_package_version_from(reference_url)
-      response = packager.import("#{package}#{version}", env: env, from: provider)
+      response = packager.import(packager.package_spec_for(package, version), env: env, from: provider)
 
       response && response[:imports][package]
     rescue Importmap::Packager::Error => error

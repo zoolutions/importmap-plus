@@ -48,8 +48,18 @@
   a `pin "photoswipe"` was appended beside it — vendored, since a fresh pin
   has no provenance to say otherwise. Every key carrying an outdated package
   is now re-pinned, and a package pinned under several keys moves all of them.
-  Inherited from importmap-rails; `update photoswipe/lightbox` was fixed for
-  the named form in 1.1.0.
+  Only pins that declare a version take part, the same ones `outdated`
+  reports on, so an app file pinned under a package's namespace —
+  `pin "md5/helpers", to: "md5/helpers.js"` — is left alone. Inherited from
+  importmap-rails; `update photoswipe/lightbox` was fixed for the named form
+  in 1.1.0.
+- **A remote subpath pin is re-resolved from the CDN it is on.** Moving
+  `pin "photoswipe/lightbox", to: "https://cdn.jsdelivr.net/npm/photoswipe@5.3.0/…"`
+  back onto jsDelivr asked for `photoswipe/lightbox@5.4.4`, a path no CDN
+  has, so `update` gave up with `Keeping "photoswipe/lightbox" pinned to …
+  (couldn't resolve it from jsdelivr)` and the pin never moved. The version
+  now goes where a CDN expects it, ahead of the subpath —
+  `photoswipe@5.4.4/lightbox`.
 - **A registry that won't answer for one package no longer ends the run.**
   A 404, a 5xx or a connection that kept resetting used to escape
   `outdated_packages` once the retries were spent, so `outdated` and
