@@ -1,0 +1,11 @@
+Gemfile.lock
+  ai_agent 4
+lib/importmap/version.rb
+  ai_agent 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "5a6fedf7bf58cecaf7189ed6e6fb58e2890b5070",
+  "prompts": {}
+}
