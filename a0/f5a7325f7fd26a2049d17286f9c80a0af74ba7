@@ -1,0 +1,31 @@
+.claude/rules/testing.md
+  s_7f508d8614d6df::t_87204ab613a8da 31-35,43
+.claude/commands/finish-prs.md
+  s_7f508d8614d6df::t_e7347f16dfb8bd 63,66-68
+.claude/commands/tdd.md
+  s_7f508d8614d6df::t_f2deb62e4def44 36-38,40,46
+.claude/commands/perf.md
+  s_7f508d8614d6df::t_42dab81ab6be62 49
+  s_7f508d8614d6df::t_62c409adf2c391 51-53
+.claude/commands/review-pr.md
+  s_7f508d8614d6df::t_35a12b6681363e 81,85
+  s_7f508d8614d6df::t_68f2b0b5d44e77 70-71,77
+.claude/commands/security.md
+  s_7f508d8614d6df::t_ad435f67187c9f 51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a0f5a7325f7fd26a2049d17286f9c80a0af74ba7",
+  "prompts": {},
+  "sessions": {
+    "s_7f508d8614d6df": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "372ec33a-7695-43b2-9b3c-1058e62da8a7",
+        "model": "claude-opus-5"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
