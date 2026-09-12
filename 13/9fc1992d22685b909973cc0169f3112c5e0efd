@@ -1,0 +1,43 @@
+.claude/commands/plan.md
+  s_7f508d8614d6df::t_b88bc18f213ad8 77
+CLAUDE.md
+  s_7f508d8614d6df::t_59b7789a15e952 42-43
+.claude/commands/finish-prs.md
+  s_7f508d8614d6df::t_b88bc18f213ad8 5
+.claude/commands/review-pr.md
+  s_7f508d8614d6df::t_b88bc18f213ad8 5,17,62
+.claude/commands/lfg.md
+  s_7f508d8614d6df::t_b88bc18f213ad8 5,94,118
+.claude/commands/github-review-comments.md
+  s_7f508d8614d6df::t_b88bc18f213ad8 5,98
+.claude/commands/debug-flaky.md
+  s_7f508d8614d6df::t_b88bc18f213ad8 5,48-50,69,77
+.claude/commands/upstream-sync.md
+  s_7f508d8614d6df::t_b88bc18f213ad8 5
+.claude/commands/github-review-failures.md
+  s_7f508d8614d6df::t_b88bc18f213ad8 5,103,105
+.claude/commands/tdd.md
+  s_7f508d8614d6df::t_b88bc18f213ad8 64,76
+.claude/commands/github-review-pr.md
+  s_7f508d8614d6df::t_b88bc18f213ad8 5,71
+.gitignore
+  s_7f508d8614d6df::t_b88bc18f213ad8 26-28
+.claude/rules/git-workflow.md
+  s_7f508d8614d6df::t_b88bc18f213ad8 54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "139fc1992d22685b909973cc0169f3112c5e0efd",
+  "prompts": {},
+  "sessions": {
+    "s_7f508d8614d6df": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "372ec33a-7695-43b2-9b3c-1058e62da8a7",
+        "model": "unknown"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
