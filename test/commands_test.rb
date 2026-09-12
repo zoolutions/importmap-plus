@@ -448,6 +448,29 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "charenc" # @0.0.2 (locked)\n)
   end
 
+  test "pin command leaves a locked dependency pin alone" do
+    importmap_config('pin "charenc" # @0.0.1 (locked)')
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0")
+
+    assert_includes out, 'Pinning "md5"'
+    assert_includes out, 'Keeping existing pin for "charenc" (locked at 0.0.1)'
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "charenc" # @0.0.1 (locked)\n)
+  end
+
+  test "update command leaves a locked dependency pin alone" do
+    importmap_config(<<~PINS)
+      pin "md5" # @2.2.0
+      pin "charenc" # @0.0.1 (locked)
+    PINS
+
+    out, _err = run_importmap_command("update")
+
+    assert_includes out, 'Pinning "md5"'
+    assert_includes out, 'Keeping existing pin for "charenc" (locked at 0.0.1)'
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "charenc" # @0.0.1 (locked)\n)
+  end
+
   test "lock command marks a vendored pin without downloading" do
     importmap_config('pin "md5" # @2.2.0 (esm.run)')
 
@@ -574,6 +597,27 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes out, %("md5" is already up to date (2.3.0))
     assert_includes out, %(Can't tell whether "application" is outdated: its pin has no version)
     assert_includes out, "No outdated packages found"
+  end
+
+  test "update command with a subpath name re-pins that key" do
+    importmap_config('pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5.3.0/dist/photoswipe-lightbox.esm.js"')
+
+    out, _err = run_importmap_command("update", "photoswipe/lightbox")
+
+    assert_includes out, 'Pinning "photoswipe/lightbox"'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_match %r{^pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5\.4\.\d+/dist/photoswipe-lightbox\.esm\.js"$}, content
+    assert_not_includes content, "photoswipe@5.3.0"
+  end
+
+  test "update command reports a name whose package is pinned under another key" do
+    importmap_config('pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5.3.0/dist/photoswipe-lightbox.esm.js"')
+
+    out, _err = run_importmap_command_expecting_failure("update", "photoswipe")
+
+    assert_includes out, %(Couldn't find a pin for "photoswipe")
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), "photoswipe@5.3.0"
   end
 
   test "outdated command shows locked packages and exits 0 when nothing unlocked is outdated" do

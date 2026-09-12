@@ -178,7 +178,8 @@ class Importmap::Packager
 
     if line.match?(PIN_PROVENANCE_REGEXP)
       rewrite_provenance(line) { |details| without_lock(details) << LOCK_DETAIL }
-    elsif (version = extract_package_version_from((extract_existing_pin_options(package)[package] || {})[:to].to_s))
+    elsif (to = (extract_existing_pin_options(package)[package] || {})[:to].to_s).match?(REMOTE_URL_REGEXP) &&
+          (version = extract_package_version_from(to))
       line + provenance_comment(version, locked: true)
     end
   end
@@ -260,6 +261,13 @@ class Importmap::Packager
   def package_key_for(spec)
     name, _version, subpath = spec.to_s.match(PACKAGE_SPEC_REGEXP)&.captures
     name ? "#{name}#{subpath}" : spec.to_s
+  end
+
+  # The package a spec or key belongs to, as the registry knows it:
+  # "photoswipe/lightbox" and "@hotwired/stimulus@3" are pins of "photoswipe"
+  # and "@hotwired/stimulus".
+  def package_name_for(spec)
+    spec.to_s.match(PACKAGE_SPEC_REGEXP)&.captures&.first || spec.to_s
   end
 
   def remove_existing_package_file(package)

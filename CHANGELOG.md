@@ -11,9 +11,11 @@
   gains the comment too, carrying the version from its URL. `pin --force`
   moves a locked package and keeps the lock at the new version; `--no-lock`
   drops it; `bin/importmap unlock luxon` removes it without touching the
-  file. `pristine` still redownloads a locked package, at the locked
-  version. Only the packages named on the command line are locked, never
-  the dependencies a CDN resolves with them.
+  file. `pristine` still redownloads a locked vendored package, at the
+  locked version; remote pins are skipped as always. Only the packages
+  named on the command line are locked, never the dependencies a CDN
+  resolves with them, and a locked dependency stays where it is when the
+  package that needs it is pinned or updated.
 - **`update` takes package names, `--all` and `--force`.**
   `bin/importmap update luxon stimulus-use` re-pins just those, asking the
   registry about them alone; `update --all` says explicitly what a bare

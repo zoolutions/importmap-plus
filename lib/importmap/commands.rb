@@ -24,6 +24,8 @@ class Importmap::Commands < Thor
     requested = packages.map { |spec| packager.package_key_for(spec) }
 
     for_each_import_grouped_by_provider(packages, env: options[:env], from: options[:from]) do |package, url|
+      next if keep_locked_dependency(package, requested)
+
       pin_package(package, url, preload: options[:preload], remote: options[:remote], env: options[:env],
                                 minify: options[:minify], from: options[:from],
                                 lock: requested.include?(package) ? options[:lock] : nil)
@@ -138,7 +140,11 @@ class Importmap::Commands < Thor
     elsif (names = without_locked_updates(outdated_packages.map(&:name), force: options[:force])).empty?
       puts "Nothing to update (every outdated package is locked; pass --force)"
     else
-      for_each_import_grouped_by_provider(names, env: "production") do |package, url|
+      keys = packages.any? ? requested_keys_for(packages, names) : names
+
+      for_each_import_grouped_by_provider(keys, env: "production") do |package, url|
+        next if keep_locked_dependency(package, keys)
+
         pin_package(package, url)
       end
     end
@@ -263,23 +269,43 @@ class Importmap::Commands < Thor
       outdated  = outdated_packages.map(&:name)
 
       names.map do |name|
-        next true if outdated.include?(name)
+        key = packager.package_key_for(name)
+        package = packager.package_name_for(key)
 
-        if versioned.key?(name)
-          puts %("#{name}" is already up to date (#{versioned[name]}))
-        elsif packager.packaged?(name)
-          puts %(Can't tell whether "#{name}" is outdated: its pin has no version)
-        else
+        if !packager.packaged?(key)
           puts %(Couldn't find a pin for "#{name}")
           next false
+        elsif outdated.include?(package)
+          next true
+        elsif versioned.key?(package)
+          puts %("#{name}" is already up to date (#{versioned[package]}))
+        else
+          puts %(Can't tell whether "#{name}" is outdated: its pin has no version)
         end
 
         true
       end.all?
     end
 
+    # The registry knows a package by name and the import map by key: a pin of
+    # "photoswipe/lightbox" is outdated when "photoswipe" is. A named update
+    # re-pins the keys that were asked for, not the name the registry answered with.
+    def requested_keys_for(specs, outdated_names)
+      specs.map { |spec| packager.package_key_for(spec) }
+           .select { |key| outdated_names.include?(packager.package_name_for(key)) }
+    end
+
     def locked_pin_covering(name)
       packager.locked_pins.find { |key| key == name || key.start_with?("#{name}/") }
+    end
+
+    # A CDN resolves a package together with its dependencies. One the app has
+    # locked stays where it is: only a package named on the command line moves.
+    def keep_locked_dependency(package, requested)
+      return false if requested.include?(package) || !packager.locked?(package)
+
+      puts %(Keeping existing pin for "#{package}" (locked at #{packager.pin_provenance(package)[:version]}))
+      true
     end
 
     # pristine asks the CDN for the pinned version, so a locked package only

@@ -379,6 +379,14 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     assert_equal "@scope/pkg/sub", @packager.package_key_for("@scope/pkg@1.0.0/sub")
   end
 
+  test "package_name_for is the package a spec or key belongs to" do
+    assert_equal "photoswipe", @packager.package_name_for("photoswipe/lightbox")
+    assert_equal "photoswipe", @packager.package_name_for("photoswipe@5.4.4/lightbox")
+    assert_equal "@hotwired/stimulus", @packager.package_name_for("@hotwired/stimulus@3")
+    assert_equal "@github/webauthn-json", @packager.package_name_for("@github/webauthn-json/browser-ponyfill")
+    assert_equal "md5", @packager.package_name_for("md5")
+  end
+
   test "download warns when a bundle imports one dependency at two versions" do
     bundle = %(import a from"/npm/charenc@0.0.1/+esm";import b from"/npm/charenc@0.0.2/+esm";export default[a,b])
     response = Class.new do
@@ -632,11 +640,13 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       pin "custom", to: "https://cdn.example.com/custom.js"
       pin "application"
       pin "local", to: "local.js", preload: false
+      pin "versioned", to: "versioned@1.2.3.js"
     RUBY
 
     assert_nil packager.locked_pin_line("custom")
     assert_nil packager.locked_pin_line("application")
     assert_nil packager.locked_pin_line("local")
+    assert_nil packager.locked_pin_line("versioned")
     assert_nil packager.locked_pin_line("not-pinned")
   end
 

@@ -225,7 +225,7 @@ pin "@hotwired/stimulus", to: "@hotwired--stimulus.js" # @3.2.2 (esm.run, locked
 pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: false # @2.2.0 (locked)
 ```
 
-A locked package is skipped by `./bin/importmap update` and by a plain `pin` of the same package, each saying so. `update --force` and `pin luxon@4.0.0 --force` move it and keep the lock at the new version; `pin luxon@4.0.0 --lock` does the same; `--no-lock` moves it and drops the lock. `pristine` redownloads a locked package at the version it is locked at. Only the packages you name are locked — the dependencies a CDN resolves alongside them keep floating. `outdated` still lists a locked package that has a newer version, marked in its Locked column, but doesn't count it as drift: it exits 1 only when an unlocked package is outdated.
+A locked package is skipped by `./bin/importmap update` and by a plain `pin` of the same package, each saying so. `update --force` and `pin luxon@4.0.0 --force` move it and keep the lock at the new version; `pin luxon@4.0.0 --lock` does the same; `--no-lock` moves it and drops the lock. `pristine` redownloads a locked vendored package at the version it is locked at; a remote pin is skipped, locked or not. Only the packages you name are locked — the dependencies a CDN resolves alongside them keep floating. `outdated` still lists a locked package that has a newer version, marked in its Locked column, but doesn't count it as drift: it exits 1 only when an unlocked package is outdated.
 
 ### Minifying vendored packages
 
