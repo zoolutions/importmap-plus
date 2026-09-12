@@ -23,7 +23,7 @@ Review the PR for pattern compliance, fork-constraint violations and real bugs. 
 |---|---|---|
 | Constant surface | Renames or removes anything importmap-rails defines; changes a public method's signature | drop-in replacement — `Importmap::` must be the same |
 | Runtime deps | `importmap-plus.gemspec` gains a dependency | railties, activesupport, actionpack only |
-| Version | `Importmap::VERSION` changed in a feature PR; `UPSTREAM_VERSION` changed outside a `sync:` PR | `bin/release` owns one, the sync procedure the other |
+| Version | `UPSTREAM_VERSION` changed outside a `sync:` PR; `VERSION` bumped for a release another open PR already bumped | `UPSTREAM_VERSION` is the sync procedure's; a feature PR may open a new minor, but only once per release |
 | Upstream-owned file rewritten | a method in `commands.rb` / `packager.rb` / `npm.rb` / `map.rb` restructured or reformatted rather than added to | conflict surface on the next sync |
 | Downgrade story | a `config/importmap.rb` this PR writes would not parse under importmap-rails (new keywords on `pin`, non-comment metadata) | apps must be able to switch back |
 | Lockfile | hand-merged `Gemfile.lock` / `docs/Gemfile.lock` / `docs/bun.lock`; a `gemfiles/*.lock` committed | regenerate; the appraisal locks are gitignored |

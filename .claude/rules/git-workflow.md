@@ -78,10 +78,10 @@ bin/release                    # patch
 bin/release minor | major | 1.4.0
 ```
 
-It refuses a dirty tree or a non-`main` branch, bumps `lib/importmap/version.rb` and `Gemfile.lock`, commits "Prepare for X.Y.Z", tags `vX.Y.Z` and publishes a GitHub Release. Publishing the release fires `release.yml` (test → build → RubyGems trusted publishing, no API key anywhere) and `deploy-docs.yml` (the docs site). Watch it with `gh run watch`.
+It refuses a dirty tree or a non-`main` branch, bumps `lib/importmap/version.rb` and `Gemfile.lock`, commits "Prepare for X.Y.Z", tags `vX.Y.Z` and publishes a GitHub Release. A feature PR that opens a new minor bumps `VERSION` itself — 1.1.0 landed that way — and `bin/release 1.1.0` then tags the version already in the file without a second bump. Only one of the two may move a given release's number. Publishing the release fires `release.yml` (test → build → RubyGems trusted publishing, no API key anywhere) and `deploy-docs.yml` (the docs site). Watch it with `gh run watch`.
 
 - Tags are plain `vX.Y.Z`. Never `-rc` suffixes, never `git push --tags`.
-- After the release, `cd docs && bundle install` and commit the `docs/Gemfile.lock` pin in a follow-up PR, or the next `docs/**` PR fails its frozen install.
+- Whenever `VERSION` moves — in the feature PR or in `bin/release` — `cd docs && bundle install` and commit the `docs/Gemfile.lock` pin, or the next `docs/**` PR fails its frozen install. The 1.1.0 bump hit exactly this.
 - `UPSTREAM_VERSION` is not touched by a release; it moves only in a sync PR.
 
 ## Rules

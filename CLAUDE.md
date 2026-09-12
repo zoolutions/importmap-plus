@@ -24,7 +24,7 @@ This is a **maintained fork that still tracks upstream**. The `upstream` remote 
 5. **NO raw `Net::HTTP` calls in Packager or Npm** — every outbound request goes through `with_retries` (`Importmap::HttpRetries`) and raises the class's own `HTTPError` once the attempts are spent.
 6. **NO network access on the request path** — engine → `Map` → helpers never reach a CDN or registry. Only the CLI (`Commands` → `Packager` / `Npm`) does.
 7. **NO hand-merging `Gemfile.lock`, `docs/Gemfile.lock` or `docs/bun.lock`** — regenerate them (`.claude/rules/git-workflow.md`). `gemfiles/*.lock` are gitignored; CI deletes and re-resolves them.
-8. **NO bumping `Importmap::VERSION` in a feature PR** — `bin/release` owns it. `UPSTREAM_VERSION` moves only in an upstream-sync PR.
+8. **NO moving `UPSTREAM_VERSION` outside a sync PR** — it names the importmap-rails release merged in, and only `/upstream-sync` changes it. `VERSION` is different: a feature PR that opens a new minor bumps it (that is how 1.1.0 landed), and `bin/release X.Y.Z` then tags the version already in the file. Never bump it twice for one release.
 
 ### Always Do
 
