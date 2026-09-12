@@ -1,0 +1,63 @@
+.claude/commands/review-pr.md
+  s_7f508d8614d6df::t_2bc2383d8d6912 1-94
+.claude/rules/coding-style.md
+  s_7f508d8614d6df::t_b788294b002678 1-98
+.claude/rules/striving-for-excellence.md
+  s_7f508d8614d6df::t_f6daba7917fb97 1-45
+.claude/commands/plan.md
+  s_7f508d8614d6df::t_2ef1d7408fe0fa 1-95
+CLAUDE.md
+  s_7f508d8614d6df::t_e87953ada9f63d 1-126
+.claude/commands/github-review-comments.md
+  s_7f508d8614d6df::t_b2e36500652237 1-4,6-179
+  s_7f508d8614d6df::t_9de81132837f7a 5
+.claude/commands/lfg.md
+  s_7f508d8614d6df::t_9de81132837f7a 5
+  s_7f508d8614d6df::t_94d5981158eea1 1-4,6-270
+.claude/commands/github-review-failures.md
+  s_7f508d8614d6df::t_1c25806d590f75 1-4,6-153
+  s_7f508d8614d6df::t_9de81132837f7a 5
+.claude/commands/finish-prs.md
+  s_7f508d8614d6df::t_6262912edd406a 1-168
+.claude/commands/security.md
+  s_7f508d8614d6df::t_66cc66c978f1fa 1-106
+.claude/commands/perf.md
+  s_7f508d8614d6df::t_de553927a39968 1-87
+.claude/commands/tdd.md
+  s_7f508d8614d6df::t_48e6187446c298 1-136
+.claude/rules/upstream-sync.md
+  s_7f508d8614d6df::t_c3590dda410218 1-58
+.claude/commands/upstream-sync.md
+  s_7f508d8614d6df::t_9de81132837f7a 5
+  s_7f508d8614d6df::t_ecddd5d916af63 1-4,6-98
+.claude/rules/agents.md
+  s_7f508d8614d6df::t_06bcb9f6ca5071 1-44
+.claude/commands/architect.md
+  s_7f508d8614d6df::t_68dac14c29d30a 1-93
+.claude/commands/github-review-pr.md
+  s_7f508d8614d6df::t_a3a894c37eae01 1-132
+.claude/commands/debug-flaky.md
+  s_7f508d8614d6df::t_4a1fbe039228c1 1-106
+.claude/rules/testing.md
+  s_7f508d8614d6df::t_f7e155abdfb517 77
+  s_7f508d8614d6df::t_4355cd30427745 1-21,23,29,32-33,35-37,40-76,78-103
+  s_7f508d8614d6df::t_749d432195187e 22,24-28,30-31,34,38-39
+.claude/rules/git-workflow.md
+  s_7f508d8614d6df::t_d16e13d19ec081 1-94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "56673d1926a4c5b5085459102b774f956c7c986e",
+  "prompts": {},
+  "sessions": {
+    "s_7f508d8614d6df": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "372ec33a-7695-43b2-9b3c-1058e62da8a7",
+        "model": "unknown"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
