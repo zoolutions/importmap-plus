@@ -1,0 +1,28 @@
+.claude/rules/git-workflow.md
+  s_7f508d8614d6df::t_088547702636d8 84
+  s_7f508d8614d6df::t_d3ec37fa7c29a6 81
+.claude/commands/github-review-comments.md
+  s_7f508d8614d6df::t_8e9e51277eeb08 85
+.claude/commands/github-review-pr.md
+  s_7f508d8614d6df::t_fb39df35fb3610 60
+CLAUDE.md
+  s_7f508d8614d6df::t_3070a25a9e4051 27
+.claude/commands/review-pr.md
+  s_7f508d8614d6df::t_48019b3af02017 26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "99fc5071cc2a893be58848bf7f03e10eff490b64",
+  "prompts": {},
+  "sessions": {
+    "s_7f508d8614d6df": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "372ec33a-7695-43b2-9b3c-1058e62da8a7",
+        "model": "claude-opus-5"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
