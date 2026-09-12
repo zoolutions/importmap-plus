@@ -40,7 +40,7 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
 end
 ```
 
-Three things that example is doing on purpose. A stubbed response is a tiny object with `code` and `body` — no `Net::HTTPResponse` construction. Anything that **writes** takes a `vendor_path` inside `Dir.mktmpdir`; the default is the real `vendor/javascript`, so a download without it leaves `test/dummy/vendor/javascript/react.js` in the working tree. And `without_retry_wait` (in `packager_test.rb`) zeroes `HttpRetries.wait` and restores it in `ensure` — any test that sets a class-level accessor (`Packager.endpoint`, `Npm.base_uri`, `HttpRetries.attempts`) restores it the same way or it leaks into later tests.
+Three things that example is doing on purpose. A stubbed response is a tiny object with `code` and `body` — no `Net::HTTPResponse` construction. Anything that **writes** takes a `vendor_path` inside `Dir.mktmpdir`. The default is a relative `vendor/javascript` resolved against the working directory, not against `Rails.root`, and the suite never chdirs — so a download without it leaves `vendor/javascript/react.js` at the **repo root**. And `without_retry_wait` (in `packager_test.rb`) zeroes `HttpRetries.wait` and restores it in `ensure` — any test that sets a class-level accessor (`Packager.endpoint`, `Npm.base_uri`, `HttpRetries.attempts`) restores it the same way or it leaks into later tests.
 
 ## Where each kind of test lives
 
