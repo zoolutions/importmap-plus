@@ -40,17 +40,20 @@ class Views::Docs::Pages::Caching < DocsUI::Page
   def sweeping
     DocsUI::Section("Sweeping the cache in development and test") do
       md <<~'MD'
-        The import map is cached once rendered. In development and test a file
-        watcher on `app/javascript` and `vendor/javascript` clears that cache before
-        each request when a file changed, so a new controller shows up in the map
-        without a restart. That is `config.importmap.sweep_cache`, on by default in
-        those environments.
+        The import map is cached once rendered. In development, and in test when
+        class reloading is on, a file watcher on `app/javascript` and
+        `vendor/javascript` clears that cache before each request when a file
+        changed, so a new controller shows up in the map without a restart. That is
+        `config.importmap.sweep_cache`, on by default in those environments; the
+        watcher is only installed when classes are reloadable, so a test
+        environment with `enable_reloading = false` (the Rails default) skips it.
 
         An engine, or an app with JavaScript elsewhere, adds its directories to the
-        watch list:
+        watch list. The watcher reads the list in the `importmap.cache_sweeper`
+        initializer, so an engine's initializer has to run before it:
       MD
       DocsUI::Code(<<~RUBY, filename: "my_engine/lib/my_engine/engine.rb")
-        initializer "my-engine.importmap" do |app|
+        initializer "my-engine.importmap", before: "importmap.cache_sweeper" do |app|
           app.config.importmap.cache_sweepers << Engine.root.join("app/assets/javascripts")
         end
       RUBY

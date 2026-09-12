@@ -85,4 +85,4 @@ bun run build:css   # only if you added classes the CSS must scan
 ```
 
 Then render locally (`bin/dev`, open `/docs/<slug>`) and confirm it reads well.
-For depth on any idiom, read the live [Authoring pages](/docs/authoring) doc.
+For depth on any idiom, read docs-kit's live [Authoring pages](https://docs-kit.zoolutions.llc/docs/authoring) doc.

@@ -22,8 +22,10 @@ class Views::Docs::Pages::Preloading < DocsUI::Page
         loads those, and so on down to the deepest nested import — a waterfall.
         importmap-rails avoids it with
         [modulepreload links](https://developers.google.com/web/updates/2017/12/modulepreload):
-        `javascript_importmap_tags` emits one for every pin before the import map,
-        so every file starts downloading at once.
+        `javascript_importmap_tags` emits the import map, then one modulepreload
+        link for every pin marked `preload: true` (the default) that applies to the
+        entry point being rendered, then the entry point import — so every
+        preloaded file starts downloading at once.
       MD
     end
   end
@@ -41,8 +43,8 @@ class Views::Docs::Pages::Preloading < DocsUI::Page
       DocsUI::Code(<<~ERB, filename: "app/views/layouts/application.html.erb")
         <%= javascript_importmap_tags %>
 
-        <%# includes the following link before the import map is set up: %>
-        <link rel="modulepreload" href="/assets/javascript/@github--hotkey.js">
+        <%# emits, after the import map, a link for hotkey but none for md5: %>
+        <link rel="modulepreload" href="/assets/@github--hotkey.js">
       ERB
       md <<~'MD'
         `bin/importmap` keeps `preload:` when it rewrites a pin, so a `preload: false`
@@ -65,8 +67,8 @@ class Views::Docs::Pages::Preloading < DocsUI::Page
       DocsUI::Code(<<~ERB, filename: "app/views/layouts/alternate.html.erb")
         <%= javascript_importmap_tags "alternate" %>
 
-        <%# includes the following link before the import map is set up: %>
-        <link rel="modulepreload" href="/assets/javascript/md5.js">
+        <%# emits, after the import map, a link for md5 but none for hotkey: %>
+        <link rel="modulepreload" href="/assets/md5.js">
       ERB
       md <<~'MD'
         A pin with `preload: true` is preloaded for every entry point; one with a

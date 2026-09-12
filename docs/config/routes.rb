@@ -2,9 +2,10 @@ Rails.application.routes.draw do
   # Read-only MCP server (JSON-RPC over POST) exposing these docs as agent tools —
   # live because `gem "mcp"` is bundled and c.mcp defaults to true. POST speaks
   # JSON-RPC; GET/DELETE 405 (the server is stateless, so there is no SSE session
-  # to open or terminate).
-  post "/mcp" => "docs_kit/mcp#create"
-  match "/mcp" => "docs_kit/mcp#method_not_allowed", via: %i[get delete]
+  # to open or terminate). `format: false` so /mcp.json doesn't route here and
+  # slip past the Rack::Attack throttle, which matches the exact /mcp path.
+  post "/mcp" => "docs_kit/mcp#create", format: false
+  match "/mcp" => "docs_kit/mcp#method_not_allowed", via: %i[get delete], format: false
   get "/llms-full.txt" => "docs_kit/llms#full", as: :llms_full
   get "/llms.txt" => "docs_kit/llms#index", as: :llms
   root "landings#show"

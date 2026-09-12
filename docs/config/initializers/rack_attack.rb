@@ -38,9 +38,14 @@ Rack::Attack.throttle("ai-endpoints/ip", limit: 60, period: 60) do |request|
 end
 
 # A small, honest 429 (plus Retry-After) instead of Rack::Attack's blank default.
+# Retry-After is the time left in the current window, not the whole period:
+# Rack::Attack buckets by `epoch_time / period`, so the window ends at the next
+# multiple of `period`.
 Rack::Attack.throttled_responder = lambda do |request|
   match_data = request.env["rack.attack.match_data"] || {}
-  retry_after = (match_data[:period] || 60).to_i
+  period = (match_data[:period] || 60).to_i
+  epoch_time = (match_data[:epoch_time] || Time.now.to_i).to_i
+  retry_after = period - (epoch_time % period)
   [
     429,
     { "Content-Type" => "text/plain", "Retry-After" => retry_after.to_s },

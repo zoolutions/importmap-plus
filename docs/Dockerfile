@@ -81,6 +81,10 @@ RUN groupadd --system --gid 1000 rails && \
     chown -R 1000:1000 /app/docs/log /app/docs/tmp
 USER 1000:1000
 
+# libjemalloc2 (installed in `base`) only takes effect when preloaded; the
+# builder is amd64 (config/deploy.yml), so the path is fixed.
+ENV LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libjemalloc.so.2"
+
 EXPOSE 3000
 # Thruster fronts Puma (HTTP caching + compression + X-Sendfile). It listens on
 # HTTP_PORT and proxies to Puma on TARGET_PORT (it sets PORT for the child, which

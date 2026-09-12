@@ -100,6 +100,6 @@ bun run build:css                          # if you added classes the CSS scans
 Then render the page locally (`bin/dev`, open `/docs/<slug>`) and confirm it
 reads correctly — with JavaScript off, too.
 
-**Depth:** the live [Authoring pages](/docs/authoring) doc is the full,
+**Depth:** docs-kit's live [Authoring pages](https://docs-kit.zoolutions.llc/docs/authoring) doc is the full,
 always-current version of this contract. When in doubt, read it.
 <!-- END docs-kit -->

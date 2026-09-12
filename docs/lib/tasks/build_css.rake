@@ -10,4 +10,4 @@ namespace :css do
   end
 end
 
-Rake::Task["assets:precompile"].enhance(["css:build"]) if Rake::Task.task_defined?("assets:precompile")
+Rake::Task["assets:precompile"].enhance([ "css:build" ]) if Rake::Task.task_defined?("assets:precompile")

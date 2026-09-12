@@ -36,7 +36,7 @@ class Views::Docs::Pages::Integrity < DocsUI::Page
         pin_all_from "app/javascript/controllers", under: "controllers" # auto-calculated
 
         # Explicit control
-        pin "cdn_package", integrity: "sha384-abc123..." # pre-calculated hash
+        pin "cdn_package", to: "https://cdn.example.com/cdn_package.js", integrity: "sha384-abc123..." # pre-calculated hash
         pin "no_integrity_package", integrity: false     # explicitly disabled
         pin "nil_integrity_package", integrity: nil      # explicitly disabled
       RUBY

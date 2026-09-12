@@ -12,8 +12,10 @@ RSpec.describe "Docs pages", type: :request do
     it "renders the #{doc.slug} page" do
       get "/docs/#{doc.slug}"
       expect(response).to have_http_status(:ok)
-      expect(response.body).to include("<h1")
-      expect(response.body).to include(doc.title)
+      # The sidebar lists every title too, so look at the masthead's own h1 —
+      # parsed, so an escaped "&" in a title still matches.
+      h1 = Nokogiri::HTML(response.body).at_css("h1")
+      expect(h1&.text).to include(doc.title)
     end
 
     it "serves a Markdown twin for #{doc.slug}" do

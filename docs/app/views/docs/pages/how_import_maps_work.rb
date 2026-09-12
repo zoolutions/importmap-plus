@@ -104,7 +104,9 @@ class Views::Docs::Pages::HowImportMapsWork < DocsUI::Page
         pin_all_from "app/javascript/controllers", under: "controllers", integrity: true
       RUBY
       md <<~'MD'
-        `to:` is only needed to change the destination logical name; drop it and
+        `under:` sets the prefix of the bare specifier — what `import` statements
+        say. `to:` sets the prefix of the asset path the file is served from, and
+        defaults to `under:`, so in this example it is redundant: drop it and
         `under:` goes directly after the first parameter. `enable_integrity!` turns
         on integrity calculation globally and `integrity: true` computes a hash for
         every file in the directory — see [Subresource integrity](/docs/integrity).

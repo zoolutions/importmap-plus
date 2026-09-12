@@ -19,9 +19,9 @@ class Views::Docs::Pages::Configuration < DocsUI::Page
     DocsUI::Section("config.importmap", description: "Set in config/application.rb or an environment file.") do
       DocsUI::PropTable(
         [
-          [ [ :code, "paths" ], "Array<Pathname>", "[]", "Additional import map files drawn after config/importmap.rb, in order. Engines append theirs here." ],
-          [ [ :code, "sweep_cache" ], "Boolean", "true in development and test", "Watch the JavaScript directories and clear the rendered map when a file changes." ],
-          [ [ :code, "cache_sweepers" ], "Array<Pathname>", "app/javascript, vendor/javascript", "The directories that watcher covers. Engines append their JavaScript directories." ],
+          [ [ :code, "paths" ], "Array<Pathname>", "[]", "Import map files, drawn in order. The engine appends config/importmap.rb during initialization, so files added in application.rb or an environment file are drawn before it; engines append theirs here." ],
+          [ [ :code, "sweep_cache" ], "Boolean", "true in development and test", "Watch the JavaScript directories and clear the rendered map when a file changes. Only takes effect when classes are reloadable." ],
+          [ [ :code, "cache_sweepers" ], "Array<Pathname>", "[] — app/javascript and vendor/javascript are added when the watcher is installed", "The directories the watcher covers, read once when sweep_cache is on and classes are reloadable. Engines append their JavaScript directories before importmap.cache_sweeper runs." ],
           [ [ :code, "rescuable_asset_errors" ], "Array<Class>", "the pipeline's missing-asset error", "Errors that make a pin resolve to nothing (and log a warning) instead of raising. Propshaft::MissingAssetError and Sprockets' AssetNotFound are added for you." ]
         ]
       )
@@ -43,7 +43,7 @@ class Views::Docs::Pages::Configuration < DocsUI::Page
         [
           [ [ :code, "minifier" ], "#call(source) → String", "the first of bun, esbuild, terser found", "What --minify runs a download through." ],
           [ [ :code, "retry_attempts" ], "Integer", "3", "How many times a CDN or registry request is tried." ],
-          [ [ :code, "retry_wait" ], "Numeric", "1", "Seconds between tries, multiplied by the attempt number." ],
+          [ [ :code, "retry_wait" ], "Numeric", "0.5", "Seconds between tries, multiplied by the attempt number." ],
           [ [ :code, "endpoint" ], "URI", "https://api.jspm.io/generate", "The JSPM generator API." ],
           [ [ :code, "esm_run_resolver" ], "URI", "https://data.jsdelivr.com/v1/packages/npm/", "The jsDelivr data API --from esm.run resolves versions through." ]
         ]
@@ -67,10 +67,11 @@ class Views::Docs::Pages::Configuration < DocsUI::Page
     DocsUI::Section("Retries") do
       md <<~'MD'
         CDNs reset connections and rate-limit bursts. A reset connection, a timeout
-        or a 429/5xx from a CDN or the registry is tried `retry_attempts` times,
-        pausing `retry_wait × attempt` seconds between tries, before `bin/importmap`
-        gives up. The failure then names the URL instead of printing a backtrace.
-        A 404 is not retried: the package isn't there.
+        or a 429, 500, 502, 503 or 504 from a CDN or the registry is tried
+        `retry_attempts` times, pausing `retry_wait × attempt` seconds between
+        tries, before `bin/importmap` gives up. A transport failure then says which
+        request it was making; an HTTP error reports the status, or the message the
+        service returned. A 404 is not retried: the package isn't there.
       MD
     end
   end

@@ -25,6 +25,7 @@
 
 # Ignore key files for decrypting credentials and more.
 /config/*.key
+/config/credentials/*.key
 
 
 # Node modules + the compiled Tailwind/daisyUI CSS bundle (built in CI/deploy).

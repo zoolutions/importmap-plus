@@ -21,7 +21,12 @@ class Views::Docs::Pages::Composing < DocsUI::Page
         `config/importmap.rb` into the `Importmap::Map` at
         `Rails.application.importmap`. Any additional file appended to
         `Rails.application.config.importmap.paths` is drawn into the same map, in
-        order, so a later file can override an earlier pin.
+        order. Files added in `config/application.rb` or an environment file come
+        before `config/importmap.rb`, which the engine appends to the list during
+        initialization. A later `pin` overrides an earlier `pin` of the same name.
+        Directories are expanded on top of the explicit pins when the map is
+        rendered, so a file found by `pin_all_from` wins over a `pin` of the same
+        name whichever file declared it.
       MD
     end
   end

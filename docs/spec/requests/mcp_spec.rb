@@ -12,11 +12,14 @@ RSpec.describe "MCP endpoint", type: :request do
     post "/mcp",
          params: { jsonrpc: "2.0", id: 1, method:, params: }.to_json,
          headers: { "CONTENT_TYPE" => "application/json" }
+    expect(response).to have_http_status(:ok)
     response.parsed_body
   end
 
   def tool_text(name, arguments = {})
-    result = rpc("tools/call", { name:, arguments: }).fetch("result")
+    body = rpc("tools/call", { name:, arguments: })
+    expect(body).to include("result"), "expected a JSON-RPC result, got #{body.inspect}"
+    result = body.fetch("result")
     expect(result["isError"]).to be_falsey
     result.dig("content", 0, "text").to_s
   end

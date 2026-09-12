@@ -2,17 +2,29 @@ name: Docs site
 
 # The docs site (docs/) is a self-contained nested Rails app built with docs-kit.
 # It has its own bundle and toolchain, so it gets its own CI job — the gem's
-# ci.yml does not touch it. Runs only when docs/ changes.
+# ci.yml does not touch it. Runs when docs/ changes, and when the gem inputs the
+# site loads change: the app bundles the gem through `path: ".."`, renders the
+# root CHANGELOG.md, and reads the root .bun-version.
 on:
   push:
     branches:
       - main
     paths:
       - "docs/**"
+      - "app/**"
+      - "lib/**"
+      - "importmap-plus.gemspec"
+      - "CHANGELOG.md"
+      - ".bun-version"
       - ".github/workflows/docs-ci.yml"
   pull_request:
     paths:
       - "docs/**"
+      - "app/**"
+      - "lib/**"
+      - "importmap-plus.gemspec"
+      - "CHANGELOG.md"
+      - ".bun-version"
       - ".github/workflows/docs-ci.yml"
 
 permissions:

@@ -61,7 +61,7 @@ class Views::Docs::Pages::EsmRun < DocsUI::Page
         says so — an import map holds one version per specifier.
       MD
       DocsUI::Callout(:note) do
-        plain "The rewrite matches import statements, not JavaScript in general. A jsDelivr bundle is esbuild output whose only surviving comment is the banner, and a root-relative /npm/ URL is meaningless anywhere but in one of its own imports."
+        plain "The rewrite is lexical, not a JavaScript parser: it matches import or from followed by a quoted /npm/…/+esm specifier, so the same text inside a string or a comment would be rewritten too. In practice that doesn't come up — a jsDelivr bundle is esbuild output whose only surviving comment is the banner, and a root-relative /npm/ URL is meaningless anywhere but in one of its own imports."
       end
     end
   end
@@ -82,8 +82,8 @@ class Views::Docs::Pages::EsmRun < DocsUI::Page
   def remote
     DocsUI::Section("Without vendoring") do
       md <<~'MD'
-        With `--remote` the pin points at the bundle URL and its imports load from
-        jsDelivr as-is — no rewrite, no dependency pins:
+        With `--from esm.run --remote` the pin points at the bundle URL and its
+        imports load from jsDelivr as-is — no rewrite, no dependency pins:
       MD
       DocsUI::Code(<<~RUBY, filename: "config/importmap.rb")
         pin "luxon", to: "https://cdn.jsdelivr.net/npm/luxon@3.7.2/+esm"

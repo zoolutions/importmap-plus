@@ -10,7 +10,7 @@ Rails.application.load_tasks
 begin
   require "rubocop"
 
-  lint_files = -> { Dir.glob(%w[app/**/*.rb spec/**/*.rb config/**/*.rb Rakefile config.ru]) }
+  lint_files = -> { Dir.glob(%w[app/**/*.rb spec/**/*.rb config/**/*.rb lib/**/*.rb lib/**/*.rake Rakefile config.ru]) }
 
   desc "Lint the docs site with RuboCop"
   task :lint do # rubocop:disable Rails/RakeEnvironment
