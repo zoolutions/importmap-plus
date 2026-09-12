@@ -64,6 +64,12 @@ class Importmap::NpmTest < ActiveSupport::TestCase
     assert_equal('5.4.4', packages[0][1])
   end
 
+  test "packages_with_versions reads locked pins" do
+    npm = Importmap::Npm.new(file_fixture("locked_import_map.rb"))
+
+    assert_equal [["luxon", "3.7.2"], ["md5", "2.2.0"], ["react", "17.0.2"]], npm.packages_with_versions.sort
+  end
+
   test "handles scoped package with nested path" do
     npm = Importmap::Npm.new(file_fixture("scoped_package_with_nested_path_import_map.rb"))
     packages = npm.packages_with_versions

@@ -15,11 +15,31 @@ class Importmap::Commands < Thor
   option :preload, type: :string, repeatable: true, desc: "Can be used multiple times"
   option :remote, type: :boolean, default: false, desc: "Pin to the remote URL instead of vendoring a download"
   option :minify, type: :boolean, desc: "Minify the vendored download with bun, esbuild or terser"
+  option :lock, type: :boolean, desc: "Lock the pin at this version; update, pin and pristine leave it there until unlocked"
+  option :force, type: :boolean, default: false, desc: "Re-pin locked packages, keeping each lock at the new version"
   def pin(*packages)
+    packages = without_locked(packages, lock: options[:lock], force: options[:force])
+    # jspm resolves a package together with its dependencies; --lock and
+    # --no-lock are about the packages that were asked for, not those.
+    requested = packages.map { |spec| packager.package_key_for(spec) }
+
     for_each_import_grouped_by_provider(packages, env: options[:env], from: options[:from]) do |package, url|
+      next if keep_locked_dependency(package, requested)
+
       pin_package(package, url, preload: options[:preload], remote: options[:remote], env: options[:env],
-                                minify: options[:minify], from: options[:from])
+                                minify: options[:minify], from: options[:from],
+                                lock: requested.include?(package) ? options[:lock] : nil)
     end
+  end
+
+  desc "lock [*PACKAGES]", "Lock packages at their pinned version"
+  def lock(*packages)
+    exit 1 unless packages.map { |package| lock_package(package) }.all?
+  end
+
+  desc "unlock [*PACKAGES]", "Let locked packages be updated again"
+  def unlock(*packages)
+    exit 1 unless packages.map { |package| unlock_package(package) }.all?
   end
 
   desc "unpin [*PACKAGES]", "Unpin existing packages"
@@ -44,6 +64,8 @@ class Importmap::Commands < Thor
     for_each_import_grouped_by_provider(packages, env: options[:env], from: options[:from]) do |package, url|
       if packager.remote_pin?(package)
         puts %(Skipping "#{package}" (pinned to remote URL))
+      elsif (resolved = version_drift_of_locked(package, url))
+        puts %(Skipping "#{package}" (locked at #{packager.pin_provenance(package)[:version]}, CDN resolved #{resolved}))
       else
         minify = options[:minify].nil? ? vendored_minified?(package) : options[:minify]
 
@@ -85,14 +107,17 @@ class Importmap::Commands < Thor
   desc "outdated", "Check for outdated packages"
   def outdated
     if (outdated_packages = npm.outdated_packages).any?
-      table = [["Package", "Current", "Latest"]]
-      outdated_packages.each { |p| table << [p.name, p.current_version, p.latest_version || p.error] }
+      locked = outdated_packages.select { |p| locked_pin_covering(p.name) }
+
+      table = [["Package", "Current", "Latest", "Locked"]]
+      outdated_packages.each { |p| table << [p.name, p.current_version, p.latest_version || p.error, locked.include?(p) ? "yes" : ""] }
 
       puts_table(table)
       packages = 'package'.pluralize(outdated_packages.size)
-      puts "  #{outdated_packages.size} outdated #{packages} found"
+      puts "  #{outdated_packages.size} outdated #{packages} found#{" (#{locked.size} locked)" if locked.any?}"
 
-      exit 1
+      # A lock is a version the app chose, so only the rest count as drift.
+      exit 1 if locked.size < outdated_packages.size
     else
       puts "No outdated packages found"
     end
@@ -101,8 +126,16 @@ class Importmap::Commands < Thor
   desc "update", "Update outdated package pins"
   def update
     if (outdated_packages = npm.outdated_packages).any?
-      for_each_import_grouped_by_provider(outdated_packages.map(&:name), env: "production") do |package, url|
-        pin_package(package, url)
+      packages = without_locked_updates(outdated_packages.map(&:name))
+
+      if packages.empty?
+        puts "Nothing to update (every outdated package is locked)"
+      else
+        for_each_import_grouped_by_provider(packages, env: "production") do |package, url|
+          next if keep_locked_dependency(package, packages)
+
+          pin_package(package, url)
+        end
       end
     else
       puts "No outdated packages found"
@@ -123,30 +156,122 @@ class Importmap::Commands < Thor
       @npm ||= Importmap::Npm.new
     end
 
-    def pin_package(package, url, preload: nil, remote: false, env: "production", minify: nil, from: nil)
+    # A lock outlives a rewrite unless the caller says otherwise, so update
+    # and --force re-lock at the version they move to.
+    def pin_package(package, url, preload: nil, remote: false, env: "production", minify: nil, from: nil, lock: nil)
       existing_options = packager.extract_existing_pin_options(package)[package] || {}
       preload = existing_options[:preload] if preload.nil?
+      integrity = existing_options[:integrity]
+      locked = lock.nil? ? packager.locked?(package) : lock
       existing_url = existing_options[:to] if existing_options[:to].to_s.match?(Importmap::Packager::REMOTE_URL_REGEXP)
 
       if existing_url
-        repin_remote_package(package, url, existing_url, preload, env: env, from: from)
+        repin_remote_package(package, url, existing_url, preload, env: env, from: from, integrity: integrity, locked: locked)
       elsif remote
-        pin_remote_package(package, url, preload)
+        pin_remote_package(package, url, preload, integrity: integrity, locked: locked)
       else
-        pin_vendored_package(package, url, preload, minify: minify)
+        pin_vendored_package(package, url, preload, minify: minify, integrity: integrity, locked: locked)
       end
     end
 
-    def pin_vendored_package(package, url, preload, minify: nil)
+    def pin_vendored_package(package, url, preload, minify: nil, integrity: nil, locked: false)
       minify = vendored_minified?(package) if minify.nil?
 
       puts %(Pinning "#{package}" to #{packager.vendor_path}/#{package}.js via download from #{url}#{" (minified)" if minify})
 
       dependencies = packager.download(package, url, minify: minify)
 
-      update_importmap_with_pin(package, packager.vendored_pin_for(package, url, preload, minify: minify))
+      update_importmap_with_pin(package, packager.vendored_pin_for(package, url, preload, minify: minify, integrity: integrity, locked: locked))
+      report_lock(package) if locked
 
       pin_esm_run_dependencies(dependencies, preload: preload, minify: minify)
+    end
+
+    def lock_package(spec)
+      package = packager.package_key_for(spec)
+
+      if package != spec
+        puts %(Use "bin/importmap pin #{spec} --lock" to lock at a different version)
+      elsif !packager.packaged?(package)
+        puts %(Couldn't find a pin for "#{package}")
+      elsif packager.locked?(package)
+        puts %("#{package}" is already locked at #{packager.pin_provenance(package)[:version]})
+        return true
+      elsif (line = packager.locked_pin_line(package))
+        update_importmap_with_pin(package, line)
+        report_lock(package)
+        return true
+      else
+        puts %(Can't lock "#{package}": its pin has no version)
+      end
+
+      false
+    end
+
+    def unlock_package(spec)
+      package = packager.package_key_for(spec)
+
+      if !packager.packaged?(package)
+        puts %(Couldn't find a pin for "#{package}")
+        false
+      elsif !packager.locked?(package)
+        puts %("#{package}" isn't locked)
+        true
+      else
+        update_importmap_with_pin(package, packager.unlocked_pin_line(package))
+        puts %(Unlocked "#{package}")
+        true
+      end
+    end
+
+    def report_lock(package)
+      puts %(Locked "#{package}" at #{packager.pin_provenance(package)[:version]})
+    end
+
+    # Specs the user named that point at a locked pin are dropped, with a
+    # note, unless the lock is what they are here to change.
+    def without_locked(specs, lock: nil, force: false)
+      return specs if force || !lock.nil?
+
+      specs.reject do |spec|
+        package = packager.package_key_for(spec)
+
+        packager.locked?(package).tap do |locked|
+          puts %(Skipping "#{package}" (locked at #{packager.pin_provenance(package)[:version]}; run bin/importmap unlock #{package} or pass --force)) if locked
+        end
+      end
+    end
+
+    # update sees npm names (apexcharts) where pins are import-map keys
+    # (apexcharts/core), so a lock on any pin of the package holds it.
+    def without_locked_updates(names)
+      names.reject do |name|
+        (locked = locked_pin_covering(name)).tap do
+          puts %(Skipping "#{name}" (locked at #{packager.pin_provenance(locked)[:version]}; run bin/importmap unlock #{locked})) if locked
+        end
+      end
+    end
+
+    def locked_pin_covering(name)
+      packager.locked_pins.find { |key| key == name || key.start_with?("#{name}/") }
+    end
+
+    # A CDN resolves a package together with its dependencies. One the app has
+    # locked stays where it is: only a package named on the command line moves.
+    def keep_locked_dependency(package, requested)
+      return false if requested.include?(package) || !packager.locked?(package)
+
+      puts %(Keeping existing pin for "#{package}" (locked at #{packager.pin_provenance(package)[:version]}))
+      true
+    end
+
+    # pristine asks the CDN for the pinned version, so a locked package only
+    # drifts if the CDN answers with another one.
+    def version_drift_of_locked(package, url)
+      return unless packager.locked?(package)
+
+      resolved = packager.extract_package_version_from(url).to_s.delete_prefix("@")
+      resolved if resolved != packager.pin_provenance(package)[:version]
     end
 
     # An esm.run bundle imports its dependencies as bare specifiers after
@@ -167,9 +292,11 @@ class Importmap::Commands < Thor
     # comment those are recorded in. Left alone otherwise: a pin may carry
     # options, such as integrity, that a rewrite would drop.
     def record_provenance(package, url, minify)
-      preload = (packager.extract_existing_pin_options(package)[package] || {})[:preload]
+      existing_options = packager.extract_existing_pin_options(package)[package] || {}
 
-      update_importmap_with_pin(package, packager.vendored_pin_for(package, url, preload, minify: minify))
+      update_importmap_with_pin(package, packager.vendored_pin_for(package, url, existing_options[:preload],
+                                                                   minify: minify, integrity: existing_options[:integrity],
+                                                                   locked: packager.locked?(package)))
     end
 
     def provenance_changed?(package, url, minify)
@@ -196,27 +323,28 @@ class Importmap::Commands < Thor
       packager.pin_provenance(packager.package_key_for(spec))&.dig(:provider)
     end
 
-    def pin_remote_package(package, url, preload)
+    def pin_remote_package(package, url, preload, integrity: nil, locked: false)
       puts %(Pinning "#{package}" to #{url})
 
       packager.remove_existing_package_file(package)
 
-      update_importmap_with_pin(package, packager.pin_for(package, url, preloads: preload))
+      update_importmap_with_pin(package, packager.pin_for(package, url, preloads: preload, integrity: integrity, locked: locked))
+      report_lock(package) if locked
     end
 
-    def repin_remote_package(package, url, existing_url, preload, env:, from: nil)
+    def repin_remote_package(package, url, existing_url, preload, env:, from: nil, integrity: nil, locked: false)
       # `url` was already resolved from the requested CDN, so an explicit
       # --from moves the pin instead of being overruled by its current one.
-      return pin_remote_package(package, url, preload) if from
+      return pin_remote_package(package, url, preload, integrity: integrity, locked: locked) if from
 
       provider = packager.provider_for_url(existing_url)
 
       if provider.nil?
         puts %(Skipping "#{package}" pinned to custom URL #{existing_url})
       elsif provider == packager.provider_for_url(url)
-        pin_remote_package(package, url, preload)
+        pin_remote_package(package, url, preload, integrity: integrity, locked: locked)
       elsif (provider_url = resolve_url_from_provider(package, url, provider, env: env))
-        pin_remote_package(package, provider_url, preload)
+        pin_remote_package(package, provider_url, preload, integrity: integrity, locked: locked)
       else
         puts %(Keeping "#{package}" pinned to #{existing_url} (couldn't resolve it from #{provider}))
       end
