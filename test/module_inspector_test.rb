@@ -220,6 +220,8 @@ class Importmap::ModuleInspectorTest < ActiveSupport::TestCase
   test "an exports property assignment or an AMD define is not an ES module" do
     assert_not_es_module %(exports.md5 = function() {})
     assert_not_es_module %(exports.__esModule = true; exports.default = md5)
+    assert_not_es_module %(exports["default"] = md5)
+    assert_not_es_module %(exports['md5'] = md5)
     assert_not_es_module %(define(["require", "exports"], function(require, exports) {}))
     assert_not_es_module %(define(function() { return md5 }))
   end

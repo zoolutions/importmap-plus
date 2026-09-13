@@ -96,7 +96,7 @@ class Importmap::ModuleInspector
   # `module.exports` out only in a comment, which is stripped before any of
   # this is read.
   COMMONJS_REGEXP = /
-    (?<![\w.$])(?:module\s*\.\s*exports|exports\s*\.\s*[\w$]+\s*=|require\s*\(|define\s*\(|typeof\s+(?:exports|module|define)\s*[!=]=) |
+    (?<![\w.$])(?:module\s*\.\s*exports|exports\s*(?:\.\s*[\w$]+|\[[^\]]+\])\s*=|require\s*\(|define\s*\(|typeof\s+(?:exports|module|define)\s*[!=]=) |
     \.\s*exports\s*=
   /x.freeze # :nodoc:
   LINE_COMMENT_REGEXP = %r{//[^\n]*}.freeze # :nodoc:
