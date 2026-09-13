@@ -301,10 +301,18 @@ class Importmap::Commands < Thor
 
     # The registry knows a package by name and the import map by key: a pin of
     # "photoswipe/lightbox" is outdated when "photoswipe" is. A named update
-    # re-pins the keys that were asked for, not the name the registry answered with.
+    # re-pins the keys that were asked for: a package name means every pin
+    # that carries it, the way outdated reports it and a bare update moves it,
+    # while "photoswipe/lightbox" means that one key.
     def requested_keys_for(specs, outdated_names)
-      specs.map { |spec| packager.package_key_for(spec) }
+      specs.flat_map { |spec| keys_for(packager.package_key_for(spec)) }
            .select { |key| outdated_names.include?(packager.package_name_for(key)) }
+    end
+
+    def keys_for(key)
+      return [ key ] unless key == packager.package_name_for(key)
+
+      versioned_keys_by_package[key] || [ key ]
     end
 
     # An outdated package is outdated in every pin that carries it, so a bare
@@ -320,10 +328,12 @@ class Importmap::Commands < Thor
     # doesn't match its key (pin "buffer", to: ".../npm:jspm-core@..."); it is
     # still the only handle there is, so it goes through as itself.
     def outdated_keys_for(names)
-      keys = packager.pinned_packages.select { |key| packager.pin_version(key) }
-                                     .group_by { |key| packager.package_name_for(key) }
+      names.flat_map { |name| versioned_keys_by_package[name] || [ name ] }
+    end
 
-      names.flat_map { |name| keys[name] || [ name ] }
+    def versioned_keys_by_package
+      packager.pinned_packages.select { |key| packager.pin_version(key) }
+                              .group_by { |key| packager.package_name_for(key) }
     end
 
     def locked_pin_covering(name)
@@ -393,8 +403,15 @@ class Importmap::Commands < Thor
       end
     end
 
+    # A subpath pin that names no CDN of its own comes from wherever its
+    # package's pin came from: pdfjs-dist and pdfjs-dist/build/pdf.worker.min.mjs
+    # were pinned together, and jspm, the default, can't resolve either.
     def vendored_provider_for(spec)
-      packager.pin_provenance(packager.package_key_for(spec))&.dig(:provider)
+      key  = packager.package_key_for(spec)
+      name = packager.package_name_for(key)
+
+      packager.pin_provenance(key)&.dig(:provider) ||
+        (packager.pin_provenance(name)&.dig(:provider) if key != name)
     end
 
     def pin_remote_package(package, url, preload, integrity: nil, locked: false)

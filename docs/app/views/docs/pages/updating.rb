@@ -53,10 +53,18 @@ class Views::Docs::Pages::Updating < DocsUI::Page
         The registry knows a package by name, the import map by key, and `update`
         re-pins the keys. A `pin "photoswipe/lightbox"` is a pin of `photoswipe`, so
         it is what moves when photoswipe does — no bare `pin "photoswipe"` appears
-        beside it. A package pinned under several keys has all of them re-pinned.
+        beside it. A package pinned under several keys has all of them re-pinned,
+        whether you name it or not: `update pdfjs-dist` moves `pdfjs-dist` and
+        `pdfjs-dist/build/pdf.worker.min.mjs` together, since the two are built
+        together; `update pdfjs-dist/build/pdf.worker.min.mjs` moves that key alone.
         Only pins with a version take part, so one of your own files pinned under a
         package's namespace — `pin "md5/helpers", to: "md5/helpers.js"` — is left
         alone.
+
+        A subpath pin whose comment names no CDN comes back from the CDN its
+        package's pin names — the worker above was pinned together with pdf.js and
+        comes from the same place, which matters when jspm, the default, can't
+        resolve it.
       MD
       DocsUI::Code(<<~SHELL, lexer: :console)
         $ ./bin/importmap update md5 nope

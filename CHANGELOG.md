@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.1.2
+
+### Fixed
+
+- **`update <package>` moves every pin of that package, not just the bare
+  one.** An app with `pin "pdfjs-dist"` and
+  `pin "pdfjs-dist/build/pdf.worker.min.mjs"` ran `update pdfjs-dist` and got
+  a new main file next to a worker still at the old version — the two are
+  built together and don't tolerate that. A package name now means every
+  key that carries it, the same set `outdated` reports and a bare `update`
+  moves; `update pdfjs-dist/build/pdf.worker.min.mjs` still means that one
+  key.
+- **A subpath pin without a CDN in its comment resolves from the CDN its
+  package's pin names.** The worker pin above, written before provenance
+  existed, was sent to jspm — which can't resolve pdf.js at all — and
+  reported "Couldn't find any packages" on every update while the main pin
+  moved on from jsdelivr. Siblings pinned together come from the same place;
+  the next update records it on the pin.
+
 ## 1.1.0
 
 ### Added
