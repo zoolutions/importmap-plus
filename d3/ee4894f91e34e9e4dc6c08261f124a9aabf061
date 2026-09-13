@@ -1,0 +1,9 @@
+lode/cli/summary.md
+  ai_agent 32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d3ee4894f91e34e9e4dc6c08261f124a9aabf061",
+  "prompts": {}
+}
