@@ -41,7 +41,7 @@ Why: a `"/*"` can sit *inside* a string. A naive `/\/\*.*?\*\//m` over the whole
 
 ### Safe failure direction
 
-Class comment: "a false positive keeps a working remote pin... a package wrongly kept remote still works, a package wrongly vendored 404s in production" (lines 11-14). The scanner embodies this: text is deleted on exactly one branch (`scanner.skip(...)` on a matched comment); everything else — a string (line 179), a regex literal, a plain character (line 181) — is kept whole, so a span the scanner can't be sure about is never dropped.
+Class comment: "a false positive keeps a working remote pin... a package wrongly kept remote still works, a package wrongly vendored 404s in production" (lines 11-14). The scanner embodies this: text is deleted on exactly one branch (`scanner.skip(...)` on a matched comment); everything else — a string (line 179), a regex literal, a plain character (line 181) — is kept whole, so in the default scan a span the scanner can't be sure about is never dropped (the `statements_only` mode empties every literal to its delimiters and also skips line comments, by design; `review/inspection-and-tools.md` scopes the invariant).
 
 ### `es_module?`
 
@@ -51,7 +51,7 @@ def es_module?
 end
 ```
 
-(lines 136-138). `ESM_STATEMENT_REGEXP` (lines 80-86) matches every import/export spelling a published bundle uses, read against `statements` — every literal emptied to `literal[0, 1] * 2` (line 179) — so a quoted or commented-out import never counts, but `import "x"` still reads because its delimiters survive. `COMMONJS_REGEXP` (lines 98-101) matches `module.exports`, `exports.foo =` / `exports["foo"] =`, `.exports =`, `require(`, `define(`, or a `typeof exports/module/define ==`/`!=` sniff — read against `code` (strings and regex literals intact), "because a UMD wrapper hidden in a string is a UMD wrapper" (lines 131-135). A file with neither signal is taken for an ES module (lines 181-186).
+(lines 136-138). `ESM_STATEMENT_REGEXP` (lines 80-86) matches every import/export spelling a published bundle uses, read against `statements` — every literal emptied to `literal[0, 1] * 2` (line 179) — so a quoted or commented-out import never counts, but `import "x"` still reads because its delimiters survive. `COMMONJS_REGEXP` (lines 98-101) matches `module.exports`, `exports.foo =` / `exports["foo"] =`, `.exports =`, `require(`, `define(`, or a `typeof exports/module/define ==`/`!=` sniff — read against `code` (strings and regex literals intact), "because a UMD wrapper hidden in a string is a UMD wrapper" (lines 131-135). A file with neither signal is taken for an ES module (`es_module?`, lines 136-138).
 
 ## Minifier (`lib/importmap/minifier.rb`)
 

@@ -1,7 +1,7 @@
 What the docs site and CHANGELOG must keep saying, and how the docs app itself is wired.
 
 ### The pin-comment grammar on the Provenance page lists `not an ES module` among the `remote:` reasons
-- **Holds because:** the Grammar section is what someone editing a pin by hand reads, and the reason list has to be the set the code can actually write: `ModuleInspector::PATTERNS`' four keys (`relative imports`, `dynamic imports`, `workers`, `import.meta.url`, `wasm`) plus the `"not an ES module"` string `pin_vendored_package` passes for `NotAnEsModule`. A reason missing from the list reads as a typo the user should "fix", which would drop the provenance on the next rewrite.
+- **Holds because:** the Grammar section is what someone editing a pin by hand reads, and the reason list has to be the set the code can actually write: `ModuleInspector::PATTERNS`' five keys (`relative imports`, `dynamic imports`, `workers`, `import.meta.url`, `wasm`) plus the `"not an ES module"` string `pin_vendored_package` passes for `NotAnEsModule`. A reason missing from the list reads as a typo the user should "fix", which would drop the provenance on the next rewrite.
 - **Where:** `docs/app/views/docs/pages/provenance.rb#grammar` (and `#the_comment`); mirrors `lib/importmap/commands.rb#pin_vendored_package` and `lib/importmap/module_inspector.rb#PATTERNS`
 - **Proven by:** `test/commands_test.rb:"pin keeps a package remote when the CDN hands back something that isn't an ES module"` pins the string the docs must match; the docs page itself is covered only by `docs/spec/requests/docs_spec.rb:"renders the provenance page"` (render, not content)
 - **Origin:** cubic learning e95aa367

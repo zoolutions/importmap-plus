@@ -2,7 +2,7 @@
 
 - pin — one `pin "name", to: …` line in `config/importmap.rb`; the unit the CLI reads and rewrites.
 - pin line — the literal source line, matched by regex (`Importmap::Map.pin_line_regexp_for`); there is no AST.
-- provenance comment — the trailing `# @<version> (<provider>[, minified][, locked][, vendored][, remote: <reason>])`; the fork's metadata, ignored by upstream.
+- provenance comment — the trailing `# @<version> (<provider>[, minified][, vendored][, remote[: <reason>]][, locked])`; the fork's metadata, ignored by upstream.
 - provider — the CDN a pin came from: `jspm.io` (default, omitted from the comment), `esm.run` (jsDelivr's bundled builds), `jsdelivr`, `unpkg`, `skypack`.
 - provider chain — the order `pin` tries providers when one cannot resolve a package (`provider_chain.rb`).
 - vendored pin — a pin whose file was downloaded to `vendor/javascript/<name>.js`; `to:` is absent or local.

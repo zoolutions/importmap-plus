@@ -21,7 +21,7 @@ The rules are `../../.claude/rules/testing.md` (TDD workflow, Minitest conventio
 | `npm_integration_test.rb` (4 tests) | **live** | `Npm#outdated_packages`/`vulnerable_packages` against the real npm registry, plus a deliberately bad domain to exercise `HTTPError` |
 | `installer_test.rb` (3 tests) | **live** (`bundle install` inside a generated app) | `rails importmap:install` generator output, run inside a real `rails new` app in a tmpdir |
 
-Total: 17 test files. `bin/test` is upstream's rails/plugin runner and runs 0 tests on Rails 8.1 per `CLAUDE.md` — don't use it; `bundle exec rake test` is the entry point.
+Total: 14 files under `test/` outside `dummy/` and `fixtures/` (13 `*_test.rb` plus `test_helper.rb`). `bin/test` is upstream's rails/plugin runner and runs 0 tests on Rails 8.1 per `CLAUDE.md` — don't use it; `bundle exec rake test` is the entry point.
 
 ## CommandsTest process isolation
 

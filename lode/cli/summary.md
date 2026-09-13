@@ -48,7 +48,7 @@ one." An unreachable registry leaves the spec untouched.
 (`commands.rb:423-431`) groups by `from || vendored_provider_for(spec) ||
 Importmap::ProviderChain::DEFAULT` ("jspm"). A group with no provider of its
 own goes through `for_each_import_with_fallback` (`commands.rb:438-447`) →
-`ProviderChain#resolve` (`provider_chain.rb:52-70`): jspm, then esm.run, then
+`ProviderChain#resolve` (`provider_chain.rb:56-75`): jspm, then esm.run, then
 jsdelivr (`PROVIDERS`), printing `"#{provider} couldn't resolve ...; trying
 #{next_provider}"` on each miss. An explicit `--from` or a pin's own recorded
 provider is asked once, no fallback (`for_each_import`, `commands.rb:594-602`).
@@ -75,7 +75,7 @@ depending on whether the pin already has a remote `to:` and whether `vendor`
 is set (`vendor ||= packager.vendored?(package)`, so `--vendor` sticks on
 later rewrites). `pin_vendored_package` → `Packager#download`, which unless
 `force:` (true for `--vendor`/`pristine`) runs `ensure_servable`
-(`packager.rb:589-593`) via `Importmap::ModuleInspector` (relative/dynamic
+(`packager.rb:563-568`) via `Importmap::ModuleInspector` (relative/dynamic
 imports, workers, `import.meta.url`, `.wasm` → not vendorable; also checks ES
 module). Failure raises `Unvendorable` → `pin_remote_package(kept_remote:
 error.reasons)`, or `NotAnEsModule` → `kept_remote: ["not an ES module"]`.
@@ -150,23 +150,23 @@ that isn't `gsub_file`/`append_to_file`).
 
 `Importmap::Npm` talks only to `registry.npmjs.org` (`base_uri` class
 accessor), via `get_json`/`post_json`, both wrapped in `with_retries`
-(`HttpRetries`, included) raising `HTTPError` (`npm.rb:113-131`, `165-171`).
+(`HttpRetries`, included) raising `HTTPError` (`npm.rb:112-133`, `169-177`).
 
-- `outdated_packages(only: nil)` (`npm.rb:23-40`): builds an `OutdatedPackage`
+- `outdated_packages(only: nil)` (`npm.rb:24-44`): builds an `OutdatedPackage`
   per candidate from `packages_with_versions` (or `only`, matched by
   `extract_base_package_name`); `get_package` failures are recorded as
   `.error` rather than raised, so one bad package doesn't stop the batch.
   `find_latest_version` prefers `dist-tags.latest`, else the highest
   `Gem::Version` among `versions.keys`.
-- `audit`/`vulnerable_packages` (`npm.rb:56-67`) POSTs every
+- `audit`/`vulnerable_packages` (`npm.rb:55-66`) POSTs every
   `packages_with_versions` to `/-/npm/v1/security/advisories/bulk`, mapping
   the response into `VulnerablePackage` structs sorted by `[name, severity]`.
-- `packages_with_versions` (`npm.rb:71-84`, memoized) scans `config/importmap.rb`
+- `packages_with_versions` (`npm.rb:70-87`, memoized) scans `config/importmap.rb`
   for CDN-URL versions and the vendored `# @version` comment pattern;
-  `vendored_packages_without_version` (`npm.rb:187-198`) prints `Ignoring
+  `vendored_packages_without_version` (`npm.rb:190-196`) prints `Ignoring
   #{package} (#{path}) since no version is specified in the importmap` for a
   vendored file with no version anywhere (informational).
-- `get_package` (`npm.rb:97-105`) rescues `HTTPError` (retries spent) into
+- `get_package` (`npm.rb:97-110`) rescues `HTTPError` (retries spent) into
   `{"error" => message}`, so `outdated_packages`/`latest_version` degrade per
   package instead of aborting.
 
@@ -189,7 +189,7 @@ Importmap::HttpRetries`.
 Plus `esm.run` (`ESM_RUN_PROVIDER`), detected by URL shape (`ESM_RUN_URL_REGEXP`,
 jsDelivr's `/npm/.../+esm` endpoint), not host, since its host is also
 `cdn.jsdelivr.net`. `DEFAULT_PROVIDER = "jspm.io"`; `provenance_comment`
-(`packager.rb:590-598`) appends a `provider` detail only `if provider !=
+(`packager.rb:403-412`) appends a `provider` detail only `if provider !=
 DEFAULT_PROVIDER` — this is what "jspm.io is the default provider and is
 omitted" means: a jspm-resolved pin's comment is `# @3.7.2`, never
 `# @3.7.2 (jspm.io)`. `--from jspm`/`option :from` normalize to `"jspm.io"`
@@ -206,7 +206,7 @@ so the chain and a pin's recorded provider compare equal.
 - `pin`/`update` fall back on a jspm miss; an explicit `--from` doesn't — `commands_test.rb:934` vs `:947` (live).
 - A download that can't stand alone is kept remote, never silently vendored/failed; `--vendor` overrides — `commands_test.rb:761`, `:983`, `:774`, `:995` (live).
 - A version-less spec resolves via the npm registry, not the CDN — `commands_test.rb:959` (live).
-- `outdated`/`vulnerable_packages`/`latest_version` degrade instead of raising when the registry is unreachable — `npm_test.rb:329`, `:225` (stubbed).
+- `outdated_packages` and `latest_version` degrade when the registry is unreachable (the error is recorded on the package, `npm_test.rb:329`); `vulnerable_packages` raises through `post_json`, so `audit` never reports a clean bill it cannot vouch for (`review/cli.md`).
 - Retries are bounded and shared — `npm_test.rb:245` (stubbed).
 - Live network contracts: `npm_integration_test.rb` (4 cases) and every `commands_test.rb` case (`CommandsTest` shells out to real `bin/importmap` inside a forked `ActiveSupport::Testing::Isolation` process per test, `commands_test.rb:1-15`). Stubbed: all of `npm_test.rb` except the integration file.
 

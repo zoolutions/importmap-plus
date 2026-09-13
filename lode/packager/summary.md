@@ -84,7 +84,7 @@ Both `post_json` (packager.rb:480-488, the jspm/unpkg/jsdelivr/skypack/esm.sh pa
 - An esm.run bundle's own `/npm/…/+esm` imports become bare specifiers and nothing else in the file is touched — test/packager_test.rb:341-373, 413-433.
 - A dependency imported at two versions keeps the first and warns rather than silently overwriting — test/packager_test.rb:390-411.
 - Every CDN request retries transport errors and `429`/`5xx` up to `HttpRetries.attempts`, then raises `HTTPError` with the transport error's message — test/packager_test.rb:488-526.
-- `ProviderChain#resolve` moves to the next provider on a miss but re-raises a real transport error once the chain is exhausted — provider_chain.rb:56-75 (exercised indirectly through commands_test.rb's fallback cases; no direct provider_chain_test.rb exists in this tree).
+- `ProviderChain#resolve` moves to the next provider on a miss but re-raises a real transport error once the chain is exhausted — provider_chain.rb:56-75 (`test/provider_chain_test.rb`, 13 cases with a `FakePackager`; the live fallback path is in commands_test.rb).
 - A single quote pin file (`pin 'md5', to: '…'`) round-trips through the same regexes as double quotes — test/packager_single_quotes_test.rb:12-20.
 - Live-contract shape (real jspm/jsDelivr): test/packager_integration_test.rb:9-65.
 
@@ -124,8 +124,3 @@ flowchart TD
 - [../inspection-and-tools/summary.md](../inspection-and-tools/summary.md)
 - [../review/packager.md](../review/packager.md)
 - [../lode-map.md](../lode-map.md)
-
-## Discrepancies
-
-- CLAUDE.md's pin-line contract lists `PIN_REGEX`, `PRELOAD_OPTION_REGEXP`, `TO_OPTION_REGEXP`, `PIN_PROVENANCE_REGEXP` and `PACKAGE_SPEC_REGEXP` as "the parser" but doesn't mention `INTEGRITY_OPTION_REGEXP`, `REMOTE_URL_REGEXP`, `ESM_RUN_URL_REGEXP` or `ESM_RUN_IMPORT_REGEXP`, all of which the code also uses to parse or rewrite a pin line (packager.rb:16-17,31,39-40).
-- CLAUDE.md's provenance grammar (`# @<version> (<provider>[, minified][, locked])`) omits `vendored` and `remote[: <reason>]`, both of which `provenance_comment` writes and `provenance_of` reads (packager.rb:401-412, 370-380).

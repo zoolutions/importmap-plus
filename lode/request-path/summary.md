@@ -105,7 +105,3 @@ sequenceDiagram
 - [../packager/summary.md](../packager/summary.md)
 - [../cli/summary.md](../cli/summary.md)
 - [../lode-map.md](../lode-map.md)
-
-## Discrepancies
-
-None found — the code matches `CLAUDE.md`'s description of the request path (engine → Map → helpers, asset-resolver-only I/O) and the README makes no claims about this subsystem's internals beyond what the code does.
