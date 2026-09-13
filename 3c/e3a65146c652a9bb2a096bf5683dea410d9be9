@@ -1,0 +1,77 @@
+test/packager_test.rb
+  s_3598d27e5630bd::t_1af919a4427903 1122,1142,1144,1156-1169,1225,1235-1236,1240,1262-1264
+  s_3598d27e5630bd::t_bc33971c13d964 1033-1038,1042-1050,1053-1054,1057
+  s_3598d27e5630bd::t_1475be36b3900a 1040
+lode/summary.md
+  s_302893bcd9747c::t_c92aedf1f21e85 3
+docs/app/views/docs/pages/provenance.rb
+  s_3598d27e5630bd::t_b199df2e1ddfc8 55-58
+lib/importmap/vendored_graph.rb
+  s_3598d27e5630bd::t_6199389687f825 25-29,31
+  s_302893bcd9747c::t_832495de0ec91f 66-87
+  s_302893bcd9747c::t_7e1eeb8999a46f 1-24,30,32-65,88-183
+lode/cli/summary.md
+  s_302893bcd9747c::t_c6aa45c04d0984 21,24-25
+docs/app/views/docs/pages/cli.rb
+  s_3598d27e5630bd::t_b199df2e1ddfc8 32
+lode/review/cli.md
+  s_302893bcd9747c::t_d9361e53fc3d33 57-74
+docs/app/views/docs/pages/updating.rb
+  s_3598d27e5630bd::t_b199df2e1ddfc8 164-171
+lode/lode-map.md
+  s_302893bcd9747c::t_c92aedf1f21e85 15
+lib/importmap/packager.rb
+  s_302893bcd9747c::t_172bf98ab945e3 22-24,217-218,223-226
+  s_302893bcd9747c::t_53596997e9bf53 7,216,219-220,228-230,234,683,685,689
+  s_302893bcd9747c::t_8763d1cad30d3e 485,650,675,682,684,686,690-694,713-714,722-729,807
+  s_3598d27e5630bd::t_bc33971c13d964 339,601-607
+  s_302893bcd9747c::t_832495de0ec91f 656-658,672,676-681
+lode/review/packager.md
+  s_302893bcd9747c::t_d9361e53fc3d33 40-78
+lode/review/testing.md
+  s_302893bcd9747c::t_4e6fe123621971 14-23
+lode/inspection-and-tools/summary.md
+  s_302893bcd9747c::t_7d7beb0915f594 149-198
+lib/importmap/package_graph.rb
+  s_302893bcd9747c::t_30ab84a6518902 36-42,49-58,130,207-224
+lib/importmap/commands.rb
+  s_302893bcd9747c::t_6b8c5e704888d3 4,70,78,81-82,198-199,240-269,633-655,663-664
+  s_302893bcd9747c::t_172bf98ab945e3 665
+lode/testing-and-ci/summary.md
+  s_302893bcd9747c::t_1f012be03004a3 14-15
+lode/review/inspection-and-tools.md
+  s_302893bcd9747c::t_4e6fe123621971 61-70
+CLAUDE.md
+  s_302893bcd9747c::t_7d07eeb0055539 26,95-97,112,122
+lode/packager/summary.md
+  s_302893bcd9747c::t_c6aa45c04d0984 67-85
+lode/terminology.md
+  s_302893bcd9747c::t_c92aedf1f21e85 5,14-16,18
+test/vendored_graph_test.rb
+  s_3598d27e5630bd::t_a76725fec6f6ef 71,89,91,94
+  s_302893bcd9747c::t_c2d618193e1260 1-70,72-88,90,92-93,95-102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "3ce3a65146c652a9bb2a096bf5683dea410d9be9",
+  "prompts": {},
+  "sessions": {
+    "s_302893bcd9747c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e9daba0-ca6b-4aa5-bbaa-83c35301fc04",
+        "model": "claude-opus-5"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    },
+    "s_3598d27e5630bd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "64306a32-a4ec-4445-b858-a6c3a74557c8",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
