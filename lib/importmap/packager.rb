@@ -531,7 +531,6 @@ class Importmap::Packager
 
         source = self.class.minifier.call(source) if minify
 
-        remove_existing_package_file(package)
         save_vendored_package(package, url, source, minified: minify)
 
         dependencies || []
@@ -546,12 +545,26 @@ class Importmap::Packager
       raise Unvendorable, inspection.reasons unless inspection.vendorable?
     end
 
+    # The download is written beside its target and renamed over it, so a write
+    # that fails partway — a full disk, a killed process — leaves the file the
+    # app already had rather than half of the new one. Rename replaces a file
+    # atomically; a directory in the way is the one case it can't, and that gets
+    # cleared first the way it always was.
     def save_vendored_package(package, url, source, minified: false)
-      File.open(vendored_package_path(package), "w+") do |vendored_package|
+      target  = vendored_package_path(package)
+      partial = Pathname.new("#{target}.download")
+
+      File.open(partial, "w+") do |vendored_package|
         vendored_package.write "// #{package}#{extract_package_version_from(url)} downloaded from #{url}#{" (minified)" if minified}\n\n"
 
         vendored_package.write remove_sourcemap_comment_from(source).force_encoding("UTF-8")
       end
+
+      remove_existing_package_file(package) if target.directory?
+      File.rename(partial, target)
+    rescue
+      FileUtils.rm_f(partial)
+      raise
     end
 
     # Turns import "/npm/dep@1.2.3/+esm" into import "dep" so the bundle

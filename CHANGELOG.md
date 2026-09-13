@@ -25,8 +25,12 @@
   re-resolve it from the same CDN and keep the reason, `pristine` skips it.
   `pin --vendor` downloads the package anyway and records `(vendored)` on the
   pin, so a later `update` doesn't undo the override; it also converts a pin
-  that was kept remote back to a download. Packages an app already vendored
-  are left exactly as they are, and `pristine` still redownloads them.
+  that was kept remote back to a download. Nothing an app already vendored is
+  rewritten on its own — `pristine` redownloads those pins as it always has —
+  but the next `pin` or `update` that touches one re-resolves it, and a package
+  whose file can't stand alone converts to a remote pin then. That is the fix
+  arriving, not a surprise: the vendored file it replaces was already 404ing
+  for its siblings.
 
 ### Fixed
 

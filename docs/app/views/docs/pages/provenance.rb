@@ -37,9 +37,11 @@ class Views::Docs::Pages::Provenance < DocsUI::Page
         [Locking versions](/docs/locking). `remote: <reason>` says the package was
         pinned to its CDN URL because the downloaded file can't stand alone, and
         `vendored` says `--vendor` overrode that check — see
-        [Packages that can't be vendored alone](/docs/pinning). A remote pin has no
-        comment unless it is locked or was kept remote; then the version from its
-        URL is written out so the detail has something to hang off.
+        [Packages that can't be vendored alone](/docs/pinning). A bare `remote`,
+        with no reason after it, means the same thing without saying why; write one
+        by hand and it is kept as it is. A remote pin has no comment unless it is
+        locked or was kept remote; then the version from its URL is written out so
+        the detail has something to hang off.
       MD
     end
   end

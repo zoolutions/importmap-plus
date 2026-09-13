@@ -737,6 +737,28 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     end
   end
 
+  test "download leaves the file an app has when the replacement can't be written" do
+    response = Class.new do
+      def code() "200" end
+      def body() "export default 1" end
+    end.new
+
+    Dir.mktmpdir do |vendor_dir|
+      existing = Pathname.new(vendor_dir).join("react.js")
+      File.write(existing, "// the file that works today")
+      packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+      Net::HTTP.stub(:get_response, response) do
+        File.stub(:rename, ->(*) { raise Errno::ENOSPC }) do
+          assert_raises(Errno::ENOSPC) { packager.download("react", "https://ga.jspm.io/npm:react@17.0.2/index.js") }
+        end
+      end
+
+      assert_equal "// the file that works today", File.read(existing)
+      assert_empty Dir.glob("#{vendor_dir}/*.download"), "expected the partial download to be cleaned up"
+    end
+  end
+
   test "download with force vendors a source that can't stand alone anyway" do
     response = Class.new do
       def code() "200" end

@@ -26,8 +26,13 @@ class Importmap::ModuleInspectorTest < ActiveSupport::TestCase
   test "an import of something other than a string literal is a dynamic import" do
     assert_reason "dynamic imports", %(const load = name => import(name))
     assert_reason "dynamic imports", %(import(`${base}/chunk.js`))
+    assert_reason "dynamic imports", %(import("chunks/" + name))
+    assert_reason "dynamic imports", %(import( url ))
 
     assert_vendorable %(import("crypt"))
+    assert_vendorable %(import( "crypt" ))
+    assert_vendorable %(import("crypt"),import("charenc"))
+    assert_vendorable %(import("crypt", { with: { type: "json" } }))
     assert_vendorable %(doimport(name))
     assert_vendorable %(mod.import(name))
   end
@@ -36,9 +41,13 @@ class Importmap::ModuleInspectorTest < ActiveSupport::TestCase
     assert_reason "workers", %(const w = new Worker(url))
     assert_reason "workers", %(new SharedWorker("./worker.js"))
     assert_reason "workers", %(new  Worker (u))
+    assert_reason "workers", %(new window.Worker(url))
+    assert_reason "workers", %(new self.Worker(url))
+    assert_reason "workers", %(new globalThis . SharedWorker(url))
 
     assert_vendorable %(const Worker = 1)
     assert_vendorable %(new WorkerPool(url))
+    assert_vendorable %(new MyWorker.Factory(url))
   end
 
   test "reading import.meta.url is import.meta.url" do
@@ -52,9 +61,28 @@ class Importmap::ModuleInspectorTest < ActiveSupport::TestCase
   test "a string naming a wasm file is wasm" do
     assert_reason "wasm", %(const binary = "./tiktoken_bg.wasm")
     assert_reason "wasm", %(fetch('shiki/onig.wasm'))
+    assert_reason "wasm", %(const u = `${base}/onig.wasm`)
+    assert_reason "wasm", %(fetch("onig.wasm?v=1"))
+    assert_reason "wasm", %(fetch("onig.wasm#start"))
 
     assert_vendorable %(const note = "compiled from wasm")
     assert_vendorable %(const f = "wasmer.js")
+  end
+
+  test "a type annotation in a block comment is not an import" do
+    assert_vendorable %(/** @typedef {import('../core/base.js').default} Base */)
+    assert_vendorable <<~JS
+      /** @typedef {import('./content.js').default} Content */
+      /** @typedef {import("../photoswipe.js").Point} Point */
+      export default class {}
+    JS
+    assert_vendorable %(/* new Worker("./w.js") — how it used to work */export default 1)
+
+    # Only the comment is discounted; code beside it still counts.
+    assert_reason "relative imports", <<~JS
+      /** @typedef {import('./types.js').Type} Type */
+      export {default} from "./slide.js";
+    JS
   end
 
   test "reasons are reported in a fixed precedence, reason being the first" do

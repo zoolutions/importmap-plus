@@ -127,14 +127,21 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
         pin "@popperjs/core", to: "@popperjs--core.js" # @2.11.8 (vendored)
       RUBY
       md <<~'MD'
+        The sentence names the package, `@popperjs/core`, while the file on disk is
+        `@popperjs--core.js` — a `/` in a package name becomes `--`, as the pin's
+        `to:` shows.
+
         `--vendor` also converts a pin that was kept remote back to a download. The
         `vendored` mark is what makes the override stick: without it the next
         `update` would inspect the new download, refuse it again and quietly undo
         your decision.
 
-        Packages an app already vendored before this check existed are left alone;
-        nothing is rewritten behind your back. Run `bin/importmap pristine` and they
-        are downloaded again exactly as their pins say.
+        Packages an app already vendored before this check existed are not rewritten
+        on their own, and `bin/importmap pristine` downloads them again exactly as
+        their pins say. The next `pin` or `update` that touches one does re-resolve
+        it, though, and converts it if its file can't stand alone — which is the fix
+        arriving rather than a surprise, since that vendored file was already
+        404ing for the siblings it wanted.
       MD
     end
   end
