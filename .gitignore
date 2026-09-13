@@ -24,7 +24,7 @@
 # Ignore Gemfile.lock files for Rails main branch.
 /gemfiles/*.lock
 
-# Worktrees created by /finish-prs and parallel agents
+# Worktrees created by /lode:finish-prs and parallel agents
 /.claude/worktrees/
 
 # lode/tmp is session scratch (gate output, handovers); never memory

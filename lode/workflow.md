@@ -35,7 +35,7 @@ A `--minify` test **skips** unless bun, esbuild or terser is on `PATH` or in `no
 | Reloader | `lib/importmap/reloader.rb` | upstream-owned |
 | View helpers / freshness | `app/helpers/importmap/importmap_tags_helper.rb`, `app/controllers/importmap/freshness.rb` | upstream-owned |
 | CLI | `lib/importmap/commands.rb` | upstream-owned, heavily modified here: a new option is a new `option` line plus a threaded keyword, never a rewritten method |
-| Packager | `lib/importmap/packager.rb` | upstream-owned, heavily modified here and already at the file-size limit — new behaviour goes in a collaborator |
+| Packager | `lib/importmap/packager.rb` | upstream-owned, heavily modified here and 706 lines against the 800-line ceiling in `.claude/rules/coding-style.md` — new behaviour goes in a collaborator |
 | Registry | `lib/importmap/npm.rb` | upstream-owned, modified here |
 | Fork-only collaborators | `lib/importmap/minifier.rb`, `http_retries.rb`, `module_inspector.rb`, `provider_chain.rb`, `integrity.rb`, `lib/importmap-plus.rb` | owned here — this is where any change bigger than a few lines belongs |
 | Installer | `lib/install/`, `lib/tasks/importmap_tasks.rake` | upstream-owned (`install.rb` modified here) |
@@ -129,7 +129,7 @@ Mechanical files (the lockfiles, the CHANGELOG, the page registry) are the only 
 - Before pushing: the touched test files, then `bundle exec rake test` with a minifier installed (confirm the `--minify` cases ran, not skipped), plus `cd docs && bundle exec rake lint && bundle exec rspec` if `docs/**` changed, plus the nearest matrix cell if the engine, `Map` or a helper changed.
 - Stress iterations for a flake proof: **10** consecutive green runs judged by exit code, or **3** for a test that hits a live CDN — each iteration there is real traffic, and hammering jspm proves only that rate limits exist. Re-run the exact original repro (same seed, same cell) too.
 - A regression fence is proven by reintroducing the bug and watching the test go red, then restoring.
-- Where evidence goes: `tmp/` (git-ignored) — stress logs, gate diffs, handovers. A flake's mechanism, in one sentence, plus its reproduction recipe, goes in a dated entry in `../test/flaky-tests.md` (create it if missing; it does not exist yet).
+- Where evidence goes: `tmp/` (git-ignored) — stress logs, gate diffs, handovers. A flake's mechanism, in one sentence, plus its reproduction recipe, goes in a dated entry in `../test/flaky-tests.md` (create it if missing; it does not exist yet). A flake that is found but not yet fixed gets a GitHub issue labelled `flaky-test` (`gh issue create --label flaky-test`, creating the label once if absent); the fixing PR closes it with `Closes #N`.
 
 ## See also
 
