@@ -89,7 +89,7 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes updated_content, 'pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.3.0/md5.js", preload: "custom"'
   end
 
-  test "update command removes existing integrity" do
+  test "update command replaces a stale integrity hash on a remote pin" do
     importmap_config('pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", integrity: "sha384-oldintegrity"')
 
     out, _err = run_importmap_command("update")
@@ -101,7 +101,7 @@ class CommandsTest < ActiveSupport::TestCase
     assert_match(%r{^pin "md5", to: "https://cdn\.jsdelivr\.net/npm/md5@2\.3\.0/md5\.js", integrity: "sha384-[A-Za-z0-9+/]+=*"$}, updated_content)
   end
 
-  test "update command keeps pin remote and preload option but drops integrity" do
+  test "update command keeps pin remote and preload option and refreshes integrity" do
     importmap_config('pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: false, integrity: "sha384-oldintegrity"')
 
     out, _err = run_importmap_command("update")

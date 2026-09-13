@@ -33,8 +33,7 @@ class Importmap::Commands < Thor
       pin_package(package, url, preload: options[:preload], remote: options[:remote], env: options[:env],
                                 minify: options[:minify], from: options[:from],
                                 lock: requested.include?(package) ? options[:lock] : nil,
-                                vendor: requested.include?(package) && options[:vendor],
-                                compute_integrity: options[:integrity])
+                                vendor: requested.include?(package) && options[:vendor])
     end
   end
 
@@ -184,7 +183,7 @@ class Importmap::Commands < Thor
 
     # A lock outlives a rewrite unless the caller says otherwise, so update
     # and --force re-lock at the version they move to.
-    def pin_package(package, url, preload: nil, remote: false, env: "production", minify: nil, from: nil, lock: nil, vendor: false, compute_integrity: true)
+    def pin_package(package, url, preload: nil, remote: false, env: "production", minify: nil, from: nil, lock: nil, vendor: false)
       existing_options = packager.extract_existing_pin_options(package)[package] || {}
       preload = existing_options[:preload] if preload.nil?
       integrity = existing_options[:integrity]
@@ -195,29 +194,25 @@ class Importmap::Commands < Thor
       existing_url = existing_options[:to] if existing_options[:to].to_s.match?(Importmap::Packager::REMOTE_URL_REGEXP)
 
       if existing_url && !vendor
-        repin_remote_package(package, url, existing_url, preload, env: env, from: from, integrity: integrity, locked: locked,
-                                                                 compute_integrity: compute_integrity)
+        repin_remote_package(package, url, existing_url, preload, env: env, from: from, integrity: integrity, locked: locked)
       elsif remote
-        pin_remote_package(package, url, preload, integrity: integrity, locked: locked, compute_integrity: compute_integrity)
+        pin_remote_package(package, url, preload, integrity: integrity, locked: locked)
       else
-        pin_vendored_package(package, url, preload, minify: minify, integrity: integrity, locked: locked, vendor: vendor,
-                                                    compute_integrity: compute_integrity)
+        pin_vendored_package(package, url, preload, minify: minify, integrity: integrity, locked: locked, vendor: vendor)
       end
     end
 
     # Nothing is said about a download until it has arrived and been found fit
     # to serve on its own, so a package kept remote reports that and only that.
-    def pin_vendored_package(package, url, preload, minify: nil, integrity: nil, locked: false, vendor: false, compute_integrity: true)
+    def pin_vendored_package(package, url, preload, minify: nil, integrity: nil, locked: false, vendor: false)
       minify = vendored_minified?(package) if minify.nil?
 
       begin
         dependencies = packager.download(package, url, minify: minify, force: vendor)
       rescue Importmap::Packager::Unvendorable => error
-        return pin_remote_package(package, url, preload, integrity: integrity, locked: locked, kept_remote: error.reasons,
-                                                         compute_integrity: compute_integrity)
+        return pin_remote_package(package, url, preload, integrity: integrity, locked: locked, kept_remote: error.reasons)
       rescue Importmap::Packager::NotAnEsModule
-        return pin_remote_package(package, url, preload, integrity: integrity, locked: locked, kept_remote: [ "not an ES module" ],
-                                                         compute_integrity: compute_integrity)
+        return pin_remote_package(package, url, preload, integrity: integrity, locked: locked, kept_remote: [ "not an ES module" ])
       end
 
       puts %(Pinning "#{package}" to #{packager.vendor_path}/#{package}.js via download from #{url}#{" (minified)" if minify})
@@ -502,8 +497,8 @@ class Importmap::Commands < Thor
     # +kept_remote+ is the reasons a download just turned out not to stand on
     # its own; without it the reason the pin already records is carried over, so
     # update and a plain pin don't drop it.
-    def pin_remote_package(package, url, preload, integrity: nil, locked: false, kept_remote: nil, compute_integrity: true)
-      integrity = remote_integrity_for(url, integrity) if compute_integrity
+    def pin_remote_package(package, url, preload, integrity: nil, locked: false, kept_remote: nil)
+      integrity = remote_integrity_for(url, integrity) if compute_integrity?
 
       notes = +""
       notes << %( (kept remote: #{kept_remote.to_sentence})) if kept_remote
@@ -520,22 +515,31 @@ class Importmap::Commands < Thor
       report_lock(package) if locked
     end
 
-    def repin_remote_package(package, url, existing_url, preload, env:, from: nil, integrity: nil, locked: false, compute_integrity: true)
+    def repin_remote_package(package, url, existing_url, preload, env:, from: nil, integrity: nil, locked: false)
       # `url` was already resolved from the requested CDN, so an explicit
       # --from moves the pin instead of being overruled by its current one.
-      return pin_remote_package(package, url, preload, integrity: integrity, locked: locked, compute_integrity: compute_integrity) if from
+      return pin_remote_package(package, url, preload, integrity: integrity, locked: locked) if from
 
       provider = packager.provider_for_url(existing_url)
 
       if provider.nil?
         puts %(Skipping "#{package}" pinned to custom URL #{existing_url})
       elsif provider == packager.provider_for_url(url)
-        pin_remote_package(package, url, preload, integrity: integrity, locked: locked, compute_integrity: compute_integrity)
+        pin_remote_package(package, url, preload, integrity: integrity, locked: locked)
       elsif (provider_url = resolve_url_from_provider(package, url, provider, env: env))
-        pin_remote_package(package, provider_url, preload, integrity: integrity, locked: locked, compute_integrity: compute_integrity)
+        pin_remote_package(package, provider_url, preload, integrity: integrity, locked: locked)
       else
         puts %(Keeping "#{package}" pinned to #{existing_url} (couldn't resolve it from #{provider}))
       end
+    end
+
+    # Read from the command's own options rather than threaded through every
+    # pin path: update, pristine and an esm.run bundle's dependency pins all
+    # reach pin_remote_package too, and a keyword one of them forgets to pass
+    # silently hashes a pin the app asked not to hash. Only pin declares the
+    # flag, so anything else sees nil and hashes.
+    def compute_integrity?
+      options["integrity"] != false
     end
 
     # A remote pin is the one place an app trusts a CDN at runtime, so the pin
