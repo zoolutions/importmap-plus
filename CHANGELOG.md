@@ -17,7 +17,9 @@
   existed, was sent to jspm — which can't resolve pdf.js at all — and
   reported "Couldn't find any packages" on every update while the main pin
   moved on from jsdelivr. Siblings pinned together come from the same place;
-  the next update records it on the pin.
+  the next update records it on the pin. The package's pin answers whether it
+  is vendored, which records the CDN in its comment, or remote, which carries
+  it in the URL and, unlocked, has no comment at all.
 
 ## 1.1.0
 

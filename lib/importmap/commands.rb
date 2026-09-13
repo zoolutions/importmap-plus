@@ -411,7 +411,17 @@ class Importmap::Commands < Thor
       name = packager.package_name_for(key)
 
       packager.pin_provenance(key)&.dig(:provider) ||
-        (packager.pin_provenance(name)&.dig(:provider) if key != name)
+        (provider_of_package_pin(name) if key != name)
+    end
+
+    # Only a subpath falls back to its package's pin, and only that pin's URL is
+    # read: a vendored pin records the CDN in its comment, while a remote one
+    # carries it in the URL and, unlocked, has no comment at all. Reading the
+    # URL of every pin instead would change where a plain remote pin resolves
+    # its dependencies from, which is not this fallback's business.
+    def provider_of_package_pin(package)
+      packager.pin_provenance(package)&.dig(:provider) ||
+        packager.provider_for_url(packager.extract_existing_pin_options(package).dig(package, :to))
     end
 
     def pin_remote_package(package, url, preload, integrity: nil, locked: false)

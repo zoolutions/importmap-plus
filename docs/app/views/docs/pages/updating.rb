@@ -64,7 +64,8 @@ class Views::Docs::Pages::Updating < DocsUI::Page
         A subpath pin whose comment names no CDN comes back from the CDN its
         package's pin names — the worker above was pinned together with pdf.js and
         comes from the same place, which matters when jspm, the default, can't
-        resolve it.
+        resolve it. That works whether the package's own pin is vendored, recording
+        its CDN in the comment, or remote, carrying it in the URL.
       MD
       DocsUI::Code(<<~SHELL, lexer: :console)
         $ ./bin/importmap update md5 nope

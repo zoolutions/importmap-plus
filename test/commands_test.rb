@@ -776,6 +776,21 @@ class CommandsTest < ActiveSupport::TestCase
     assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/photoswipe--lightbox.js")
   end
 
+  test "update command resolves a subpath pin from the CDN its package's remote pin points at" do
+    importmap_config(<<~PINS)
+      pin "photoswipe", to: "https://cdn.jsdelivr.net/npm/photoswipe@5.3.0/dist/photoswipe.esm.js"
+      pin "photoswipe/lightbox", to: "photoswipe--lightbox.js" # @5.3.0
+    PINS
+
+    out, _err = run_importmap_command("update")
+
+    assert_not_includes out, "ga.jspm.io"
+    assert_not_includes out, "Couldn't find any packages"
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_match %r{^pin "photoswipe/lightbox", to: "photoswipe--lightbox\.js" # @5\.4\.\d+ \(jsdelivr\)$}, content
+  end
+
   test "update command with a subpath name re-pins only that key" do
     importmap_config(<<~PINS)
       pin "photoswipe" # @5.3.0 (jsdelivr)
