@@ -29,7 +29,7 @@ states and the `require` graph confirms (`commands.rb` requires
 | `update [*PACKAGES]` | `--all` (false), `--force` (false) | `Pass package names or --all, not both`; `Couldn't check "#{p.name}": #{p.error}`; `No outdated packages found`; `Nothing to update (every outdated package is locked; pass --force)`; plus `pin_package`'s sentences | rewrites pins for eligible keys | `exit 1` if `--all`+names both given, a named package unknown, or any package unchecked |
 | `packages` | none | one line per `"#{name} #{version}"` | nothing | none |
 
-`Commands.exit_on_failure? = false` (`commands.rb:8-10`) means a `Thor::Error`/
+`Commands.exit_on_failure? = false` (`commands.rb:9-11`) means a `Thor::Error`/
 `Packager::Error` prints and exits non-zero without Thor's crash-style output.
 `Commands` rescues `Packager::Error` itself only in `resolve_url_from_provider`
 (§3), downgrading it to a printed sentence and `nil`.
