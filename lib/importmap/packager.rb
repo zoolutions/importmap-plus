@@ -65,7 +65,7 @@ class Importmap::Packager
 
   Error        = Class.new(StandardError)
   HTTPError    = Class.new(Error)
-  ServiceError = Error.new(Error)
+  ServiceError = Class.new(Error)
 
   # A download that can't be served as the one file an import map entry points
   # at. Raised before anything is written, so the vendored file an app already
@@ -78,6 +78,13 @@ class Importmap::Packager
       super("can't be vendored as a single file (#{@reasons.join(", ")})")
     end
   end
+
+  # A download that isn't an ES module — a CommonJS or UMD bundle, which every
+  # CDN that serves a package's own dist file will hand back for a package that
+  # publishes one. Loaded through an import map it runs and exports nothing, so
+  # the app's `import x from "pkg"` quietly becomes undefined. Raised before
+  # anything is written, like Unvendorable, and answered by asking another CDN.
+  NotAnEsModule = Class.new(Error)
 
   singleton_class.attr_accessor :endpoint
   self.endpoint = URI("https://api.jspm.io/generate")
@@ -110,12 +117,21 @@ class Importmap::Packager
 
   attr_reader :vendor_path
 
+  # What the CDN said about the most recent #import that came back empty, or
+  # nil. jspm answers 401 with its generator's reason in the body — "No
+  # './dist/cytoscape.umd.js' exports subpath defined" — and #import still
+  # answers nil, because one spec a CDN can't serve must not end a whole run.
+  # The reason is worth repeating to whoever asked, and to the next CDN's turn.
+  attr_reader :last_import_error
+
   def initialize(importmap_path = "config/importmap.rb", vendor_path: "vendor/javascript")
     @importmap_path = Pathname.new(importmap_path)
     @vendor_path    = Pathname.new(vendor_path)
   end
 
   def import(*packages, env: "production", from: "jspm")
+    @last_import_error = nil
+
     return import_from_esm_run(packages) if esm_run?(from)
 
     response = post_json({
@@ -129,6 +145,7 @@ class Importmap::Packager
     when "200"
       extract_parsed_response(response)
     when "404", "401"
+      @last_import_error = parse_service_error(response)
       nil
     else
       handle_failure_response(response)
@@ -527,7 +544,7 @@ class Importmap::Packager
         source = response.body.dup.force_encoding("UTF-8")
         source, dependencies = rewrite_esm_run_imports(source) if url.match?(ESM_RUN_URL_REGEXP)
 
-        ensure_vendorable(source) unless force
+        ensure_servable(source) unless force
 
         source = self.class.minifier.call(source) if minify
 
@@ -539,10 +556,14 @@ class Importmap::Packager
       end
     end
 
-    def ensure_vendorable(source)
+    # Both questions are asked of one inspection of one download. Standing alone
+    # is asked first, so a file that fails both is reported as that: it is the
+    # answer an app can act on by keeping the pin remote.
+    def ensure_servable(source)
       inspection = Importmap::ModuleInspector.new(source)
 
       raise Unvendorable, inspection.reasons unless inspection.vendorable?
+      raise NotAnEsModule, "isn't an ES module" unless inspection.es_module?
     end
 
     # The download is written beside its target and renamed over it, so a write
