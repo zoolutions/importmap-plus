@@ -10,8 +10,10 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
 
   def content
     vendoring
+    resolving_a_version
     choosing_a_cdn
     cant_be_vendored_alone
+    not_an_es_module
     remote_pins
     custom_urls
     options_survive
@@ -51,8 +53,62 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
     end
   end
 
+  def resolving_a_version
+    DocsUI::Section("The version a bare name gets",
+                    description: "Resolved against the npm registry before any CDN is asked.") do
+      md <<~'MD'
+        `pin react` means the latest React, and the npm registry is what knows which
+        that is. A CDN answers with the latest version it has got round to indexing,
+        which can lag npm by hours or by a major release, so the version is resolved
+        first and every CDN is then asked for that exact one:
+      MD
+      DocsUI::Code(<<~SHELL, lexer: :console)
+        $ ./bin/importmap pin md5
+        Resolved "md5" to 2.3.0 from the npm registry
+        Pinning "md5" to vendor/javascript/md5.js via download from https://ga.jspm.io/npm:md5@2.3.0/md5.js
+      SHELL
+      md <<~'MD'
+        A spec that names a version — `pin luxon@3.7.2`, `pin react@18` — is passed
+        through untouched, and so is one the registry couldn't be asked about: the
+        CDN then chooses, as it always did. Nothing else changes, and `outdated`
+        already read the same registry.
+      MD
+    end
+  end
+
   def choosing_a_cdn
     DocsUI::Section("Choosing a CDN") do
+      md <<~'MD'
+        A package that names no CDN of its own is asked of three, in order: jspm,
+        then `esm.run`, then jsDelivr. jspm is first because its generator builds an
+        ES module for packages that ship none — which is the thing an import map
+        needs, and the reason it is the default. That same generator also gives up
+        on packages it can't build, and when it does it says why:
+      MD
+      DocsUI::Code(<<~SHELL, lexer: :console)
+        $ ./bin/importmap pin mermaid@10.6.0
+        jspm couldn't resolve "mermaid@10.6.0" (No './dist/cytoscape.umd.js' exports subpath defined in cytoscape@3.34.3); trying esm.run
+        Pinning "mermaid" to vendor/javascript/mermaid.js via download from https://cdn.jsdelivr.net/npm/mermaid@10.6.0/+esm
+      SHELL
+      DocsUI::Code(<<~RUBY, filename: "config/importmap.rb")
+        pin "mermaid" # @10.6.0 (esm.run)
+      RUBY
+      md <<~'MD'
+        That is a fact about the generator, not about the package: jsDelivr publishes
+        a bundle of the very same version. The CDN that answered is recorded in the
+        pin comment, so `update` and `pristine` go straight back to it and never
+        retry the jspm that couldn't build it. Nothing new is stored anywhere else.
+
+        If no CDN in the chain has the package, each one's reason is printed and the
+        command says so:
+      MD
+      DocsUI::Code(<<~SHELL, lexer: :console)
+        $ ./bin/importmap pin no-such-package
+        jspm couldn't resolve "no-such-package" (Unable to resolve npm:no-such-package@ to a valid version); trying esm.run
+        esm.run couldn't resolve "no-such-package"; trying jsdelivr
+        jsdelivr couldn't resolve "no-such-package" (Unable to resolve npm:no-such-package@ to a valid version)
+        Couldn't find any packages in ["no-such-package"] on jspm, esm.run or jsdelivr
+      SHELL
       md <<~'MD'
         Other CDNs are one flag away. `--from` takes `jspm` (the default), `unpkg`,
         `jsdelivr`, `esm.sh`, `skypack`, or `esm.run` for jsDelivr's bundled builds
@@ -66,10 +122,50 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
         Pinning "react" to vendor/javascript/react.js via download from https://cdn.jsdelivr.net/npm/react@19.1.0/index.js
       SHELL
       md <<~'MD'
+        `--from` is a choice you made, so it is asked once and never falls back: the
+        CDN you named either has the package or reports why it hasn't. The same goes
+        for a package whose pin already records a CDN.
+
         The CDN is recorded in the pin comment when it isn't jspm, and later commands
         go back to it — an unpkg download stays on unpkg through `update` and
         `pristine`. Pass `--from` again to move a package to another CDN. See
         [Provenance](/docs/provenance).
+      MD
+    end
+  end
+
+  def not_an_es_module
+    DocsUI::Section("Packages the CDN hands back as CommonJS",
+                    description: "A UMD or CommonJS bundle exports nothing through an import map.") do
+      md <<~'MD'
+        jspm and `esm.run` build an ES module out of whatever a package ships. The
+        CDNs that serve a package's own `dist` file do not, and plenty of packages
+        still publish a UMD bundle there. Loaded through an import map it runs and
+        exports nothing, so `import x from "pkg"` hands your app `undefined` —
+        silently, and only in the browser.
+
+        A download that says it is CommonJS is pinned to its CDN URL instead, with
+        the reason on the pin, the same way a file that can't stand alone is:
+      MD
+      DocsUI::Code(<<~SHELL, lexer: :console)
+        $ ./bin/importmap pin google-libphonenumber@3.2.42 --from jsdelivr
+        Pinning "google-libphonenumber" to https://cdn.jsdelivr.net/npm/google-libphonenumber@3.2.42/dist/libphonenumber.js (kept remote: not an ES module)
+      SHELL
+      DocsUI::Code(<<~RUBY, filename: "config/importmap.rb")
+        pin "google-libphonenumber", to: "https://cdn.jsdelivr.net/npm/google-libphonenumber@3.2.42/dist/libphonenumber.js" # @3.2.42 (remote: not an ES module)
+      RUBY
+      md <<~'MD'
+        A file counts as an ES module when it has a top-level `import` or `export`
+        statement, or when it never says it is CommonJS — no `module.exports`, no
+        `require(`, no `typeof exports == "object"` loader sniff. The two halves read
+        the source differently on purpose: an `import` statement is believed only
+        outside a string literal, because a bundle shipping a usage example in a
+        docstring is still CommonJS, while a `module.exports` is believed wherever it
+        appears.
+
+        The default `pin` never reaches this, since jspm converts the package for
+        you. `--vendor` downloads it anyway when you know better, and dropping
+        `--from` lets jspm do the conversion.
       MD
     end
   end

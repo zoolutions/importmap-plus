@@ -32,12 +32,14 @@ class Views::Docs::Pages::Provenance < DocsUI::Page
         pin "monaco-editor", to: "monaco-editor.js" # @0.52.2 (vendored)
       RUBY
       md <<~'MD'
-        The CDN is named when it isn't jspm. `minified` says the file went through a
+        The CDN is named when it isn't jspm — including one the fallback chain
+        chose, which is how `update` and `pristine` stay on it. `minified` says the file went through a
         minifier. `locked` says the version is held — see
         [Locking versions](/docs/locking). `remote: <reason>` says the package was
-        pinned to its CDN URL because the downloaded file can't stand alone, and
-        `vendored` says `--vendor` overrode that check — see
-        [Packages that can't be vendored alone](/docs/pinning). A bare `remote`,
+        pinned to its CDN URL because the downloaded file can't stand alone, or
+        because it isn't an ES module, and `vendored` says `--vendor` overrode that
+        check — see [Packages that can't be vendored alone](/docs/pinning) and
+        [Packages the CDN hands back as CommonJS](/docs/pinning). A bare `remote`,
         with no reason after it, means the same thing without saying why; write one
         by hand and it is kept as it is. A remote pin has no comment unless it is
         locked or was kept remote; then the version from its URL is written out so
