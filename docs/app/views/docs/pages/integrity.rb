@@ -141,11 +141,14 @@ class Views::Docs::Pages::Integrity < DocsUI::Page
     DocsUI::Section("When bin/importmap rewrites a pin") do
       md <<~'MD'
         `integrity: true` and `integrity: false` are settings, and they survive a
-        rewrite by `pin`, `update` or `pristine` the way `preload:` does. An explicit
-        hash string belongs to one particular file, so it never survives a change of
-        URL — the old hash would no longer match. On a remote pin a fresh hash is
-        computed and written in its place; on any other pin the option is simply gone,
-        and a hash you wrote by hand has to be written again.
+        rewrite by `pin`, `update` or `pristine` the way `preload:` does — with one
+        exception: `integrity: true` on a remote pin asks the asset pipeline to hash a
+        URL, which it can't, so a rewrite replaces it with the computed hash. An
+        explicit hash string belongs to one particular file, so it never survives a
+        change of URL — the old hash would no longer match. On a remote pin a fresh
+        hash is computed and written in its place (`--no-integrity` says so when it
+        drops one instead); on any other pin the option is simply gone, and a hash you
+        wrote by hand has to be written again.
       MD
     end
   end

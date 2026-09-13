@@ -978,6 +978,75 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     assert_match(/404/, error.message)
   end
 
+  test "a download kept remote carries the hash of the bytes it fetched, so nothing fetches them twice" do
+    unvendorable = Class.new do
+      def code() "200" end
+      def body() %(export{top}from"./enums.js") end
+    end.new
+    not_es_module = Class.new do
+      def code() "200" end
+      def body() %(module.exports = 1) end
+    end.new
+
+    Dir.mktmpdir do |vendor_dir|
+      packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+      error = Net::HTTP.stub(:get_response, unvendorable) do
+        assert_raises(Importmap::Packager::Unvendorable) { packager.download("a", "https://ga.jspm.io/npm:a@1.0.0/index.js") }
+      end
+      assert_equal Importmap::Integrity.for(unvendorable.body), error.integrity
+
+      error = Net::HTTP.stub(:get_response, not_es_module) do
+        assert_raises(Importmap::Packager::NotAnEsModule) { packager.download("b", "https://ga.jspm.io/npm:b@1.0.0/index.js") }
+      end
+      assert_equal Importmap::Integrity.for(not_es_module.body), error.integrity
+      assert_equal [ "not an ES module" ], error.reasons
+    end
+  end
+
+  test "a kept-remote esm.run bundle is hashed as the CDN serves it, not as rewritten for vendoring" do
+    response = Class.new do
+      def code() "200" end
+      def body() %(import"/npm/dep@1.0.0/+esm";export{top}from"./enums.js") end
+    end.new
+
+    Dir.mktmpdir do |vendor_dir|
+      packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+      error = Net::HTTP.stub(:get_response, response) do
+        assert_raises(Importmap::Packager::Unvendorable) { packager.download("a", "https://cdn.jsdelivr.net/npm/a@1.0.0/+esm") }
+      end
+
+      assert_equal Importmap::Integrity.for(response.body), error.integrity
+      assert_not_equal Importmap::Integrity.for(%(import"dep";export{top}from"./enums.js")), error.integrity
+    end
+  end
+
+  test "fetch_remote wraps a failure the retry doesn't know as its own HTTPError" do
+    error = Net::HTTP.stub(:get_response, ->(_uri) { raise Zlib::GzipFile::Error, "not in gzip format" }) do
+      assert_raises(Importmap::Packager::HTTPError) { @packager.fetch_remote("https://ga.jspm.io/npm:md5@2.2.0/md5.js") }
+    end
+
+    assert_match(/Zlib::GzipFile::Error: not in gzip format/, error.message)
+  end
+
+  test "integrity_hash? is true only for a pin carrying a computed hash" do
+    packager = Importmap::Packager.new(create_temp_importmap(<<~RUBY))
+      pin "hashed", to: "https://cdn/hashed.js", integrity: "sha384-abc"
+      pin 'quoted', to: 'https://cdn/quoted.js', integrity: 'sha384-abc'
+      pin "boolean", to: "https://cdn/boolean.js", integrity: true
+      pin "off", to: "https://cdn/off.js", integrity: false
+      pin "plain", to: "https://cdn/plain.js"
+    RUBY
+
+    assert packager.integrity_hash?("hashed")
+    assert packager.integrity_hash?("quoted")
+    assert_not packager.integrity_hash?("boolean")
+    assert_not packager.integrity_hash?("off")
+    assert_not packager.integrity_hash?("plain")
+    assert_not packager.integrity_hash?("missing")
+  end
+
   private
     def without_retry_wait
       original = Importmap::Packager.retry_wait

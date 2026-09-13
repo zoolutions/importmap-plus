@@ -209,10 +209,8 @@ class Importmap::Commands < Thor
 
       begin
         dependencies = packager.download(package, url, minify: minify, force: vendor)
-      rescue Importmap::Packager::Unvendorable => error
-        return pin_remote_package(package, url, preload, integrity: integrity, locked: locked, kept_remote: error.reasons)
-      rescue Importmap::Packager::NotAnEsModule
-        return pin_remote_package(package, url, preload, integrity: integrity, locked: locked, kept_remote: [ "not an ES module" ])
+      rescue Importmap::Packager::Unvendorable, Importmap::Packager::NotAnEsModule => refusal
+        return pin_remote_package(package, url, preload, integrity: integrity, locked: locked, kept_remote: refusal)
       end
 
       puts %(Pinning "#{package}" to #{packager.vendor_path}/#{package}.js via download from #{url}#{" (minified)" if minify})
@@ -494,19 +492,24 @@ class Importmap::Commands < Thor
         packager.provider_for_url(packager.extract_existing_pin_options(package).dig(package, :to))
     end
 
-    # +kept_remote+ is the reasons a download just turned out not to stand on
-    # its own; without it the reason the pin already records is carried over, so
-    # update and a plain pin don't drop it.
+    # +kept_remote+ is the Packager's refusal to vendor a download it just
+    # fetched — its reasons, and the hash of the bytes it already has; without
+    # it the reason the pin already records is carried over, so update and a
+    # plain pin don't drop it.
     def pin_remote_package(package, url, preload, integrity: nil, locked: false, kept_remote: nil)
-      integrity = remote_integrity_for(url, integrity) if compute_integrity?
+      if compute_integrity?
+        integrity = remote_integrity_for(url, integrity, kept_remote&.integrity)
+      elsif packager.integrity_hash?(package)
+        puts %(Dropping the integrity hash on "#{package}" (--no-integrity))
+      end
 
       notes = +""
-      notes << %( (kept remote: #{kept_remote.to_sentence})) if kept_remote
+      notes << %( (kept remote: #{kept_remote.reasons.to_sentence})) if kept_remote
       notes << %( (integrity #{integrity})) if Importmap::Integrity.hash?(integrity)
 
       puts %(Pinning "#{package}" to #{url}#{notes})
 
-      remote = kept_remote&.first || packager.remote_reason(package)
+      remote = kept_remote&.reasons&.first || packager.remote_reason(package)
 
       packager.remove_existing_package_file(package)
 
@@ -546,11 +549,13 @@ class Importmap::Commands < Thor
     # records the hash of what was resolved and the browser checks the bytes it
     # gets against it. integrity: false is an app's decision and stays; a hash
     # the line already carried was computed for the old URL and was dropped
-    # when the line was read, so nil here means "hash this".
-    def remote_integrity_for(url, integrity)
+    # when the line was read, so nil here means "hash this". +computed+ is the
+    # hash a download that was just refused already carries — the file isn't
+    # fetched again for it.
+    def remote_integrity_for(url, integrity, computed = nil)
       return integrity if integrity == false
 
-      Importmap::Integrity.for(packager.fetch_remote(url))
+      computed || Importmap::Integrity.for(packager.fetch_remote(url))
     rescue Importmap::Packager::Error => error
       puts %(Couldn't hash #{url} (#{error.message}); pinning it without an integrity hash)
       nil

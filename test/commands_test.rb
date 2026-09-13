@@ -98,7 +98,7 @@ class CommandsTest < ActiveSupport::TestCase
 
     updated_content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
     assert_not_includes updated_content, "sha384-oldintegrity"
-    assert_match(%r{^pin "md5", to: "https://cdn\.jsdelivr\.net/npm/md5@2\.3\.0/md5\.js", integrity: "sha384-[A-Za-z0-9+/]+=*"$}, updated_content)
+    assert_match(%r{^pin "md5", to: "https://cdn\.jsdelivr\.net/npm/md5@2\.3\.0/md5\.js"#{INTEGRITY_OPTION}$}, updated_content)
   end
 
   test "update command keeps pin remote and preload option and refreshes integrity" do
@@ -1041,7 +1041,7 @@ class CommandsTest < ActiveSupport::TestCase
     assert_match(%r{Pinning "md5" to https://ga\.jspm\.io/npm:md5@2\.2\.0/md5\.js \(integrity sha384-[A-Za-z0-9+/]+=*\)}, out)
 
     content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
-    assert_match(%r{^pin "md5", to: "https://ga\.jspm\.io/npm:md5@2\.2\.0/md5\.js", integrity: "sha384-[A-Za-z0-9+/]+=*"$}, content)
+    assert_match(%r{^pin "md5", to: "https://ga\.jspm\.io/npm:md5@2\.2\.0/md5\.js"#{INTEGRITY_OPTION}$}, content)
   end
 
   test "pin command with --no-integrity pins a remote package without a hash" do
@@ -1076,16 +1076,25 @@ class CommandsTest < ActiveSupport::TestCase
     assert_match(/\(integrity sha384-/, out)
 
     content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
-    assert_match(%r{^pin "@popperjs/core", to: "https://ga\.jspm\.io/\S+", integrity: "sha384-[A-Za-z0-9+/]+=*" # @2\.11\.8 \(remote: relative imports\)$}, content)
+    assert_match(%r{^pin "@popperjs/core", to: "https://ga\.jspm\.io/\S+"#{INTEGRITY_OPTION} # @2\.11\.8 \(remote: relative imports\)$}, content)
   end
 
-  test "pin command with --remote and --lock writes the hash before the version comment" do
-    importmap_config("")
+  test "pin command replaces integrity: true on a remote pin with a hash" do
+    importmap_config('pin "md5", to: "https://ga.jspm.io/npm:md5@2.2.0/md5.js", integrity: true')
 
-    run_importmap_command("pin", "md5@2.2.0", "--remote", "--lock")
+    out, _err = run_importmap_command("pin", "md5@2.2.0", "--remote")
 
-    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
-    assert_match(%r{^pin "md5", to: "\S+", integrity: "sha384-[A-Za-z0-9+/]+=*" # @2\.2\.0 \(locked\)$}, content)
+    assert_match(/Pinning "md5" to \S+ \(integrity sha384-/, out)
+    assert_match(%r{^pin "md5", to: "https://ga\.jspm\.io/npm:md5@2\.2\.0/md5\.js"#{INTEGRITY_OPTION}$}, File.read("#{@tmpdir}/dummy/config/importmap.rb"))
+  end
+
+  test "pin command with --no-integrity says when it drops the hash a pin carried" do
+    importmap_config('pin "md5", to: "https://ga.jspm.io/npm:md5@2.2.0/md5.js", integrity: "sha384-old"')
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0", "--remote", "--no-integrity")
+
+    assert_includes out, %(Dropping the integrity hash on "md5" (--no-integrity)\n)
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "md5", to: "https://ga.jspm.io/npm:md5@2.2.0/md5.js"\n)
   end
 
   test "pin command writes no integrity hash for a vendored download" do

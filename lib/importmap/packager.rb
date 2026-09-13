@@ -4,6 +4,7 @@ require "json"
 require "importmap/minifier"
 require "importmap/module_inspector"
 require "importmap/http_retries"
+require "importmap/integrity"
 
 class Importmap::Packager
   include Importmap::HttpRetries
@@ -14,6 +15,7 @@ class Importmap::Packager
   # Only the booleans: a hash string is tied to the file it was computed for,
   # so a rewrite that changes the URL has to drop it.
   INTEGRITY_OPTION_REGEXP = /integrity:\s*(true|false)\b/.freeze # :nodoc:
+  INTEGRITY_HASH_REGEXP = /integrity:\s*["'][^"']+["']/.freeze # :nodoc:
   REMOTE_URL_REGEXP = %r{\Ahttps?://}.freeze # :nodoc:
 
   PROVIDER_HOSTS = {
@@ -70,11 +72,15 @@ class Importmap::Packager
   # A download that can't be served as the one file an import map entry points
   # at. Raised before anything is written, so the vendored file an app already
   # has survives; #reasons lists every pattern Importmap::ModuleInspector found.
+  # The pin is kept remote instead, and #integrity is the hash of the bytes the
+  # CDN served — as served, before any rewriting for vendoring — so the remote
+  # pin can carry it without fetching the same file again.
   class Unvendorable < Error
-    attr_reader :reasons
+    attr_reader :reasons, :integrity
 
-    def initialize(reasons)
-      @reasons = Array(reasons)
+    def initialize(reasons, integrity: nil)
+      @reasons   = Array(reasons)
+      @integrity = integrity
       super("can't be vendored as a single file (#{@reasons.join(", ")})")
     end
   end
@@ -84,8 +90,17 @@ class Importmap::Packager
   # publishes one. Loaded through an import map it runs and exports nothing, so
   # the app's `import x from "pkg"` fails to link in the browser and takes the
   # importing module down with it. Raised before anything is written, like
-  # Unvendorable, and kept remote the same way.
-  NotAnEsModule = Class.new(Error)
+  # Unvendorable, and kept remote the same way, with the same #reasons and
+  # #integrity so the caller can treat the two alike.
+  class NotAnEsModule < Error
+    attr_reader :reasons, :integrity
+
+    def initialize(integrity: nil)
+      @reasons   = [ "not an ES module" ]
+      @integrity = integrity
+      super("isn't an ES module")
+    end
+  end
 
   singleton_class.attr_accessor :endpoint
   self.endpoint = URI("https://api.jspm.io/generate")
@@ -163,7 +178,6 @@ class Importmap::Packager
   def pin_for(package, url = nil, preloads: nil, integrity: nil, locked: false, remote: nil)
     to = url ? %(, to: "#{url}") : ""
     preload_param = preload(preloads)
-    # inspect quotes a computed hash and leaves true and false bare.
     integrity_param = integrity.nil? ? "" : %(, integrity: #{integrity.inspect})
     version = extract_package_version_from(url.to_s) if locked || remote
 
@@ -214,6 +228,13 @@ class Importmap::Packager
 
   def locked?(package)
     pin_provenance(package)&.dig(:locked) || false
+  end
+
+  # Whether the pin carries a computed hash. #extract_existing_pin_options
+  # leaves a hash string out on purpose — it belongs to one file — so this is
+  # how a caller about to drop one can say so.
+  def integrity_hash?(package)
+    pin_line_for(package).to_s.match?(INTEGRITY_HASH_REGEXP)
   end
 
   # The import-map keys of every pin, in file order.
@@ -271,17 +292,22 @@ class Importmap::Packager
     download_package_file(package, url, minify: minify, force: force)
   end
 
-  # The body at +url+, for hashing a remote pin. Vendoring goes through
-  # #download; this writes nothing and inspects nothing, because the file is
-  # the CDN's to serve and only its bytes are wanted.
+  # The body at +url+ — the one GET this class makes, whether the file is
+  # going to be vendored or only hashed for a remote pin. Writes nothing and
+  # inspects nothing. Like #post_json, a failure the retry doesn't recognise
+  # still comes out as this class's HTTPError rather than a backtrace.
   def fetch_remote(url)
-    response = with_retries("fetching #{url}") { Net::HTTP.get_response(URI(url)) }
+    response = with_retries("downloading #{url}") { Net::HTTP.get_response(URI(url)) }
 
     if response.code == "200"
       response.body
     else
       handle_failure_response(response)
     end
+  rescue Error
+    raise
+  rescue => error
+    raise HTTPError, "Unexpected transport error downloading #{url} (#{error.class}: #{error.message})"
   end
 
   def remove(package)
@@ -553,32 +579,33 @@ class Importmap::Packager
     # become bare specifiers, before minifying, which rewrites nothing that
     # matters to it.
     def download_package_file(package, url, minify: false, force: false)
-      response = with_retries("downloading #{url}") { Net::HTTP.get_response(URI(url)) }
+      body   = fetch_remote(url)
+      source = body.dup.force_encoding("UTF-8")
+      source, dependencies = rewrite_esm_run_imports(source) if url.match?(ESM_RUN_URL_REGEXP)
 
-      if response.code == "200"
-        source = response.body.dup.force_encoding("UTF-8")
-        source, dependencies = rewrite_esm_run_imports(source) if url.match?(ESM_RUN_URL_REGEXP)
+      ensure_servable(source, body) unless force
 
-        ensure_servable(source) unless force
+      source = self.class.minifier.call(source) if minify
 
-        source = self.class.minifier.call(source) if minify
+      save_vendored_package(package, url, source, minified: minify)
 
-        save_vendored_package(package, url, source, minified: minify)
-
-        dependencies || []
-      else
-        handle_failure_response(response)
-      end
+      dependencies || []
     end
 
     # Both questions are asked of one inspection of one download. Standing alone
     # is asked first, so a file that fails both is reported as that: it is the
-    # answer an app can act on by keeping the pin remote.
-    def ensure_servable(source)
+    # answer an app can act on by keeping the pin remote. A refusal carries the
+    # hash of +body+ — the bytes as the CDN served them, not +source+, which an
+    # esm.run bundle has already had rewritten — so the pin kept remote doesn't
+    # fetch the file a second time to get it.
+    def ensure_servable(source, body)
       inspection = Importmap::ModuleInspector.new(source)
+      return if inspection.vendorable? && inspection.es_module?
 
-      raise Unvendorable, inspection.reasons unless inspection.vendorable?
-      raise NotAnEsModule, "isn't an ES module" unless inspection.es_module?
+      integrity = Importmap::Integrity.for(body)
+
+      raise Unvendorable.new(inspection.reasons, integrity: integrity) unless inspection.vendorable?
+      raise NotAnEsModule.new(integrity: integrity)
     end
 
     # The download is written beside its target and renamed over it, so a write
