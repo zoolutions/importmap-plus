@@ -550,9 +550,12 @@ class Importmap::Packager
     # app already had rather than half of the new one. Rename replaces a file
     # atomically; a directory in the way is the one case it can't, and that gets
     # cleared first the way it always was.
+    #
+    # The partial carries the pid so two shells pinning the same package can't
+    # write each other's file, or clean each other's up on the way out.
     def save_vendored_package(package, url, source, minified: false)
       target  = vendored_package_path(package)
-      partial = Pathname.new("#{target}.download")
+      partial = Pathname.new("#{target}.#{Process.pid}.download")
 
       File.open(partial, "w+") do |vendored_package|
         vendored_package.write "// #{package}#{extract_package_version_from(url)} downloaded from #{url}#{" (minified)" if minified}\n\n"

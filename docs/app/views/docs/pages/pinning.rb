@@ -115,9 +115,14 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
       )
       md <<~'MD'
         The check reads the source with regular expressions rather than parsing
-        JavaScript, so the same text inside a string or a comment counts too. That
-        direction is deliberate: a false positive leaves you with a working remote
-        pin. When you know better, `--vendor` downloads the package anyway:
+        JavaScript. Block comments are discounted first — a published bundle is full
+        of `/** @typedef {import('./slide.js').Slide} Slide */`, naming files it
+        never loads — but string literals are read as they stand, so a package that
+        merely mentions `"./x.js"` in a string is kept remote too.
+
+        That asymmetry is deliberate, because the two mistakes are not equal: a
+        package wrongly kept remote still works, while one wrongly vendored 404s in
+        the browser. When you know better, `--vendor` downloads it anyway:
       MD
       DocsUI::Code(<<~SHELL, lexer: :console)
         $ ./bin/importmap pin @popperjs/core@2.11.8 --vendor

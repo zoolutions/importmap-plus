@@ -1,3 +1,5 @@
+require "strscan"
+
 # Decides whether a downloaded ESM file can stand alone as the single file an
 # import map entry points at. A vendored package is exactly one file served
 # under a digested asset path, so anything the file expects to find beside
@@ -7,7 +9,9 @@
 # Like Packager::ESM_RUN_IMPORT_REGEXP this reads the source with regexes
 # rather than parsing JavaScript, so the same text inside a string still counts.
 # It is deliberately the cautious direction: a false positive keeps a working
-# remote pin, and `pin --vendor` is the escape hatch.
+# remote pin, and `pin --vendor` is the escape hatch. Every judgement call here
+# leans that way, because the two mistakes are not equal — a package wrongly
+# kept remote still works, a package wrongly vendored 404s in production.
 class Importmap::ModuleInspector
   # `from "./x"`, `from '../x'`, a bare `import "./x"` and a dynamic
   # `import("./x")`. Anchored on the keyword, and the lookbehind keeps
@@ -45,12 +49,9 @@ class Importmap::ModuleInspector
     "wasm"             => WASM_REGEXP
   }.freeze # :nodoc:
 
-  # Block comments are discounted before anything is matched. A published
-  # bundle is full of `/** @typedef {import('./slide.js').Slide} Slide */` —
-  # type annotations naming files the package does not load at runtime, which
-  # would otherwise keep a perfectly self-contained package remote. photoswipe
-  # alone carries 76 of them. Line comments are left in: `//` is too common
-  # inside URLs to strip safely, and nothing is known to hide there.
+  # A string literal, consumed whole so nothing inside it is ever read as
+  # code. Unterminated, it simply doesn't match and the quote is stepped over.
+  STRING_REGEXP = /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/m.freeze # :nodoc:
   BLOCK_COMMENT_REGEXP = %r{/\*.*?\*/}m.freeze # :nodoc:
 
   attr_reader :source
@@ -76,6 +77,39 @@ class Importmap::ModuleInspector
 
   private
     def code
-      @code ||= source.gsub(BLOCK_COMMENT_REGEXP, "")
+      @code ||= without_block_comments
+    end
+
+    # Block comments are discounted before anything is matched. A published
+    # bundle is full of `/** @typedef {import('./slide.js').Slide} Slide */` —
+    # type annotations naming files the package never loads, which would
+    # otherwise keep a self-contained package remote; photoswipe alone carries
+    # 76 of them.
+    #
+    # The scan walks the source instead of running a `/\*.*?\*/` over it,
+    # because that regex reads a `"/*"` inside a string as a comment opener and
+    # swallows the code up to the next `*/` — and an `import "./sibling.js"`
+    # swallowed there is precisely the 404 this class exists to catch. Strings
+    # are matched first and kept whole, so a comment opener inside one is never
+    # reached.
+    #
+    # Line comments are left alone. Stripping them would mean reading `//` as
+    # an opener inside a regex literal such as `[//]`, which is the same trap
+    # in the same dangerous direction, and nothing is known to hide behind one.
+    def without_block_comments
+      scanner = StringScanner.new(source)
+      kept    = +""
+
+      until scanner.eos?
+        if scanner.skip(BLOCK_COMMENT_REGEXP)
+          next
+        elsif (literal = scanner.scan(STRING_REGEXP))
+          kept << literal
+        else
+          kept << scanner.getch
+        end
+      end
+
+      kept
     end
 end

@@ -65,8 +65,11 @@ class Views::Docs::Pages::Upgrading < DocsUI::Page
         file spawns a `Worker` and its worker fetches `.wasm` decoders beside itself.
         `update` prints the reason and the pin becomes
         `pin "pdfjs-dist", to: "https://cdn.jsdelivr.net/…" # @6.3.289 (remote: dynamic imports)`.
-        Nothing is rewritten until you run one of those commands, and `pristine` keeps
-        redownloading the file exactly as the pin says.
+
+        Nothing is rewritten until you run one of those commands: until then
+        `pristine` keeps redownloading the file exactly as the pin says. Afterwards
+        the pin is a remote pin like any other, so `pristine` skips it — there is no
+        longer a vendored file to restore — and the vendored one is removed.
 
         If the vendored file worked for you — you configure the worker URL yourself,
         say — `bin/importmap pin pdfjs-dist --vendor` puts it back and marks the pin

@@ -78,6 +78,18 @@ class Importmap::ModuleInspectorTest < ActiveSupport::TestCase
     JS
     assert_vendorable %(/* new Worker("./w.js") — how it used to work */export default 1)
 
+    # A comment opener inside a string is not a comment: the code after it
+    # must still be read, or a real sibling import disappears from view.
+    assert_reason "relative imports", <<~JS
+      const open = "/*";
+      import sibling from "./sibling.js";
+      const close = "*/";
+    JS
+    assert_reason "workers", %(const s = '/* not a comment';const w = new Worker(u);const e = "*/")
+    # A string is kept, not stripped, so text inside one still counts — the
+    # documented caveat, and the harmless direction.
+    assert_reason "relative imports", %(const marker = "/* @typedef {import('./x.js')} */";export default marker)
+
     # Only the comment is discounted; code beside it still counts.
     assert_reason "relative imports", <<~JS
       /** @typedef {import('./types.js').Type} Type */
