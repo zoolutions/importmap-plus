@@ -43,6 +43,15 @@ class Importmap::Npm
     end.sort_by(&:name)
   end
 
+  # The version the registry calls latest, or nil when it couldn't be asked.
+  # The registry is authoritative about what a package's latest version is,
+  # where a CDN answers with the latest it happens to have built.
+  def latest_version(package)
+    response = get_package(package)
+
+    find_latest_version(response)&.to_s unless response.nil? || response["error"]
+  end
+
   def vulnerable_packages
     get_audit.flat_map do |package, vulnerabilities|
       vulnerabilities.map do |vulnerability|
