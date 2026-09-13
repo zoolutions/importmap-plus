@@ -82,8 +82,9 @@ class Importmap::Packager
   # A download that isn't an ES module — a CommonJS or UMD bundle, which every
   # CDN that serves a package's own dist file will hand back for a package that
   # publishes one. Loaded through an import map it runs and exports nothing, so
-  # the app's `import x from "pkg"` quietly becomes undefined. Raised before
-  # anything is written, like Unvendorable, and answered by asking another CDN.
+  # the app's `import x from "pkg"` fails to link in the browser and takes the
+  # importing module down with it. Raised before anything is written, like
+  # Unvendorable, and kept remote the same way.
   NotAnEsModule = Class.new(Error)
 
   singleton_class.attr_accessor :endpoint

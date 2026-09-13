@@ -75,8 +75,8 @@ class Views::Docs::Pages::Provenance < DocsUI::Page
         Details come in that order: provider, `minified`, `vendored` or
         `remote: <reason>`, `locked`. `vendored` and `remote:` are the same slot — a
         pin is one or the other, never both — and the reason is one of
-        `relative imports`, `dynamic imports`, `workers`, `import.meta.url` or
-        `wasm`. `locked: <range>`
+        `relative imports`, `dynamic imports`, `workers`, `import.meta.url`,
+        `wasm` or `not an ES module`. `locked: <range>`
         is reserved for range locks in a later release; today's parser already reads
         it as a lock. The version is whatever the CDN URL carried, so prerelease tags
         such as `@2.0.0-beta.19` are fine. Anything after `pin` on the same line is

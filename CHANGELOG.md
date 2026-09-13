@@ -31,7 +31,7 @@
 - **A download that isn't an ES module is kept remote instead of vendored.**
   The CDNs that serve a package's own `dist` file hand back the UMD bundle
   plenty of packages still publish; vendored into an import map it runs and
-  exports nothing, so `import x from "pkg"` is `undefined` in the browser and
+  exports nothing, so `import x from "pkg"` fails to link in the browser and
   nowhere else. `pin google-libphonenumber --from jsdelivr` now keeps the pin
   remote and records `(remote: not an ES module)`. `--vendor` downloads it
   anyway, and the default `pin` never sees it, since jspm converts the package.

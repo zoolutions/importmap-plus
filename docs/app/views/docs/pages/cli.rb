@@ -39,9 +39,9 @@ class Views::Docs::Pages::Cli < DocsUI::Page
         `luxon@3.7.2`, `apexcharts/core`, `@hotwired/stimulus@3`. `lock` and
         `unlock` take names only.
 
-        A spec `pin` is given with no version is resolved against the npm registry
-        first, then asked of jspm, `esm.run` and jsDelivr in turn until one of them
-        has it. See [Pinning](/docs/pinning).
+        When `pin` is given a spec with no version, it is resolved against the npm
+        registry first, then asked of jspm, `esm.run` and jsDelivr in turn until one
+        of them has it. See [Pinning](/docs/pinning).
       MD
     end
   end

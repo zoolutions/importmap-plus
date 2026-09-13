@@ -84,8 +84,9 @@ class Importmap::ModuleInspector
       export\s*(?:[{*]|\b(?:default|var|let|const|function|class|async)\b)
     )
   /x.freeze # :nodoc:
-  # What a CommonJS or UMD bundle says instead: it assigns to an `exports`, it
-  # requires, or it sniffs for the loader it is running under. None of these is
+  # What a CommonJS, AMD or UMD bundle says instead: it assigns to an
+  # `exports`, it requires or defines, or it sniffs for the loader it is
+  # running under. None of these is
   # proof on its own — an ESM file may well mention `require(` — so they only
   # decide a file that declares no exports of its own, where the only mistake
   # they can make is sending a package on to the next CDN.
@@ -95,9 +96,10 @@ class Importmap::ModuleInspector
   # `module.exports` out only in a comment, which is stripped before any of
   # this is read.
   COMMONJS_REGEXP = /
-    (?<![\w.$])(?:module\s*\.\s*exports|require\s*\(|typeof\s+(?:exports|module|define)\s*[!=]=) |
+    (?<![\w.$])(?:module\s*\.\s*exports|exports\s*\.\s*[\w$]+\s*=|require\s*\(|define\s*\(|typeof\s+(?:exports|module|define)\s*[!=]=) |
     \.\s*exports\s*=
   /x.freeze # :nodoc:
+  LINE_COMMENT_REGEXP = %r{//[^\n]*}.freeze # :nodoc:
 
   attr_reader :source
 
@@ -122,16 +124,17 @@ class Importmap::ModuleInspector
 
   # Whether the file is something an import map entry can resolve to: it says
   # what it exports, or at least never says it is CommonJS. A UMD bundle loaded
-  # as a module runs and exports nothing, so `import x from "pkg"` hands the app
-  # undefined — silently, and only in the browser.
+  # as a module runs and exports nothing, so `import x from "pkg"` fails to
+  # link — "The requested module does not provide an export named 'default'" —
+  # and takes every module that imported it down too, in the browser only.
   #
   # The two halves read different text, each in the direction that keeps a
-  # non-module out. An import statement counts only outside a string literal,
-  # because a bundle that ships a usage example in a docstring is still
-  # CommonJS; a `module.exports` counts wherever it appears, because a UMD
-  # wrapper hidden in a string is a UMD wrapper.
+  # non-module out. An import statement counts only outside a string literal
+  # and outside a line comment, because a bundle that ships a usage example in
+  # either is still CommonJS; a `module.exports` counts wherever it appears,
+  # because a UMD wrapper hidden in a string is a UMD wrapper.
   def es_module?
-    code_without_literals.match?(ESM_STATEMENT_REGEXP) || !code.match?(COMMONJS_REGEXP)
+    statements.match?(ESM_STATEMENT_REGEXP) || !code.match?(COMMONJS_REGEXP)
   end
 
   private
@@ -139,8 +142,8 @@ class Importmap::ModuleInspector
       @code ||= without_block_comments
     end
 
-    def code_without_literals
-      @code_without_literals ||= without_block_comments(keep_literals: false)
+    def statements
+      @statements ||= without_block_comments(statements_only: true)
     end
 
     # Block comments are discounted before anything is matched. A published
@@ -159,19 +162,21 @@ class Importmap::ModuleInspector
     # Line comments are left alone. Stripping them would mean reading `//` as
     # an opener inside a regex literal such as `[//]`, which is the same trap
     # in the same dangerous direction, and nothing is known to hide behind one.
-    # With +keep_literals: false+ every literal is emptied rather than kept —
-    # its delimiters stay, so `import "x"` still reads as an import statement,
-    # while the text inside it stops being read as code at all.
-    def without_block_comments(keep_literals: true)
+    # With +statements_only+ the line comments go too, and every literal is
+    # emptied rather than kept — its delimiters stay, so `import "x"` still
+    # reads as an import statement while the text inside it stops being read
+    # as code at all. That mode feeds only the ES-module check, where the
+    # `[//]` trap above can at worst send a package on to the next CDN.
+    def without_block_comments(statements_only: false)
       scanner = StringScanner.new(source)
       kept    = +""
 
       until scanner.eos?
-        if scanner.skip(BLOCK_COMMENT_REGEXP)
+        if scanner.skip(BLOCK_COMMENT_REGEXP) || (statements_only && scanner.skip(LINE_COMMENT_REGEXP))
           next
         elsif (literal = scanner.scan(STRING_REGEXP)) ||
               (regexp_literal_next?(kept, scanner) && (literal = scanner.scan(REGEXP_LITERAL_REGEXP)))
-          kept << (keep_literals ? literal : literal[0, 1] * 2)
+          kept << (statements_only ? literal[0, 1] * 2 : literal)
         else
           kept << scanner.getch
         end

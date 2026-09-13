@@ -141,8 +141,9 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
         jspm and `esm.run` build an ES module out of whatever a package ships. The
         CDNs that serve a package's own `dist` file do not, and plenty of packages
         still publish a UMD bundle there. Loaded through an import map it runs and
-        exports nothing, so `import x from "pkg"` hands your app `undefined` —
-        silently, and only in the browser.
+        exports nothing, so `import x from "pkg"` fails to link — the browser
+        reports that the module provides no export named `default` and refuses to
+        run anything that imported it. Nothing warns you before the page.
 
         A download that says it is CommonJS is pinned to its CDN URL instead, with
         the reason on the pin, the same way a file that can't stand alone is:
@@ -156,12 +157,13 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
       RUBY
       md <<~'MD'
         A file counts as an ES module when it has a top-level `import` or `export`
-        statement, or when it never says it is CommonJS — no `module.exports`, no
-        `require(`, no `typeof exports == "object"` loader sniff. The two halves read
-        the source differently on purpose: an `import` statement is believed only
-        outside a string literal, because a bundle shipping a usage example in a
-        docstring is still CommonJS, while a `module.exports` is believed wherever it
-        appears.
+        statement, or when it never says it is CommonJS or AMD — no
+        `module.exports`, no `exports.x =`, no `require(`, no `define(`, no
+        `typeof exports == "object"` loader sniff. The two halves read the source
+        differently on purpose: an `import` statement is believed only outside a
+        string literal or a line comment, because a bundle shipping a usage example
+        in either is still CommonJS, while a `module.exports` is believed wherever
+        it appears.
 
         The default `pin` never reaches this, since jspm converts the package for
         you. `--vendor` downloads it anyway when you know better, and dropping

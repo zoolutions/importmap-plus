@@ -207,6 +207,23 @@ class Importmap::ModuleInspectorTest < ActiveSupport::TestCase
     assert_not_es_module %(module.exports = { snippet: `export default 1` })
   end
 
+  # A line comment is dropped before import statements are read, and only
+  # there: for the vendorability patterns a `//` inside a regex literal is
+  # dangerous to read as a comment, but here the worst it can do is send a
+  # package on to the next CDN.
+  test "an import or export written in a line comment is not a statement" do
+    assert_not_es_module %(// export default 1\nvar a = require("x"))
+    assert_not_es_module %(// usage: import md5 from "md5"\nmodule.exports = md5)
+    assert_es_module %(// the real thing follows\nexport default 1)
+  end
+
+  test "an exports property assignment or an AMD define is not an ES module" do
+    assert_not_es_module %(exports.md5 = function() {})
+    assert_not_es_module %(exports.__esModule = true; exports.default = md5)
+    assert_not_es_module %(define(["require", "exports"], function(require, exports) {}))
+    assert_not_es_module %(define(function() { return md5 }))
+  end
+
   test "a module.exports written about in a comment still counts against the file" do
     assert_not_es_module %(/** sets module.exports */ var a = require("x"))
   end
