@@ -95,6 +95,19 @@ class Importmap::ModuleInspectorTest < ActiveSupport::TestCase
     assert_reason "relative imports", %(const re = /[/*]/; import y from "./sibling.js"; const end = "*/";)
     assert_reason "workers", %(const re = /[/*]/; const w = new Worker(u); const end = "*/";)
 
+    assert_reason "relative imports", %(if (x) /[/*]/.test(s); import y from "./sibling.js"; const e = "*/";)
+    assert_reason "relative imports", %(throw /[/*]/.test(s); import y from "./sibling.js"; const e = "*/";)
+    assert_reason "relative imports", %(function f(){} /[/*]/.test(s); import y from "./sibling.js"; const e = "*/";)
+
+    # The token before the slash may be a keyword a long way back on the line.
+    assert_reason "relative imports", <<~JS
+      const ok = x instanceof Y
+                 ? a
+                 : /[/*]/.test(s);
+      import y from "./sibling.js";
+      const e = "*/";
+    JS
+
     # A quote inside a regex literal can only ever leave a comment in place,
     # never hide code: a span read as a string is kept verbatim, not dropped.
     assert_reason "relative imports", <<~JS
