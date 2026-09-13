@@ -2,6 +2,7 @@ require "thor"
 require "importmap/packager"
 require "importmap/npm"
 require "importmap/provider_chain"
+require "importmap/integrity"
 
 class Importmap::Commands < Thor
   include Thor::Actions
@@ -19,6 +20,7 @@ class Importmap::Commands < Thor
   option :lock, type: :boolean, desc: "Lock the pin at this version; update, pin and pristine leave it there until unlocked"
   option :force, type: :boolean, default: false, desc: "Re-pin locked packages, keeping each lock at the new version"
   option :vendor, type: :boolean, default: false, desc: "Vendor the download even when it looks like it needs sibling files; converts a pin kept remote back"
+  option :integrity, type: :boolean, default: true, desc: "Write a subresource-integrity hash on a pin kept remote; --no-integrity skips the fetch that computes it"
   def pin(*packages)
     packages = resolve_latest_versions(without_locked(packages, lock: options[:lock], force: options[:force]))
     # jspm resolves a package together with its dependencies; --lock and
@@ -31,7 +33,8 @@ class Importmap::Commands < Thor
       pin_package(package, url, preload: options[:preload], remote: options[:remote], env: options[:env],
                                 minify: options[:minify], from: options[:from],
                                 lock: requested.include?(package) ? options[:lock] : nil,
-                                vendor: requested.include?(package) && options[:vendor])
+                                vendor: requested.include?(package) && options[:vendor],
+                                compute_integrity: options[:integrity])
     end
   end
 
@@ -181,7 +184,7 @@ class Importmap::Commands < Thor
 
     # A lock outlives a rewrite unless the caller says otherwise, so update
     # and --force re-lock at the version they move to.
-    def pin_package(package, url, preload: nil, remote: false, env: "production", minify: nil, from: nil, lock: nil, vendor: false)
+    def pin_package(package, url, preload: nil, remote: false, env: "production", minify: nil, from: nil, lock: nil, vendor: false, compute_integrity: true)
       existing_options = packager.extract_existing_pin_options(package)[package] || {}
       preload = existing_options[:preload] if preload.nil?
       integrity = existing_options[:integrity]
@@ -192,25 +195,29 @@ class Importmap::Commands < Thor
       existing_url = existing_options[:to] if existing_options[:to].to_s.match?(Importmap::Packager::REMOTE_URL_REGEXP)
 
       if existing_url && !vendor
-        repin_remote_package(package, url, existing_url, preload, env: env, from: from, integrity: integrity, locked: locked)
+        repin_remote_package(package, url, existing_url, preload, env: env, from: from, integrity: integrity, locked: locked,
+                                                                 compute_integrity: compute_integrity)
       elsif remote
-        pin_remote_package(package, url, preload, integrity: integrity, locked: locked)
+        pin_remote_package(package, url, preload, integrity: integrity, locked: locked, compute_integrity: compute_integrity)
       else
-        pin_vendored_package(package, url, preload, minify: minify, integrity: integrity, locked: locked, vendor: vendor)
+        pin_vendored_package(package, url, preload, minify: minify, integrity: integrity, locked: locked, vendor: vendor,
+                                                    compute_integrity: compute_integrity)
       end
     end
 
     # Nothing is said about a download until it has arrived and been found fit
     # to serve on its own, so a package kept remote reports that and only that.
-    def pin_vendored_package(package, url, preload, minify: nil, integrity: nil, locked: false, vendor: false)
+    def pin_vendored_package(package, url, preload, minify: nil, integrity: nil, locked: false, vendor: false, compute_integrity: true)
       minify = vendored_minified?(package) if minify.nil?
 
       begin
         dependencies = packager.download(package, url, minify: minify, force: vendor)
       rescue Importmap::Packager::Unvendorable => error
-        return pin_remote_package(package, url, preload, integrity: integrity, locked: locked, kept_remote: error.reasons)
+        return pin_remote_package(package, url, preload, integrity: integrity, locked: locked, kept_remote: error.reasons,
+                                                         compute_integrity: compute_integrity)
       rescue Importmap::Packager::NotAnEsModule
-        return pin_remote_package(package, url, preload, integrity: integrity, locked: locked, kept_remote: [ "not an ES module" ])
+        return pin_remote_package(package, url, preload, integrity: integrity, locked: locked, kept_remote: [ "not an ES module" ],
+                                                         compute_integrity: compute_integrity)
       end
 
       puts %(Pinning "#{package}" to #{packager.vendor_path}/#{package}.js via download from #{url}#{" (minified)" if minify})
@@ -495,8 +502,14 @@ class Importmap::Commands < Thor
     # +kept_remote+ is the reasons a download just turned out not to stand on
     # its own; without it the reason the pin already records is carried over, so
     # update and a plain pin don't drop it.
-    def pin_remote_package(package, url, preload, integrity: nil, locked: false, kept_remote: nil)
-      puts %(Pinning "#{package}" to #{url}#{" (kept remote: #{kept_remote.to_sentence})" if kept_remote})
+    def pin_remote_package(package, url, preload, integrity: nil, locked: false, kept_remote: nil, compute_integrity: true)
+      integrity = remote_integrity_for(url, integrity) if compute_integrity
+
+      notes = +""
+      notes << %( (kept remote: #{kept_remote.to_sentence})) if kept_remote
+      notes << %( (integrity #{integrity})) if Importmap::Integrity.hash?(integrity)
+
+      puts %(Pinning "#{package}" to #{url}#{notes})
 
       remote = kept_remote&.first || packager.remote_reason(package)
 
@@ -507,22 +520,36 @@ class Importmap::Commands < Thor
       report_lock(package) if locked
     end
 
-    def repin_remote_package(package, url, existing_url, preload, env:, from: nil, integrity: nil, locked: false)
+    def repin_remote_package(package, url, existing_url, preload, env:, from: nil, integrity: nil, locked: false, compute_integrity: true)
       # `url` was already resolved from the requested CDN, so an explicit
       # --from moves the pin instead of being overruled by its current one.
-      return pin_remote_package(package, url, preload, integrity: integrity, locked: locked) if from
+      return pin_remote_package(package, url, preload, integrity: integrity, locked: locked, compute_integrity: compute_integrity) if from
 
       provider = packager.provider_for_url(existing_url)
 
       if provider.nil?
         puts %(Skipping "#{package}" pinned to custom URL #{existing_url})
       elsif provider == packager.provider_for_url(url)
-        pin_remote_package(package, url, preload, integrity: integrity, locked: locked)
+        pin_remote_package(package, url, preload, integrity: integrity, locked: locked, compute_integrity: compute_integrity)
       elsif (provider_url = resolve_url_from_provider(package, url, provider, env: env))
-        pin_remote_package(package, provider_url, preload, integrity: integrity, locked: locked)
+        pin_remote_package(package, provider_url, preload, integrity: integrity, locked: locked, compute_integrity: compute_integrity)
       else
         puts %(Keeping "#{package}" pinned to #{existing_url} (couldn't resolve it from #{provider}))
       end
+    end
+
+    # A remote pin is the one place an app trusts a CDN at runtime, so the pin
+    # records the hash of what was resolved and the browser checks the bytes it
+    # gets against it. integrity: false is an app's decision and stays; a hash
+    # the line already carried was computed for the old URL and was dropped
+    # when the line was read, so nil here means "hash this".
+    def remote_integrity_for(url, integrity)
+      return integrity if integrity == false
+
+      Importmap::Integrity.for(packager.fetch_remote(url))
+    rescue Importmap::Packager::Error => error
+      puts %(Couldn't hash #{url} (#{error.message}); pinning it without an integrity hash)
+      nil
     end
 
     def resolve_url_from_provider(package, reference_url, provider, env:)

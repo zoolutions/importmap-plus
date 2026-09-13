@@ -52,6 +52,7 @@ class Views::Docs::Pages::Cli < DocsUI::Page
         [
           [ [ :code, "--from CDN" ], "String", "the pin's CDN, else jspm then esm.run then jsdelivr", "jspm, unpkg, jsdelivr, esm.sh, skypack or esm.run. Naming one turns off the fallback chain: that CDN is asked once. Also moves a remote pin to that CDN." ],
           [ [ :code, "--remote" ], "Boolean", "false", "Pin the resolved URL instead of vendoring a download; converts a vendored pin." ],
+          [ [ :code, "--integrity / --no-integrity" ], "Boolean", "true", "Fetch a pin that stays remote to write a subresource-integrity hash of it. --no-integrity skips the fetch; integrity: false on the pin turns it off for good. Vendored downloads are unaffected." ],
           [ [ :code, "--vendor" ], "Boolean", "what the pin says", "Download the package even when its file looks like it needs siblings beside it; converts a pin that was kept remote. Applies only to the packages you name, not the dependencies resolved with them, and --remote wins if you pass both. Recorded on the pin." ],
           [ [ :code, "--minify / --no-minify" ], "Boolean", "what the pin says", "Run the download through bun, esbuild or terser. Recorded on the pin." ],
           [ [ :code, "--lock / --no-lock" ], "Boolean", "what the pin says", "Lock the named packages at this version, or drop their lock. Dependencies are never locked." ],

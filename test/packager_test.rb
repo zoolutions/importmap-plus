@@ -924,6 +924,60 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     assert_equal %(pin "chart.js" # @4.4.0 (unpkg, vendored)), packager.unlocked_pin_line("chart.js")
   end
 
+  test "pin_for quotes a computed integrity hash and leaves the booleans bare" do
+    assert_equal %(pin "md5", to: "https://cdn/md5.js", integrity: "sha384-abc"),
+                 @packager.pin_for("md5", "https://cdn/md5.js", integrity: "sha384-abc")
+    assert_equal %(pin "md5", to: "https://cdn/md5@2.2.0/md5.js", integrity: "sha384-abc" # @2.2.0 (locked)),
+                 @packager.pin_for("md5", "https://cdn/md5@2.2.0/md5.js", integrity: "sha384-abc", locked: true)
+    assert_equal %(pin "md5", to: "https://cdn/md5.js", integrity: false),
+                 @packager.pin_for("md5", "https://cdn/md5.js", integrity: false)
+  end
+
+  test "fetch_remote returns the body without writing anything" do
+    response = Class.new do
+      def code() "200" end
+      def body() "export default 1" end
+    end.new
+
+    Dir.mktmpdir do |vendor_dir|
+      packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+      body = Net::HTTP.stub(:get_response, ->(_uri) { response }) do
+        packager.fetch_remote("https://ga.jspm.io/npm:md5@2.2.0/md5.js")
+      end
+
+      assert_equal "export default 1", body
+      assert_empty Dir.children(vendor_dir)
+    end
+  end
+
+  test "fetch_remote retries a reset connection and then raises" do
+    attempts = 0
+    broken = ->(_uri) { attempts += 1; raise Errno::ECONNRESET, "SSL_connect" }
+
+    without_retry_wait do
+      error = Net::HTTP.stub(:get_response, broken) do
+        assert_raises(Importmap::Packager::HTTPError) { @packager.fetch_remote("https://ga.jspm.io/npm:md5@2.2.0/md5.js") }
+      end
+
+      assert_equal Importmap::Packager.retry_attempts, attempts
+      assert_match(/Connection reset|SSL_connect/, error.message)
+    end
+  end
+
+  test "fetch_remote raises on a response the CDN refused" do
+    response = Class.new do
+      def code() "404" end
+      def body() "" end
+    end.new
+
+    error = Net::HTTP.stub(:get_response, ->(_uri) { response }) do
+      assert_raises(Importmap::Packager::HTTPError) { @packager.fetch_remote("https://ga.jspm.io/npm:md5@2.2.0/md5.js") }
+    end
+
+    assert_match(/404/, error.message)
+  end
+
   private
     def without_retry_wait
       original = Importmap::Packager.retry_wait

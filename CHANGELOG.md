@@ -69,6 +69,35 @@
   for its siblings. pdf.js is the package most apps will see this on — see
   the upgrading page for what to expect and how `--vendor` puts it back.
 
+- **A pin that stays remote carries a subresource-integrity hash.** A vendored
+  file is served by the app; a remote pin is fetched from a CDN on every page
+  load with nothing checking the bytes, and importmap-rails never wrote an
+  `integrity:` value for one — the hash had to be computed by hand and redone
+  on every update. `pin --remote`, and a package [kept remote] because its file
+  can't stand alone, now fetch the URL they just resolved, hash it and write it
+  with the pin:
+
+  ```
+  $ bin/importmap pin md5@2.2.0 --remote
+  Pinning "md5" to https://ga.jspm.io/npm:md5@2.2.0/md5.js (integrity sha384-+wqk6m3DPZ6mVMgVZlXnGgDjDY2skGEZ3U9tBnRHiPJXLRLKBmYkKlX2urz9T61b)
+  ```
+  ```ruby
+  pin "md5", to: "https://ga.jspm.io/npm:md5@2.2.0/md5.js", integrity: "sha384-+wqk6m3DPZ6mVMgVZlXnGgDjDY2skGEZ3U9tBnRHiPJXLRLKBmYkKlX2urz9T61b"
+  ```
+
+  The hash is `sha384` of the bytes the CDN served, computed here rather than
+  asked of any one CDN, so jspm, esm.run, jsDelivr, unpkg, esm.sh and skypack
+  are all covered by one code path. `update` and a later `pin` fetch the new
+  URL and rewrite the hash, so a pin never carries the hash of a file it no
+  longer points at — where before an explicit hash was simply dropped.
+  `enable_integrity!` in `config/importmap.rb` is still what puts the value in
+  the import map and on the preload link; `--no-integrity` skips the fetch for
+  a run, and `integrity: false` on a pin stays off for good. Vendored downloads
+  are unaffected: `integrity: true`, the default, already computes theirs
+  through the asset pipeline.
+
+  [kept remote]: https://importmap-plus.zoolutions.llc/docs/pinning
+
 ### Fixed
 
 - **`Importmap::Packager::ServiceError` is a class again.** It was assigned

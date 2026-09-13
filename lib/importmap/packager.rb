@@ -163,7 +163,8 @@ class Importmap::Packager
   def pin_for(package, url = nil, preloads: nil, integrity: nil, locked: false, remote: nil)
     to = url ? %(, to: "#{url}") : ""
     preload_param = preload(preloads)
-    integrity_param = integrity.nil? ? "" : %(, integrity: #{integrity})
+    # inspect quotes a computed hash and leaves true and false bare.
+    integrity_param = integrity.nil? ? "" : %(, integrity: #{integrity.inspect})
     version = extract_package_version_from(url.to_s) if locked || remote
 
     %(pin "#{package}") + to + preload_param + integrity_param +
@@ -268,6 +269,19 @@ class Importmap::Packager
   def download(package, url, minify: false, force: false)
     ensure_vendor_directory_exists
     download_package_file(package, url, minify: minify, force: force)
+  end
+
+  # The body at +url+, for hashing a remote pin. Vendoring goes through
+  # #download; this writes nothing and inspects nothing, because the file is
+  # the CDN's to serve and only its bytes are wanted.
+  def fetch_remote(url)
+    response = with_retries("fetching #{url}") { Net::HTTP.get_response(URI(url)) }
+
+    if response.code == "200"
+      response.body
+    else
+      handle_failure_response(response)
+    end
   end
 
   def remove(package)
