@@ -22,7 +22,7 @@ class Views::Docs::Pages::Cli < DocsUI::Page
       DocsUI::Table(
         [ "Command", "What it does", "Docs" ],
         [
-          [ [ :code, "pin [PACKAGES]" ], "Resolves each package on a CDN, downloads it to vendor/javascript (or pins the URL, with --remote or because the file can't stand alone) and writes the pin.", [ :md, "[Pinning](/docs/pinning)" ] ],
+          [ [ :code, "pin [PACKAGES]" ], "Resolves each package's version on the npm registry and the package itself on a CDN, downloads it to vendor/javascript (or pins the URL, with --remote or because the file can't stand alone) and writes the pin.", [ :md, "[Pinning](/docs/pinning)" ] ],
           [ [ :code, "unpin [PACKAGES]" ], "Removes the pin and the vendored file.", [ :md, "[Pinning](/docs/pinning)" ] ],
           [ [ :code, "lock [PACKAGES]" ], "Marks the pins as locked at their current version. No network.", [ :md, "[Locking](/docs/locking)" ] ],
           [ [ :code, "unlock [PACKAGES]" ], "Removes the lock marker. No network.", [ :md, "[Locking](/docs/locking)" ] ],
@@ -38,6 +38,10 @@ class Views::Docs::Pages::Cli < DocsUI::Page
         A package spec is `name[@version][/subpath]`: `react`, `luxon@3`,
         `luxon@3.7.2`, `apexcharts/core`, `@hotwired/stimulus@3`. `lock` and
         `unlock` take names only.
+
+        When `pin` is given a spec with no version, it is resolved against the npm
+        registry first, then asked of jspm, `esm.run` and jsDelivr in turn until one
+        of them has it. See [Pinning](/docs/pinning).
       MD
     end
   end
@@ -46,7 +50,7 @@ class Views::Docs::Pages::Cli < DocsUI::Page
     DocsUI::Section("pin options") do
       DocsUI::PropTable(
         [
-          [ [ :code, "--from CDN" ], "String", "the pin's CDN, else jspm", "jspm, unpkg, jsdelivr, esm.sh, skypack or esm.run. Also moves a remote pin to that CDN." ],
+          [ [ :code, "--from CDN" ], "String", "the pin's CDN, else jspm then esm.run then jsdelivr", "jspm, unpkg, jsdelivr, esm.sh, skypack or esm.run. Naming one turns off the fallback chain: that CDN is asked once. Also moves a remote pin to that CDN." ],
           [ [ :code, "--remote" ], "Boolean", "false", "Pin the resolved URL instead of vendoring a download; converts a vendored pin." ],
           [ [ :code, "--vendor" ], "Boolean", "what the pin says", "Download the package even when its file looks like it needs siblings beside it; converts a pin that was kept remote. Applies only to the packages you name, not the dependencies resolved with them, and --remote wins if you pass both. Recorded on the pin." ],
           [ [ :code, "--minify / --no-minify" ], "Boolean", "what the pin says", "Run the download through bun, esbuild or terser. Recorded on the pin." ],

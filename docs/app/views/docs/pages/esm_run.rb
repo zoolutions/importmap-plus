@@ -35,6 +35,11 @@ class Views::Docs::Pages::EsmRun < DocsUI::Page
       md <<~'MD'
         The CDN is recorded in the pin comment, so `update` and `pristine` fetch the
         bundle again rather than jspm's file. See [Provenance](/docs/provenance).
+
+        You also get here without asking. esm.run is the first CDN `pin` falls back
+        to when jspm's generator can't build a package, and the pin comment records
+        it exactly as it does above — see
+        [Choosing a CDN](/docs/pinning#choosing-a-cdn).
       MD
     end
   end

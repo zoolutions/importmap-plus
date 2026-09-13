@@ -4,6 +4,42 @@
 
 ### Added
 
+- **`pin` resolves the version on the npm registry, then falls back from jspm
+  to esm.run to jsDelivr.** jspm is the default CDN and was the only one `pin`
+  asked, so a package its generator can't build — `mermaid@10.6.0` fails on a
+  cytoscape subpath, `@mui/material@5.15.0` on a module it can't find — ended
+  in `Couldn't find any packages`, and a bare `pin foo` took whatever version
+  jspm had indexed, which lags npm. A package that names no CDN of its own is
+  now asked of each in turn, and its version is settled against the registry
+  before any of them is asked:
+
+  ```
+  $ bin/importmap pin mermaid
+  Resolved "mermaid" to 10.6.0 from the npm registry
+  jspm couldn't resolve "mermaid@10.6.0" (No './dist/cytoscape.umd.js' exports subpath defined in cytoscape@3.34.3); trying esm.run
+  Pinning "mermaid" to vendor/javascript/mermaid.js via download from https://cdn.jsdelivr.net/npm/mermaid@10.6.0/+esm
+  ```
+  ```ruby
+  pin "mermaid" # @10.6.0 (esm.run)
+  ```
+
+  The pin comment already records a CDN that isn't jspm, so `update` and
+  `pristine` stay on esm.run from then on with no new state anywhere. An
+  explicit `--from`, and a provider a pin already names, are choices somebody
+  made: those are asked once and never fall back. When no CDN has the package,
+  each one's reason is printed and the summary names all three.
+- **A download that isn't an ES module is kept remote instead of vendored.**
+  The CDNs that serve a package's own `dist` file hand back the UMD bundle
+  plenty of packages still publish; vendored into an import map it runs and
+  exports nothing, so `import x from "pkg"` fails to link in the browser and
+  nowhere else. `pin google-libphonenumber --from jsdelivr` now keeps the pin
+  remote and records `(remote: not an ES module)`. `--vendor` downloads it
+  anyway, and the default `pin` never sees it, since jspm converts the package.
+- **The CDN's own reason reaches the terminal.** jspm answers 401 with its
+  generator's message in the body, which `pin` discarded: `Couldn't find any
+  packages in ["mermaid@10.6.0"] on jspm` said nothing about what went wrong.
+  That message is now printed with the sentence, whichever CDN was asked.
+
 - **`pin` keeps a package remote when its file can't stand alone, and says
   why.** A vendored package is one file served under a digested asset path,
   but plenty of packages ship a file that imports a sibling by relative path,
@@ -35,6 +71,11 @@
 
 ### Fixed
 
+- **`Importmap::Packager::ServiceError` is a class again.** It was assigned
+  `Error.new(Error)` — an *instance* — so `rescue Packager::ServiceError`
+  raised `TypeError: class or module required for rescue clause`, and every
+  jspm service error arrived as a plain `Packager::Error`. Inherited from
+  importmap-rails, where it is still the case.
 - **A failed download no longer deletes the file an app already has.**
   `pin` and `pristine` removed `vendor/javascript/<package>.js` before
   fetching, so a CDN that answered 500 — or, now, a file that can't be

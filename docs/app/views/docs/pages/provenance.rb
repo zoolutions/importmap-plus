@@ -32,12 +32,14 @@ class Views::Docs::Pages::Provenance < DocsUI::Page
         pin "monaco-editor", to: "monaco-editor.js" # @0.52.2 (vendored)
       RUBY
       md <<~'MD'
-        The CDN is named when it isn't jspm. `minified` says the file went through a
+        The CDN is named when it isn't jspm — including one the fallback chain
+        chose, which is how `update` and `pristine` stay on it. `minified` says the file went through a
         minifier. `locked` says the version is held — see
         [Locking versions](/docs/locking). `remote: <reason>` says the package was
-        pinned to its CDN URL because the downloaded file can't stand alone, and
-        `vendored` says `--vendor` overrode that check — see
-        [Packages that can't be vendored alone](/docs/pinning). A bare `remote`,
+        pinned to its CDN URL because the downloaded file can't stand alone, or
+        because it isn't an ES module, and `vendored` says `--vendor` overrode that
+        check — see [Packages that can't be vendored alone](/docs/pinning) and
+        [Packages the CDN hands back as CommonJS](/docs/pinning). A bare `remote`,
         with no reason after it, means the same thing without saying why; write one
         by hand and it is kept as it is. A remote pin has no comment unless it is
         locked or was kept remote; then the version from its URL is written out so
@@ -73,8 +75,8 @@ class Views::Docs::Pages::Provenance < DocsUI::Page
         Details come in that order: provider, `minified`, `vendored` or
         `remote: <reason>`, `locked`. `vendored` and `remote:` are the same slot — a
         pin is one or the other, never both — and the reason is one of
-        `relative imports`, `dynamic imports`, `workers`, `import.meta.url` or
-        `wasm`. `locked: <range>`
+        `relative imports`, `dynamic imports`, `workers`, `import.meta.url`,
+        `wasm` or `not an ES module`. `locked: <range>`
         is reserved for range locks in a later release; today's parser already reads
         it as a lock. The version is whatever the CDN URL carried, so prerelease tags
         such as `@2.0.0-beta.19` are fine. Anything after `pin` on the same line is

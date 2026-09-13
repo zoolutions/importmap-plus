@@ -28,7 +28,7 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
   end
 
   test "missing import with mock" do
-    response = Class.new { def code() "404" end }.new
+    response = Class.new { def code() "404" end; def body() "" end }.new
 
     @packager.stub(:post_json, response) do
       assert_nil @packager.import("missing-package-that-doesnt-exist@17.0.2")
@@ -734,6 +734,62 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
 
       assert_equal [ "relative imports", "workers" ], error.reasons
       assert_equal "// the file that works today", File.read(existing)
+    end
+  end
+
+  test "download refuses a source that isn't an ES module and leaves the vendored file it has" do
+    response = Class.new do
+      def code() "200" end
+      def body() %(var f = typeof exports == "object"; module.exports = f) end
+    end.new
+
+    Dir.mktmpdir do |vendor_dir|
+      existing = Pathname.new(vendor_dir).join("google-libphonenumber.js")
+      File.write(existing, "// the file that works today")
+      packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+      Net::HTTP.stub(:get_response, response) do
+        assert_raises(Importmap::Packager::NotAnEsModule) do
+          packager.download("google-libphonenumber", "https://cdn.jsdelivr.net/npm/google-libphonenumber@3.2.42/dist/libphonenumber.js")
+        end
+      end
+
+      assert_equal "// the file that works today", File.read(existing)
+    end
+  end
+
+  # --vendor is the one answer to both checks: the app has looked and decided.
+  test "download vendors a source that isn't an ES module when forced" do
+    response = Class.new do
+      def code() "200" end
+      def body() %(module.exports = f) end
+    end.new
+
+    Dir.mktmpdir do |vendor_dir|
+      packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+      Net::HTTP.stub(:get_response, response) do
+        packager.download("google-libphonenumber", "https://cdn.jsdelivr.net/npm/google-libphonenumber@3.2.42/dist/libphonenumber.js", force: true)
+      end
+
+      assert_includes File.read("#{vendor_dir}/google-libphonenumber.js"), "module.exports = f"
+    end
+  end
+
+  # A file that fails both checks is reported as unvendorable, because that is
+  # the one an app can answer by keeping the pin remote.
+  test "download reports a source that can't stand alone before it reports the module format" do
+    response = Class.new do
+      def code() "200" end
+      def body() %(const s = require("./util.js"); module.exports = s; const w = new Worker(u)) end
+    end.new
+
+    Dir.mktmpdir do |vendor_dir|
+      packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+      Net::HTTP.stub(:get_response, response) do
+        assert_raises(Importmap::Packager::Unvendorable) { packager.download("some-package", "https://ga.jspm.io/npm:some-package@1.0.0/index.js") }
+      end
     end
   end
 

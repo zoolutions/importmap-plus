@@ -297,4 +297,40 @@ class Importmap::NpmTest < ActiveSupport::TestCase
       assert_equal %w[99.0.0 99.0.0], outdated_packages.reject(&:error).map(&:latest_version)
     end
   end
+
+  test "latest version is the one the registry tags latest" do
+    response = { "dist-tags" => { "latest" => "2.3.0" } }.to_json
+
+    @npm.stub(:get_json, response) do
+      assert_equal "2.3.0", @npm.latest_version("md5")
+    end
+  end
+
+  test "latest version falls back to the highest version the registry lists" do
+    response = { "versions" => { "2.2.0" => {}, "2.10.0" => {}, "2.3.0" => {} } }.to_json
+
+    @npm.stub(:get_json, response) do
+      assert_equal "2.10.0", @npm.latest_version("md5")
+    end
+  end
+
+  test "latest version is nil when the registry answers with an error" do
+    @npm.stub(:get_json, { "error" => "Not found" }.to_json) do
+      assert_nil @npm.latest_version("md5")
+    end
+  end
+
+  test "latest version is nil when the registry answer can't be parsed" do
+    @npm.stub(:get_json, "<html>Bad gateway</html>") do
+      assert_nil @npm.latest_version("md5")
+    end
+  end
+
+  test "latest version is nil when the registry can't be reached" do
+    unreachable = ->(_uri) { raise Importmap::Npm::HTTPError, "Unexpected error response 503: Service Unavailable" }
+
+    @npm.stub(:get_json, unreachable) do
+      assert_nil @npm.latest_version("md5")
+    end
+  end
 end

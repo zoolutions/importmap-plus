@@ -1,6 +1,7 @@
 require "thor"
 require "importmap/packager"
 require "importmap/npm"
+require "importmap/provider_chain"
 
 class Importmap::Commands < Thor
   include Thor::Actions
@@ -19,12 +20,12 @@ class Importmap::Commands < Thor
   option :force, type: :boolean, default: false, desc: "Re-pin locked packages, keeping each lock at the new version"
   option :vendor, type: :boolean, default: false, desc: "Vendor the download even when it looks like it needs sibling files; converts a pin kept remote back"
   def pin(*packages)
-    packages = without_locked(packages, lock: options[:lock], force: options[:force])
+    packages = resolve_latest_versions(without_locked(packages, lock: options[:lock], force: options[:force]))
     # jspm resolves a package together with its dependencies; --lock and
     # --no-lock are about the packages that were asked for, not those.
     requested = packages.map { |spec| packager.package_key_for(spec) }
 
-    for_each_import_grouped_by_provider(packages, env: options[:env], from: options[:from]) do |package, url|
+    for_each_import_grouped_by_provider(packages, env: options[:env], from: options[:from], fallback: true) do |package, url|
       next if keep_locked_dependency(package, requested)
 
       pin_package(package, url, preload: options[:preload], remote: options[:remote], env: options[:env],
@@ -154,7 +155,7 @@ class Importmap::Commands < Thor
     else
       keys = packages.any? ? requested_keys_for(packages, names) : outdated_keys_for(names)
 
-      for_each_import_grouped_by_provider(keys, env: "production") do |package, url|
+      for_each_import_grouped_by_provider(keys, env: "production", fallback: true) do |package, url|
         next if keep_locked_dependency(package, keys)
 
         pin_package(package, url)
@@ -208,6 +209,8 @@ class Importmap::Commands < Thor
         dependencies = packager.download(package, url, minify: minify, force: vendor)
       rescue Importmap::Packager::Unvendorable => error
         return pin_remote_package(package, url, preload, integrity: integrity, locked: locked, kept_remote: error.reasons)
+      rescue Importmap::Packager::NotAnEsModule
+        return pin_remote_package(package, url, preload, integrity: integrity, locked: locked, kept_remote: [ "not an ES module" ])
       end
 
       puts %(Pinning "#{package}" to #{packager.vendor_path}/#{package}.js via download from #{url}#{" (minified)" if minify})
@@ -412,9 +415,54 @@ class Importmap::Commands < Thor
     # A vendored package keeps coming from the CDN its pin comment names, the
     # way a remote pin keeps its provider, unless --from says otherwise.
     # Packages that aren't pinned yet resolve from jspm.
-    def for_each_import_grouped_by_provider(packages, env:, from: nil, &block)
-      packages.group_by { |spec| from || vendored_provider_for(spec) || "jspm" }.each do |provider, group|
-        for_each_import(group, env: env, from: provider, &block)
+    #
+    # +fallback+ lets the group that named no CDN try the rest of the chain
+    # when jspm can't build it, which is what pin and update want. pristine
+    # doesn't: it restores what each pin already says, and a pin that moved to
+    # another CDN would be a rewrite, not a restore.
+    def for_each_import_grouped_by_provider(packages, env:, from: nil, fallback: false, &block)
+      packages.group_by { |spec| from || vendored_provider_for(spec) || Importmap::ProviderChain::DEFAULT }.each do |provider, group|
+        if fallback && from.nil? && Importmap::ProviderChain.default?(provider)
+          for_each_import_with_fallback(group, env: env, &block)
+        else
+          for_each_import(group, env: env, from: provider, &block)
+        end
+      end
+    end
+
+    # A package nobody has pinned yet names no CDN, so it is asked of each in
+    # turn: jspm's generator giving up on a package says something about the
+    # generator, not about the package, and the next CDN often has it. A
+    # provider a pin already records, or one --from names, is a choice somebody
+    # made, and a choice is asked once and reported on.
+    def for_each_import_with_fallback(packages, env:, &block)
+      response = Importmap::ProviderChain.new.resolve(packager, packages, env: env) { |_provider, answer| answer }
+
+      if response
+        response[:imports].each(&block)
+      else
+        # Every CDN has already said why it couldn't, so the summary repeats none of it.
+        handle_package_not_found(packages, Importmap::ProviderChain.to_sentence, reason: nil)
+      end
+    end
+
+    # A spec with no version means the latest, and the registry is what knows
+    # which that is: a CDN answers with the latest it has got round to indexing,
+    # which lags npm by anything from hours to a major release. Resolving it up
+    # front also pins the version for the whole chain, so falling back to
+    # another CDN can't quietly land the app on a different one. A registry
+    # that can't be reached leaves the spec alone, and the CDN chooses as before.
+    def resolve_latest_versions(specs)
+      specs.map do |spec|
+        name, version, _subpath = spec.to_s.match(Importmap::Packager::PACKAGE_SPEC_REGEXP)&.captures
+        next spec if version || name.nil?
+
+        if (latest = npm.latest_version(name))
+          puts %(Resolved "#{name}" to #{latest} from the npm registry)
+          packager.package_spec_for(spec, "@#{latest}")
+        else
+          spec
+        end
       end
     end
 
@@ -499,8 +547,13 @@ class Importmap::Commands < Thor
       packager.reload!
     end
 
-    def handle_package_not_found(packages, from)
-      puts "Couldn't find any packages in #{packages.inspect} on #{from}"
+    # jspm answers 401 with its generator's reason in the body — the subpath a
+    # dependency doesn't export, the module it couldn't find — and that is the
+    # one thing that tells an app developer whether to try another CDN.
+    def handle_package_not_found(packages, from, reason: packager.last_import_error)
+      detail = Importmap::ProviderChain.tidy_reason(reason)
+
+      puts "Couldn't find any packages in #{packages.inspect} on #{from}#{" (#{detail})" if detail}"
     end
 
     def remove_line_from_file(path, pattern)

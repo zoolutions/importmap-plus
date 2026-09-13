@@ -49,7 +49,10 @@ class Views::Docs::Pages::Upgrading < DocsUI::Page
           [ "update takes no arguments.", "update takes package names, --all and --force." ],
           [ "outdated exits 1 for any outdated package.", "outdated exits 1 only for an outdated package that isn't locked." ],
           [ "A failed CDN request is a raw backtrace.", "Requests are retried three times with a growing pause; the failure then names the URL." ],
-          [ "A download that imports sibling files, spawns a worker or fetches a .wasm is vendored anyway and 404s in the browser.", "It is pinned to its CDN URL instead, the pin says why, and pin --vendor overrides. See below." ]
+          [ "A download that imports sibling files, spawns a worker or fetches a .wasm is vendored anyway and 404s in the browser.", "It is pinned to its CDN URL instead, the pin says why, and pin --vendor overrides. See below." ],
+          [ "pin asks jspm and nothing else; a package its generator can't build reports \"Couldn't find any packages\".", "jspm, then esm.run, then jsDelivr, until one answers. The CDN that did is recorded on the pin. --from turns the fallback off." ],
+          [ "pin foo takes whatever version jspm has indexed.", "The npm registry decides the version, then every CDN is asked for that one." ],
+          [ "A CDN that hands back a UMD bundle is vendored, and the import fails to link in the browser.", "It is pinned to its CDN URL with (remote: not an ES module). pin --vendor overrides." ]
         ]
       )
       md <<~'MD'

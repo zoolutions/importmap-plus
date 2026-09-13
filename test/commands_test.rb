@@ -928,6 +928,106 @@ class CommandsTest < ActiveSupport::TestCase
     assert_match %r{^pin "photoswipe/lightbox", to: "photoswipe--lightbox\.js" # @5\.4\.\d+ \(jsdelivr\)$}, content
   end
 
+  # jspm's generator can't build mermaid — it reads cytoscape's package.json and
+  # finds no export for the subpath mermaid imports. jsDelivr publishes a bundle
+  # of the same version, so the package is fine and the generator isn't.
+  test "pin falls back to the next CDN when jspm can't resolve a package" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "mermaid@10.6.0")
+
+    assert_match %r{jspm couldn't resolve "mermaid@10\.6\.0" \(.*cytoscape.*\); trying esm\.run}, out
+    assert_includes out, 'Pinning "mermaid" to vendor/javascript/mermaid.js via download from https://cdn.jsdelivr.net/npm/mermaid@10.6.0/+esm'
+
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "mermaid" # @10.6.0 (esm.run)\n)
+    assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/mermaid.js")
+  end
+
+  # --from is a choice somebody made, so it is asked once and reported on.
+  test "pin asks only the CDN it was told to and says why that one couldn't" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "mermaid@10.6.0", "--from", "jspm")
+
+    assert_not_includes out, "trying esm.run"
+    assert_includes out, %(Couldn't find any packages in ["mermaid@10.6.0"] on jspm)
+    assert_match(/cytoscape/, out)
+
+    assert_not_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), "mermaid"
+  end
+
+  test "pin resolves a package with no version from the npm registry" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "md5")
+
+    version = out[/Resolved "md5" to (\d+\.\d+\.\d+) from the npm registry/, 1]
+    assert version, "expected the registry version to be reported, got:\n#{out}"
+
+    assert_includes out, "https://ga.jspm.io/npm:md5@#{version}/md5.js"
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "md5" # @#{version}\n)
+  end
+
+  test "pin leaves a version it was given alone" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0")
+
+    assert_not_includes out, "from the npm registry"
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "md5" # @2.2.0\n)
+  end
+
+  # jsDelivr serves the package's own dist file, which for google-libphonenumber
+  # is the UMD bundle it has always shipped: vendoring it gives an import map
+  # entry that exports nothing.
+  test "pin keeps a package remote when the CDN hands back something that isn't an ES module" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "google-libphonenumber@3.2.42", "--from", "jsdelivr")
+
+    assert_includes out, 'Pinning "google-libphonenumber" to https://cdn.jsdelivr.net/npm/google-libphonenumber@3.2.42/dist/libphonenumber.js (kept remote: not an ES module)'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, %(# @3.2.42 (remote: not an ES module))
+    assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/google-libphonenumber.js")
+  end
+
+  test "pin vendors something that isn't an ES module when told to" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "google-libphonenumber@3.2.42", "--from", "jsdelivr", "--vendor")
+
+    assert_includes out, 'Pinning "google-libphonenumber" to vendor/javascript/google-libphonenumber.js via download'
+    assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/google-libphonenumber.js")
+  end
+
+  # A pin with no CDN in its comment is a jspm pin, and jspm can't build the
+  # version this one is moving to either. The pin that comes out names esm.run,
+  # so the next command goes straight there.
+  test "update falls back for a pin whose CDN can't build the new version" do
+    importmap_config(%(pin "mermaid" # @10.6.0))
+
+    out, _err = run_importmap_command("update")
+
+    # update names the pin's key, not a spec: the version it moves to is the
+    # CDN's to resolve, the same way a bare update has always worked.
+    assert_match(/jspm couldn't resolve "mermaid" \(.+\); trying esm\.run/, out)
+    assert_match %r{^pin "mermaid" # @1[12]\.\d+\.\d+ \(esm\.run\)$}, File.read("#{@tmpdir}/dummy/config/importmap.rb")
+  end
+
+  # pristine restores what a pin already says. Moving a package to another CDN
+  # would be a rewrite, so the CDN the pin names is asked, and only that one.
+  test "pristine asks the CDN the pin names and doesn't fall back" do
+    importmap_config(%(pin "mermaid" # @10.6.0))
+
+    out, _err = run_importmap_command("pristine")
+
+    assert_not_includes out, "trying esm.run"
+    assert_includes out, %(Couldn't find any packages in ["mermaid@10.6.0"] on jspm)
+    assert_match(/cytoscape/, out)
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "mermaid" # @10.6.0\n)
+  end
+
   private
     # A registry that can't answer for a package is the case under test, and
     # the live registry won't produce it on demand. Stub the one method that
