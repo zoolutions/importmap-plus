@@ -1,0 +1,9 @@
+lode/review/docs-and-changelog.md
+  ai_agent 38-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c462f7fc192cd53a16949c69c5d6f73d2ca1ebc3",
+  "prompts": {}
+}
