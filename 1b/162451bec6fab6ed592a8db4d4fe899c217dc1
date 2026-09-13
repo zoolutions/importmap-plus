@@ -1,0 +1,24 @@
+lode/testing-and-ci/summary.md
+  s_3598d27e5630bd::t_45dacb46729be0 70
+  ai_agent 10
+lode/cli/summary.md
+  ai_agent 19,32,41,209
+lode/inspection-and-tools/summary.md
+  ai_agent 90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1b162451bec6fab6ed592a8db4d4fe899c217dc1",
+  "prompts": {},
+  "sessions": {
+    "s_3598d27e5630bd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "64306a32-a4ec-4445-b858-a6c3a74557c8",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
