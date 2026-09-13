@@ -7,15 +7,15 @@
 - provider chain — the order `pin` tries providers when one cannot resolve a package (`provider_chain.rb`).
 - vendored pin — a pin whose file was downloaded to `vendor/javascript/<name>.js`; `to:` is absent or local.
 - remote pin — a pin with `to: "https://…"`; re-resolved from the same CDN on `update`, never downloaded by `pristine`.
-- custom URL — a remote pin whose host is not a known provider; the CLI leaves it alone unless an explicit `--from` names a CDN to move it to.
+- custom URL — a remote pin whose host is not a known provider; the CLI leaves it alone unless an explicit `--from` names a CDN to move it to, or `--vendor` is passed, which falls through to the vendored branch and downloads from the resolved CDN instead of the custom URL (issue #29).
 - locked — a pin held at its version; `update` skips it and `pin` keeps it when a CDN resolves it as a dependency.
 - subpath pin — `pkg/sub`; vendored as `pkg--sub.js`; answers for its own provider first, then its package's.
 - scoped package — `@scope/name`; vendored as `@scope--name.js`.
-- single-file check — `ModuleInspector`'s decision whether a downloaded file can stand alone; a file that cannot is kept remote with a reason, unless `--vendor` names the package and overrides the check.
+- single-file check — `ModuleInspector`'s decision whether a downloaded file can stand alone; a file that cannot is kept remote with a reason. Three things skip the check: `--vendor` for the packages it names, `pristine` (always `force: true`), and a pin already marked `(vendored)`.
 - remote reason — one of `relative imports`, `dynamic imports`, `workers`, `import.meta.url`, `wasm`, `not an ES module`.
 - esm.run bundle — a jsDelivr `+esm` build whose `/npm/dep@ver/+esm` imports the packager rewrites to bare specifiers.
 - minify — transform-only compression (`--no-bundle`, `--format=esm`) by bun, esbuild or terser already on the machine.
-- preload / integrity — upstream pin options every rewrite path carries through: `preload:` in full, `integrity:` only as the boolean `INTEGRITY_OPTION_REGEXP` captures. A literal SRI hash is not round-tripped, so a rewrite that changes the URL drops it rather than leaving a hash that no longer matches the file.
+- preload / integrity — upstream pin options every rewrite path carries through: `preload:` as `true`/`false`, a quoted string or a double-quoted array (a single-quoted array raises `JSON::ParserError` in `preload_from_string` and `[]` is dropped — issue #28), `integrity:` only as the boolean `INTEGRITY_OPTION_REGEXP` captures. A literal SRI hash is not round-tripped, so a rewrite that changes the URL drops it rather than leaving a hash that no longer matches the file.
 - request path — engine → `Map` → helpers; runs on every page; no network.
 - command path — CLI → `Packager` / `Npm` → CDN or registry; the only place network happens.
 - upstream-owned file — a file rails/importmap-rails also has; edited additively, in upstream's style.

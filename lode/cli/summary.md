@@ -18,7 +18,7 @@ states and the `require` graph confirms (`commands.rb` requires
 
 | Command | Options (default) | Prints (verbatim; `pluralize`d nouns shown as singular/plural) | Writes | Exit on failure |
 |---|---|---|---|---|
-| `pin [*PACKAGES]` | `--env/-e` ("production"), `--from/-f` (nil), `--preload` (repeatable), `--remote` (false), `--minify` (nil), `--lock` (nil), `--force` (false), `--vendor` (false) | `Resolved "#{name}" to #{latest} from the npm registry`; `Pinning "#{package}" to #{vendor_path}/#{package}.js via download from #{url}#{" (minified)" if minify}`; `Pinning "#{package}" to #{url}#{" (kept remote: ...)" if kept_remote}`; `Locked "#{package}" at #{version}`; `Skipping "..." (locked at ...)`; `Couldn't find any packages in ... on ...` | pin line(s) in `config/importmap.rb`; `vendor/javascript/<file>.js` unless `--remote`/kept remote | no explicit `exit`; `Packager::Error`/`ServiceError` propagates as a `Thor::Error` |
+| `pin [*PACKAGES]` | `--env/-e` ("production"), `--from/-f` (nil), `--preload` (repeatable), `--remote` (false), `--minify` (nil), `--lock` (nil), `--force` (false), `--vendor` (false) | `Resolved "#{name}" to #{latest} from the npm registry`; `Pinning "#{package}" to #{vendor_path}/#{package}.js via download from #{url}#{" (minified)" if minify}`; `Pinning "#{package}" to #{url}#{" (kept remote: ...)" if kept_remote}`; `Locked "#{package}" at #{version}`; `Skipping "..." (locked at ...)`; `Couldn't find any packages in ... on ...` | pin line(s) in `config/importmap.rb`; `vendor/javascript/<file>.js` unless `--remote`/kept remote | no explicit `exit`; an escaping `Packager::Error`/`ServiceError` is a `StandardError`, so Ruby prints a backtrace and exits 1 |
 | `lock [*PACKAGES]` | none | `Use "bin/importmap pin #{spec} --lock" ...`; `Couldn't find a pin for "..."`; `"..." is already locked at ...`; `Can't lock "...": its pin has no version`; `Locked "..." at ...` | adds `(locked)` to the pin's provenance comment | `exit 1 unless packages.map { lock_package }.all?` |
 | `unlock [*PACKAGES]` | none | `Couldn't find a pin for "..."`; `"..." isn't locked`; `Unlocked "..."` | drops `locked` from the provenance comment | `exit 1 unless packages.map { unlock_package }.all?` |
 | `unpin [*PACKAGES]` | `--env/-e` ("production"), `--from/-f` ("jspm") | `Unpinning and removing "#{package}"` | removes pin line + vendored file (`Packager#remove`) | none explicit |
@@ -30,12 +30,16 @@ states and the `require` graph confirms (`commands.rb` requires
 | `packages` | none | one line per `"#{name} #{version}"` | nothing | none |
 
 `Commands.exit_on_failure? = false` (`commands.rb:9-11`) governs `Thor::Error`
-only: Thor prints its message and exits non-zero without crash-style output.
-`Packager::Error` and its `ServiceError` subclass are plain `StandardError`s
-(`packager.rb:66-68`), so one that escapes a command propagates past Thor and
-Ruby prints a backtrace.
-`Commands` rescues `Packager::Error` itself only in `resolve_url_from_provider`
-(§3), downgrading it to a printed sentence and `nil`.
+only, and it means Thor prints the message and does *not* exit: `Thor::Base.start`
+calls `exit(false)` only when `exit_on_failure?` is true, so a command that ends
+by raising `Thor::Error` finishes with status 0 unless it called `exit` itself
+(`outdated` and `update` do). `Packager::Error` and its `ServiceError` subclass
+are plain `StandardError`s (`packager.rb:66-68`), so one that escapes a command
+propagates past Thor, prints a backtrace and exits 1. Three places catch them
+first: `pin_vendored_package` rescues the `Unvendorable` and `NotAnEsModule`
+subclasses into a remote pin (`commands.rb:210-212`), `ProviderChain#resolve`
+rescues per provider and re-raises only the last (`provider_chain.rb:64`), and
+`resolve_url_from_provider` (§3) downgrades one to a printed sentence and `nil`.
 
 ## 3. `pin` in detail
 
@@ -83,8 +87,10 @@ imports, workers, `import.meta.url`, `.wasm` → not vendorable; also checks ES
 module). Failure raises `Unvendorable` → `pin_remote_package(kept_remote:
 error.reasons)`, or `NotAnEsModule` → `kept_remote: ["not an ES module"]`.
 `--vendor` overrides the check, but only for the packages named on the command
-line, never for the dependencies a CDN resolves alongside them; `--remote` wins
-when both flags are passed (`review/cli.md`).
+line, not for the dependencies a CDN resolves alongside them — except a
+dependency whose own pin already says `(vendored)`, which keeps `vendor` on
+through `vendor ||= packager.vendored?(package)`; `--remote` wins when both flags
+are passed (`review/cli.md`).
 
 **Existing provenance honoured** — `pin_package` reads
 `extract_existing_pin_options(package)[package]` first, carrying forward

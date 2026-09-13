@@ -2,7 +2,7 @@
 description: "Executes the full autonomous engineering workflow with verification. Use when implementing a complete feature, tackling a GitHub issue, or running an end-to-end development cycle on importmap-plus."
 model: opus
 argument-hint: "GitHub issue number/URL, a docs/plans/*.md path, or a feature description"
-allowed-tools: Bash(gh issue view:*), Bash(gh search:*), Bash(gh issue list:*), Bash(gh pr create:*), Bash(gh pr view:*), Bash(bundle exec:*), Bash(bundle install:*), Bash(BUNDLE_GEMFILE=*), Bash(git:*), Bash(cd:*), Read, Write, Edit, Glob, Grep, Agent
+allowed-tools: Bash(gh issue view:*), Bash(gh search:*), Bash(gh issue list:*), Bash(gh pr create:*), Bash(gh pr view:*), Bash(bundle exec:*), Bash(bundle install:*), Bash(BUNDLE_GEMFILE=*), Bash(git:*), Bash(cd:*), Read, Write, Edit, Glob, Grep, Agent, Skill
 ---
 
 # LFG — Full Autonomous Workflow
