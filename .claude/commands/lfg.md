@@ -198,11 +198,13 @@ Confirm the `--minify` tests **ran** (not skipped) — install bun if they didn'
 
 ## Phase 6.5: Gate
 
-Commit first (Phase 7's commit step, without the push), then run `/lode:gate`. It reviews the branch with fresh-context agents against `CLAUDE.md`, the rules and `lode/review/`, proves every new test fails without the change, and loops until nothing at P1 or P2 remains. The push hook refuses `git push` and `gh pr create` until it has passed on the exact tree. Paste its `## Gate` section into the PR body, and let it run `/lode:learn gate` so the confirmed findings land in `lode/review/` in this PR.
+Run Phase 7's **Commit** step now — commit only, no push — then run `/lode:gate`. It reviews the branch with fresh-context agents against `CLAUDE.md`, the rules and `lode/review/`, proves every new test fails without the change, and loops until nothing at P1 or P2 remains. Each round's fixes are their own commit, so by the time the gate is clean the tree is committed and Phase 7 starts at **Push & PR**. The push hook refuses `git push` and `gh pr create` until the gate has passed on the exact tree at `HEAD`, so any later edit means another round. Let the gate run `/lode:learn gate` so the confirmed findings land in `lode/review/` in this PR, and keep its `## Gate` section for the PR body.
 
 ## Phase 7: Commit & PR
 
 ### Commit
+
+Already done in Phase 6.5 if you came through it; run this only for work the gate has not yet seen.
 
 ```bash
 git add <specific files>       # never -A: docs/ may hold untracked build output
@@ -239,6 +241,9 @@ Closes #<issue>
 
 ## Deviations & judgment calls
 <contents of implementation-notes.md, or "None — the plan held.">
+
+## Gate
+<the ## Gate section /lode:gate printed in Phase 6.5>
 EOF
 gh pr create --title "feat(cli): brief description" --body-file /tmp/pr-body.md
 rm /tmp/pr-body.md implementation-notes.md
@@ -268,7 +273,8 @@ The tests prove the code; this keeps the user's mental model right. End your fin
 - [ ] Docs page and CHANGELOG updated for user-visible changes
 - [ ] Upstream-owned file diffs are additive and in upstream's style
 - [ ] `config/importmap.rb` output still parses under importmap-rails
-- [ ] PR created; body ends with Deviations & judgment calls
+- [ ] `/lode:gate` clean on the exact tree pushed, and `/lode:learn gate` run
+- [ ] PR created; body ends with Deviations & judgment calls, then the Gate section
 - [ ] Comprehension close-out delivered
 
 Now execute this workflow for: $ARGUMENTS

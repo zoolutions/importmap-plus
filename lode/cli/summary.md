@@ -29,8 +29,11 @@ states and the `require` graph confirms (`commands.rb` requires
 | `update [*PACKAGES]` | `--all` (false), `--force` (false) | `Pass package names or --all, not both`; `Couldn't check "#{p.name}": #{p.error}`; `No outdated packages found`; `Nothing to update (every outdated package is locked; pass --force)`; plus `pin_package`'s sentences | rewrites pins for eligible keys | `exit 1` if `--all`+names both given, a named package unknown, or any package unchecked |
 | `packages` | none | one line per `"#{name} #{version}"` | nothing | none |
 
-`Commands.exit_on_failure? = false` (`commands.rb:9-11`) means a `Thor::Error`/
-`Packager::Error` prints and exits non-zero without Thor's crash-style output.
+`Commands.exit_on_failure? = false` (`commands.rb:9-11`) governs `Thor::Error`
+only: Thor prints its message and exits non-zero without crash-style output.
+`Packager::Error` and its `ServiceError` subclass are plain `StandardError`s
+(`packager.rb:66-68`), so one that escapes a command propagates past Thor and
+Ruby prints a backtrace.
 `Commands` rescues `Packager::Error` itself only in `resolve_url_from_provider`
 (§3), downgrading it to a printed sentence and `nil`.
 
@@ -79,6 +82,9 @@ later rewrites). `pin_vendored_package` → `Packager#download`, which unless
 imports, workers, `import.meta.url`, `.wasm` → not vendorable; also checks ES
 module). Failure raises `Unvendorable` → `pin_remote_package(kept_remote:
 error.reasons)`, or `NotAnEsModule` → `kept_remote: ["not an ES module"]`.
+`--vendor` overrides the check, but only for the packages named on the command
+line, never for the dependencies a CDN resolves alongside them; `--remote` wins
+when both flags are passed (`review/cli.md`).
 
 **Existing provenance honoured** — `pin_package` reads
 `extract_existing_pin_options(package)[package]` first, carrying forward

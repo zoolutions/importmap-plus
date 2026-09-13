@@ -3,19 +3,19 @@
 - pin — one `pin "name", to: …` line in `config/importmap.rb`; the unit the CLI reads and rewrites.
 - pin line — the literal source line, matched by regex (`Importmap::Map.pin_line_regexp_for`); there is no AST.
 - provenance comment — the trailing `# @<version> (<provider>[, minified][, vendored][, remote[: <reason>]][, locked])`; the fork's metadata, ignored by upstream.
-- provider — the CDN a pin came from: `jspm.io` (default, omitted from the comment), `esm.run` (jsDelivr's bundled builds), `jsdelivr`, `unpkg`, `skypack`.
+- provider — the CDN a pin came from: `jspm.io` (default, omitted from the comment), `esm.run` (jsDelivr's bundled builds), and the hosts in `PROVIDER_HOSTS` — `jsdelivr`, `unpkg`, `skypack`, `esm.sh`.
 - provider chain — the order `pin` tries providers when one cannot resolve a package (`provider_chain.rb`).
 - vendored pin — a pin whose file was downloaded to `vendor/javascript/<name>.js`; `to:` is absent or local.
 - remote pin — a pin with `to: "https://…"`; re-resolved from the same CDN on `update`, never downloaded by `pristine`.
-- custom URL — a remote pin whose host is not a known provider; the CLI leaves it alone.
+- custom URL — a remote pin whose host is not a known provider; the CLI leaves it alone unless an explicit `--from` names a CDN to move it to.
 - locked — a pin held at its version; `update` skips it and `pin` keeps it when a CDN resolves it as a dependency.
 - subpath pin — `pkg/sub`; vendored as `pkg--sub.js`; answers for its own provider first, then its package's.
 - scoped package — `@scope/name`; vendored as `@scope--name.js`.
-- single-file check — `ModuleInspector`'s decision whether a downloaded file can stand alone; a file that cannot is kept remote with a reason.
+- single-file check — `ModuleInspector`'s decision whether a downloaded file can stand alone; a file that cannot is kept remote with a reason, unless `--vendor` names the package and overrides the check.
 - remote reason — one of `relative imports`, `dynamic imports`, `workers`, `import.meta.url`, `wasm`, `not an ES module`.
 - esm.run bundle — a jsDelivr `+esm` build whose `/npm/dep@ver/+esm` imports the packager rewrites to bare specifiers.
 - minify — transform-only compression (`--no-bundle`, `--format=esm`) by bun, esbuild or terser already on the machine.
-- preload / integrity — upstream pin options (`preload:`, `integrity:`) that every rewrite path must carry through unchanged.
+- preload / integrity — upstream pin options every rewrite path carries through: `preload:` in full, `integrity:` only as the boolean `INTEGRITY_OPTION_REGEXP` captures. A literal SRI hash is not round-tripped, so a rewrite that changes the URL drops it rather than leaving a hash that no longer matches the file.
 - request path — engine → `Map` → helpers; runs on every page; no network.
 - command path — CLI → `Packager` / `Npm` → CDN or registry; the only place network happens.
 - upstream-owned file — a file rails/importmap-rails also has; edited additively, in upstream's style.

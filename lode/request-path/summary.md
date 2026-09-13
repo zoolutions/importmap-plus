@@ -41,7 +41,7 @@ The request path renders an app's import map into HTML: an `Importmap::Map` buil
 - `javascript_import_module_tag(*module_names)` (`:19-22`) — one `<script type="module">` containing one `import "<name>"` per argument.
 - `javascript_importmap_module_preload_tags(importmap = ..., entry_point: "application")` (`:27-31`) — resolves `preloaded_module_packages` for that importmap/entry_point (cached under the entry point name) and emits one `<link rel="modulepreload">` per resolved path, `integrity:` set from the package.
 - `javascript_module_preload_tag(*paths)` (`:34-36`) — same tag shape for arbitrary already-resolved paths, no integrity.
-- All four preload/module tags funnel through the private `_generate_preload_tags` (`:39-46`), which also attaches the CSP nonce.
+- The two preload helpers (`:30`, `:35`) funnel through the private `_generate_preload_tags` (`:39-46`), which also attaches the CSP nonce; `javascript_inline_importmap_tag` and `javascript_import_module_tag` build their own `<script>` tags and take the nonce directly.
 
 `Importmap::Freshness` (`app/controllers/importmap/freshness.rb:1-5`) exposes `stale_when_importmap_changes`, a class-level `etag { ... }` declaration (extended onto `ActionController::Base` by `engine.rb:53`) that adds `Rails.application.importmap.digest(resolver: helpers)` to the response's ETag computation, but only `if request.format&.html?`. This is how an import-map change (a new pin, a changed asset digest) busts an HTML page's browser/CDN cache without touching non-HTML responses.
 
@@ -66,7 +66,7 @@ Both cases exist because `resolver.asset_integrity` (called from `map.rb:261`) i
 - `digest` is a 40-character hex SHA1 of the resolved JSON — `test/importmap_test.rb:232-234`.
 - Every cache is keyed by `cache_key` and invalidated in full by any `pin`/`pin_all_from`/`draw`/`enable_integrity!` call — `test/importmap_test.rb:236-256`, `:357-377`, via `map.rb:200-210`.
 - An invalid `config/importmap.rb` raises `Importmap::Map::InvalidFile` rather than a bare `StandardError` — `test/importmap_test.rb:195-201`, `map.rb:24-27`.
-- A file-watcher change to a watched `config/importmap.rb` path is picked up by `Reloader#execute_if_updated`/`reload!`, replacing the app's pinned packages in place — `test/reloader_test.rb:9-23`.
+- A file-watcher change to a watched `config/importmap.rb` path is picked up by `Reloader#execute_if_updated`/`reload!`, which re-`draw`s the file into the *existing* `Map` — `test/reloader_test.rb:9-23`. `draw` only `instance_eval`s, and `@packages`/`@directories` are emptied solely in `initialize` (`map.rb:16`), so a redraw adds and overwrites pins but never removes one: a pin deleted from the file stays in the map until the process restarts.
 - Inline importmap, preload links and the entrypoint's module import all carry the request's CSP nonce, and are nonce-free when no CSP is configured — `test/importmap_tags_helper_test.rb:52-68`.
 - `javascript_importmap_tags` accepts an alternate `importmap:` instance instead of `Rails.application.importmap`, and its output correctly reflects that instance's own pins/preloads — `test/importmap_tags_helper_test.rb:70-82`.
 

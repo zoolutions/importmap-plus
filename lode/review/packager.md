@@ -13,8 +13,8 @@ How `Importmap::Packager` resolves, downloads and rewrites pins — the invarian
 - **Proven by:** `test/packager_test.rb:"download warns when a bundle imports one dependency at two versions"`
 - **Origin:** cubic learning 08aeec11
 
-### `ESM_RUN_IMPORT_REGEXP` rewrites only module specifiers, never a quoted string that looks like one
-- **Holds because:** the pattern is anchored on `from` / `import` (including the `import(` dynamic form) before the quote, so a data string such as `const path = "/npm/foo@1.0.0/+esm"` inside the bundle keeps its literal text. Rewriting it would turn a runtime string the bundle uses as data into a bare specifier the import map then fails to resolve.
+### `ESM_RUN_IMPORT_REGEXP` rewrites a `/npm/…/+esm` URL only where an `import`/`from` keyword precedes it
+- **Holds because:** the pattern requires `from` or `import` (including the `import(` dynamic form) before the quote, so a data string such as `const path = "/npm/foo@1.0.0/+esm"` inside the bundle keeps its literal text. Rewriting it would turn a runtime string the bundle uses as data into a bare specifier the import map then fails to resolve. The keyword is the whole of the protection: `rewrite_esm_run_imports` is a `source.gsub` with no notion of being inside a literal, so a *string whose contents* spell `from "/npm/foo@1/+esm"` is still rewritten. No published esm.run bundle has been seen to contain one, and the gem takes no JavaScript parser as a dependency, so the keyword anchor is the accepted limit rather than a guarantee.
 - **Where:** `lib/importmap/packager.rb#ESM_RUN_IMPORT_REGEXP`, applied in `#rewrite_esm_run_imports`
 - **Safe direction:** leaving a specifier unrewritten is the harmless miss — the absolute `/npm/…/+esm` URL still loads from jsDelivr; rewriting a data string corrupts the file with no error.
 - **Proven by:** `test/packager_test.rb:"download only rewrites an esm.run bundle's module specifiers"`

@@ -41,3 +41,9 @@ What the docs site and CHANGELOG must keep saying, and how the docs app itself i
 - **Where:** `lib/importmap/packager.rb#provenance_comment`; the six files above
 - **Proven by:** `test/packager_test.rb:"locked_pin_line puts the lock last"` for the order; the prose has no test — grep `vendored\]\[, remote` across `CLAUDE.md lode docs` before changing it
 - **Origin:** gate on chore/lode, 2026-09-13
+
+### A statement about behaviour names the flag, caller or value shape that qualifies it
+- **Holds because:** the lode and the docs are read by agents that act on them without re-reading the code. A sentence that is true of the path its author read, but silent about the exception, is acted on as if the exception did not exist. Every universal in this repo has one: `--from` moves a pin the CLI otherwise "leaves alone"; `--vendor` overrides the single-file check for named packages only; `INTEGRITY_OPTION_REGEXP` captures `true`/`false`, so a literal SRI hash is dropped rather than carried through; `Map#draw` adds and overwrites but never removes, so a deleted pin outlives a reload; two of the four tag helpers build their own `<script>` rather than going through `_generate_preload_tags`; `Packager::Error` is a `StandardError`, so `exit_on_failure? = false` does not make it print cleanly. A hand-written list is itself a claim of completeness — the provider list omitted `esm.sh`, which `PROVIDER_HOSTS` has always had.
+- **Where:** every `lode/**/*.md` and `docs/app/views/docs/pages/*.rb`
+- **Proven by:** no test — enforced by `/lode:gate`'s claims agent, which attacks universals and counts hand-written lists against the constant
+- **Origin:** cubic on PR #26 (twelve findings, all this shape, after three clean gate rounds)
