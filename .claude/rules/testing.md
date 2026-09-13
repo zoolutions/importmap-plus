@@ -90,7 +90,7 @@ BUNDLE_GEMFILE=gemfiles/rails_7.1_sprockets.gemfile ASSETS_PIPELINE=sprockets bu
 
 ## A CDN failure is not a flake until proven
 
-The live tests fail when jspm rate-limits a burst or jsDelivr resets a connection. `HttpRetries` (3 attempts, growing pause) is the harness-level answer and it is already in place. The correct reaction to a red live test is `/debug-flaky`, never a `retry`, `sleep` or `skip` around the assertion. Two full matrices hitting the same endpoints at once is what the `on: push: branches: [main]` guard in `ci.yml` prevents — don't widen it.
+The live tests fail when jspm rate-limits a burst or jsDelivr resets a connection. `HttpRetries` (3 attempts, growing pause) is the harness-level answer and it is already in place. The correct reaction to a red live test is `/lode:debug-flaky`, never a `retry`, `sleep` or `skip` around the assertion. Two full matrices hitting the same endpoints at once is what the `on: push: branches: [main]` guard in `ci.yml` prevents — don't widen it.
 
 ## Coverage
 

@@ -4,6 +4,7 @@ The index of this repository's durable memory. Read this first; it beats a direc
 
 - `summary.md` — what importmap-plus is, the three invariants, the fork stance
 - `terminology.md` — the words this repo uses (pin line, provenance comment, provider chain, remote reason, appraisal cell…)
+- `workflow.md` — the profile the shared `/lode:lfg`, `/lode:review-pr`, `/lode:finish-prs`, `/lode:debug-flaky`, `/lode:tdd` and `/lode:plan` commands read: the commands to run, branch and PR conventions, layer ownership, the input shapes every change is checked against, reviewer suggestions to push back on, docs and CHANGELOG duties, the CI matrix and how to read it, the real flake sources, per-file conflict rules, and what verification means here
 - `practices.md` — practices learned from review that `../.claude/rules/` does not state: grammar tables and safe failure direction for parsers, the pin-answers-for-itself rule, atomic writes, one-fact-every-page docs
 - `plans/README.md` — plans live in `../docs/plans/` and GitHub issues; handovers in `tmp/` (not committed)
 

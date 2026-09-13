@@ -88,6 +88,6 @@ Surfaces
 
 ## Handoff
 
-Summarise: the contract (pin line + CLI output), files per layer, integration points touched, and the fork-boundary decisions made. Then hand to `/lfg` or `/plan`.
+Summarise: the contract (pin line + CLI output), files per layer, integration points touched, and the fork-boundary decisions made. Then hand to `/lode:lfg` or `/lode:plan`.
 
 Now coordinate: $ARGUMENTS
