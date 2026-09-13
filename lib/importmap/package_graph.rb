@@ -33,16 +33,29 @@ class Importmap::PackageGraph
   ].map(&:freeze).freeze # :nodoc:
 
   # Importmap::ModuleInspector::RELATIVE_IMPORT_REGEXP with the specifier
-  # captured, so the same forms it counts are the ones rewritten here.
+  # captured, so the same forms it counts are the ones rewritten here. Like
+  # that one and Packager::ESM_RUN_IMPORT_REGEXP it doesn't parse JavaScript,
+  # so a data string that spells out an import statement is rewritten inside
+  # the string too, and a form it can't read — a magic comment between the
+  # keyword and the specifier, an unterminated literal — isn't rewritten at
+  # all. #verify_rewritten is what makes the second kind safe: a file the crawl
+  # reached and couldn't rewrite keeps the whole package remote.
   IMPORT_REGEXP =
     /((?<![\w.$])(?:from|import)\s*\(?\s*)(["'])(\.{1,2}\/[^"'\n]*)\2/.freeze # :nodoc:
 
   # A path under the package root that can become a file in vendor/javascript
   # and a key in the import map: no query, no fragment, nothing but a plain
   # relative path, and an extension Importmap::Map's directory glob picks up.
-  # A ".." segment can't survive URI.join's normalisation, and is rejected here
-  # anyway — the paths come from a CDN and are joined into a write.
-  PATH_REGEXP = %r{\A[A-Za-z0-9._@+\-/]+\.m?js\z}.freeze # :nodoc:
+  #
+  # Every segment is a plain name that doesn't begin with a dot, which rejects
+  # four paths a CDN can hand back and this class must not act on: "..", which
+  # climbs out of the package; an empty segment, as "a//b" has, whose key would
+  # be one Importmap::Map never emits for the file it writes; a leading "/",
+  # which Pathname#join turns into an absolute path outside vendor/javascript
+  # altogether; and a dot-directory, which Map's `**/*.js{,m}` glob doesn't
+  # descend into, so its files would be written and never mapped.
+  PATH_REGEXP =
+    %r{\A[A-Za-z0-9_@+\-][A-Za-z0-9._@+\-]*(?:/[A-Za-z0-9_@+\-][A-Za-z0-9._@+\-]*)*\.m?js\z}.freeze # :nodoc:
 
   # Importmap::Map's directory expansion drops a trailing "index" from a key,
   # so lib/index.js is reached as "<package>/lib" and index.js as "<package>".
@@ -114,6 +127,7 @@ class Importmap::PackageGraph
     discover
     assign_keys
     rewrite
+    verify_rewritten
 
     self
   end
@@ -190,6 +204,24 @@ class Importmap::PackageGraph
         @files[path] = url
         @keys[url]   = key
       end
+
+      # Two paths that differ only in case are one file on a case-insensitive
+      # filesystem, where the second write wins and one key serves the other
+      # module. Refusing is the same answer everywhere, rather than a package
+      # that vendors on Linux and misbehaves on a Mac.
+      raise Unownable.new(REASON) if @files.keys.map(&:downcase).uniq.size != @files.size
+    end
+
+    # Every relative import Importmap::ModuleInspector counted has to have come
+    # back as a bare key, or the file about to be written asks the browser for
+    # a path beside a digested asset. The rewrite reads the raw source while
+    # the crawl reads the source with block comments discounted, so a form the
+    # two disagree about — a magic comment between the keyword and the
+    # specifier — is caught here rather than shipped.
+    def verify_rewritten
+      sources = files.values + [ entry_source ]
+
+      raise Unownable.new(REASON) if sources.any? { |source| Importmap::ModuleInspector.new(source).reasons.include?(REASON) }
     end
 
     def key_for(path)

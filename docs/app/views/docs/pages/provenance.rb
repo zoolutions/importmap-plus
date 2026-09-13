@@ -52,8 +52,10 @@ class Views::Docs::Pages::Provenance < DocsUI::Page
         the files came from, which is the prefix their keys are written under, and
         it is not always the package the entry's own pin names. The entry keeps its
         plain comment, so `update`, `outdated` and `lock` read the pin exactly as
-        they always did; nothing reads a `pin_all_from` line but `pin`, `pristine`
-        and `unpin`, each looking for the directory it wrote.
+        they always did. The graph line is read only by the commands that own the
+        directory — `pin`, `update`, `pristine` and `unpin` — each looking for the
+        directory it wrote, and a `pin_all_from` you wrote yourself carries no such
+        comment and is never touched.
       MD
     end
   end

@@ -29,7 +29,7 @@ class Views::Docs::Pages::Cli < DocsUI::Page
           [ [ :code, "update [PACKAGES]" ], "Re-pins the outdated packages: the named ones, or every one.", [ :md, "[Updating](/docs/updating)" ] ],
           [ [ :code, "outdated" ], "Lists packages the registry has a newer version of.", [ :md, "[Updating](/docs/updating)" ] ],
           [ [ :code, "audit" ], "Lists known vulnerabilities for the pinned versions.", [ :md, "[Updating](/docs/updating)" ] ],
-          [ [ :code, "pristine" ], "Redownloads every vendored package at its pinned version, graph directories and all.", [ :md, "[Updating](/docs/updating)" ] ],
+          [ [ :code, "pristine" ], "Redownloads every vendored package at its pinned version, graph directories and all. Reports the packages it couldn't restore and exits non-zero.", [ :md, "[Updating](/docs/updating)" ] ],
           [ [ :code, "packages" ], "Prints every package with a version, one per line.", [ :md, "[Updating](/docs/updating)" ] ],
           [ [ :code, "json" ], "Boots the app and prints the resolved import map as JSON.", [ :md, "[Updating](/docs/updating)" ] ]
         ]

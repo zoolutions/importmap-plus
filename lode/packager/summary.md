@@ -64,6 +64,25 @@ An esm.run bundle is jsDelivr's single minified ES file per package with its own
 
 `--minify` runs after the esm.run rewrite and before the module-standalone check's result is used to save: `source = self.class.minifier.call(source) if minify` (packager.rb:550), i.e. `Importmap::Minifier` (a separate fork-only file) is a transform over already-CDN-resolved text — it never touches import specifiers, matching CLAUDE.md's rule 3.
 
+## Vendoring a file graph
+
+A download whose only obstacle is relative imports brings its siblings with it.
+`download_package_file` calls `#graph_for` (→ `Importmap::PackageGraph.build`,
+see `../inspection-and-tools/summary.md`) before `ensure_servable`, so the check
+runs on the entry as it will be written — every relative specifier already a bare
+key — and passes. `Packager#last_graph` is how the CLI learns the sibling count
+and whether a line is due, a second channel rather than a second return value,
+because `#download`'s is the esm.run dependency list every caller destructures.
+
+The files land through `Importmap::VendoredGraph` (`#vendored_graph(package)`):
+one directory per pin, replaced whole, mapped by one `pin_all_from` line that
+`#graph_pin_for` renders with the entry's own `preload:`. The entry and the
+directory are one unit, so `#save_vendored_package` builds both partials before
+committing either — a new entry beside an old directory is as broken as the
+reverse. `download(graph:)` is the caller's decision: `pin --vendor` passes false
+(the entry alone, and the directory it had goes), `pristine` passes whether the
+pin already maps one (restore, never re-decide).
+
 ## Vendoring
 
 `download(package, url, minify:, force:)` (packager.rb:268-271) ensures `vendor_path` exists then calls `download_package_file` (packager.rb:541-558): fetch via `with_retries` → rewrite esm.run imports if applicable → `ensure_servable(source) unless force` → minify if asked → `save_vendored_package`. `ensure_servable` (packager.rb:563-568) runs `Importmap::ModuleInspector` and raises `Unvendorable` (needs sibling files: relative imports, workers, etc. — reasons listed, packager.rb:70-80) or `NotAnEsModule` (a CommonJS/UMD bundle, packager.rb:82-88) *before anything is written*, so a vendored file an app already has survives a refused re-download (test/packager_test.rb:718-761). `force: true` (from `--vendor`, or `pristine` restoring what a pin already records) skips `ensure_servable` entirely (packager.rb:548, commands.rb:79).

@@ -12,7 +12,7 @@ The index of this repository's durable memory. Read this first; it beats a direc
 - `request-path/summary.md` — engine → `Map` → helpers → freshness: the DSL, `to_json`, preloads, integrity, both asset pipelines, the reloader and sweeper; no network on a request
 - `packager/summary.md` — `Packager` and `ProviderChain`: every parser regex quoted, the provenance grammar, the four rewrite paths and what each preserves, resolution and the provider fallback, esm.run rewriting, the atomic vendored write, retries
 - `cli/summary.md` — `bin/importmap` command by command with the exact sentences it prints, `pin` and `update` in depth, provider grouping, `Npm`
-- `inspection-and-tools/summary.md` — the fork-only collaborators: `ModuleInspector` (grammar table, safe failure direction), `Minifier`, `HttpRetries`
+- `inspection-and-tools/summary.md` — the fork-only collaborators: `ModuleInspector` (grammar table, safe failure direction), `PackageGraph` and `VendoredGraph` (the file-graph crawl, the directory and its line), `Minifier`, `HttpRetries`
 - `testing-and-ci/summary.md` — every test file and what it pins, live versus stubbed, process isolation in `CommandsTest`, fixtures, the Appraisal matrix, the workflows, `bin/release`
 - `docs-site/summary.md` — the docs-kit app: page-to-behaviour mapping table, authoring contract, lint and specs, the `path: ".."` pin
 

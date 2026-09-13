@@ -37,3 +37,42 @@ How `Importmap::Packager` resolves, downloads and rewrites pins — the invarian
 - **Where:** `lib/importmap/packager.rb#reload!`; `lib/importmap/commands.rb#update_importmap_with_pin`, `#pin_esm_run_dependencies`
 - **Proven by:** `test/packager_test.rb:"reload! drops the cached import map so a pin written now is seen next"`; `test/commands_test.rb:"pin command with --from esm.run pins a shared dependency once"`
 - **Origin:** cubic learning 1f57a939
+
+### A rewritten graph file is inspected again, so a specifier the crawl counted but the rewrite couldn't touch keeps the whole package remote
+- **Holds because:** the crawl reads `ModuleInspector#code` (block comments discounted) while the rewrite runs `IMPORT_REGEXP` over the raw source, and the two disagree about at least one real form: `import(/* webpackChunkName: "leaf" */ "./leaf.js")` is discovered and fetched, and `\s*` can't cross the comment, so the file is written still asking the browser for `./leaf.js` beside a digested asset path. The entry is caught by `ensure_servable`; a *sibling* is not, because nothing inspects it after the rewrite. `#verify_rewritten` inspects every rewritten source — siblings and entry — and raises `Unownable` if any still carries a relative import, which also catches the unterminated-literal and quote-in-path forms without naming them.
+- **Where:** `lib/importmap/package_graph.rb#verify_rewritten`, called from `#crawl`
+- **Safe direction:** refusing is harmless — the package stays on its CDN and works; shipping an unrewritten specifier is a 404 on the page.
+- **Proven by:** `test/package_graph_test.rb:"keeps the whole package remote when a specifier it crawled comes back unrewritten"`
+- **Origin:** gate round 1 (parser), PR #30
+
+### `PackageGraph::PATH_REGEXP` matches a path segment at a time, because the path becomes a write
+- **Holds because:** the paths come from a CDN and are joined onto a directory. A single character class over the whole path accepted `dist//a.js`, whose key (`pkg/dist//a`) is not the key `Importmap::Map` gives the file it writes, and `..//tmp/evil.js`, which `URI.join` leaves as `/tmp/evil.js` under the package root — `Pathname#join` then returns an absolute path and the write lands outside `vendor/javascript` entirely, where the partial's own cleanup can't reach it. Each segment must now be a plain name that doesn't start with a dot, which refuses `..`, an empty segment, a leading `/` and a dot-directory (which `Map`'s `**/*.js{,m}` glob never descends into) in one rule. `VendoredGraph#write` asserts the joined path is still inside the partial.
+- **Where:** `lib/importmap/package_graph.rb#PATH_REGEXP`, `#vendorable_path?`; `lib/importmap/vendored_graph.rb#write`
+- **Safe direction:** refusing keeps a working remote pin; a write outside the vendor directory is the one failure with no undo.
+- **Proven by:** `test/package_graph_test.rb:"keeps the whole package remote when a relative path leaves the package root sideways"`, `:"…when a sibling hides in a dot directory"`
+- **Origin:** gate round 1 (parser), PR #30
+
+### A graph directory is this gem's to replace or delete only when the import map maps it *with the comment this gem writes*
+- **Holds because:** `pin lodash --vendor` downloads the entry alone and clears the directory a previous graph left — and an app that keeps its own `vendor/javascript/lodash` would have lost it, because the removal ran before anything checked whose directory it was. Ownership is now `VendoredGraph#mapped?`, which requires the line to name the directory **and** carry `# @<version> (graph of <package>)`; a `pin_all_from` an app wrote itself has no such comment, so it is never rewritten and its directory never deleted.
+- **Where:** `lib/importmap/vendored_graph.rb#line_regexp_for`, `#mapped?`, `#commit`, `#remove`
+- **Safe direction:** leaving a stale directory is untidy; deleting an app's own source is unrecoverable.
+- **Proven by:** `test/packager_test.rb:"download without a graph leaves a directory the import map doesn't map"`, `:"download without a graph vendors the entry alone and drops the directory its pin maps"`; `test/vendored_graph_test.rb:"a line is found by its own directory and by no other"`
+- **Origin:** gate round 1 (parser), PR #30
+
+### An entry and its graph directory are written as one unit, and the directory is swapped by rename, not by delete-then-rename
+- **Holds because:** the entry's rewritten specifiers name the chunks in its directory, so a new entry beside an old directory is as broken as an old entry beside a new one: both partials are built before either is committed, and only the two renames are exposed to a crash. The directory swap renames the old one aside, moves the new one in and removes the old, restoring it if the move fails — `rm_rf` then `rename` left a window the width of a recursive delete in which the app had no directory at all while `pin_all_from` still mapped it.
+- **Where:** `lib/importmap/packager.rb#save_vendored_package`, `#write_entry_partial`, `#commit_entry`; `lib/importmap/vendored_graph.rb#write`, `#commit`
+- **Proven by:** `test/vendored_graph_test.rb:"commit puts the directory the app has back when the swap fails"`; `test/packager_test.rb:"download leaves the graph an app has when the crawl refuses"`, `:"download leaves the file an app has when the replacement can't be written"`
+- **Origin:** gate round 1 (correctness, rules), PR #30
+
+### `fetch_remote` lets Net::HTTP negotiate the encoding and asks for identity only when the body comes back unreadable
+- **Holds because:** jspm answers some files `content-encoding: br` however the request advertises itself (`@popperjs/core@2.11.8/lib/utils/computeAutoPlacement.js` is one), and Net::HTTP decodes gzip and deflate only, so those bytes reach `ModuleInspector` as invalid UTF-8 and raise `ArgumentError`. Sending `Accept-Encoding: identity` up front fixes that and breaks more: `Net::HTTPGenericRequest` sets `decode_content` **only** when the caller supplies no accept-encoding, so every gzip answer would then arrive compressed and be written to `vendor/javascript` as bytes on the `force: true` paths. The request is therefore made normally, and repeated with `IDENTITY_ENCODING` only when the body is not valid UTF-8.
+- **Where:** `lib/importmap/packager.rb#fetch_remote`, `#encoded?`, `IDENTITY_ENCODING`
+- **Proven by:** `test/packager_test.rb:"fetch_remote asks again for an unencoded body when the CDN encoded one Net::HTTP can't read"`, `:"fetch_remote lets Net::HTTP negotiate an encoding it can read"`
+- **Origin:** gate round 1 (correctness), PR #30
+
+### `remove_package_from_importmap` re-reads the file it just rewrote
+- **Holds because:** `#importmap` memoises, and `remove` is followed by a caller asking whether the pin is still there — `unpin` does it for the next package, and `Packager#remove` itself now reads the map (through `VendoredGraph#mapped?`) *before* removing the pin, which primed the memo. Without the `reload!`, `packaged?` answered from the file as it was and reported a pin that had just been deleted.
+- **Where:** `lib/importmap/packager.rb#remove_package_from_importmap`
+- **Proven by:** `test/packager_test.rb:"remove takes the graph directory and its line with the pin"` (asserts `packaged?` on the same instance afterwards); `test/packager_single_quotes_test.rb:"remove package with single quotes"`
+- **Origin:** PR #30

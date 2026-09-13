@@ -4,6 +4,7 @@ require "json"
 require "importmap/minifier"
 require "importmap/module_inspector"
 require "importmap/package_graph"
+require "importmap/vendored_graph"
 require "importmap/http_retries"
 require "importmap/integrity"
 
@@ -18,15 +19,9 @@ class Importmap::Packager
   INTEGRITY_OPTION_REGEXP = /integrity:\s*(true|false)\b/.freeze # :nodoc:
   INTEGRITY_HASH_REGEXP = /integrity:\s*["'][^"']+["']/.freeze # :nodoc:
   REMOTE_URL_REGEXP = %r{\Ahttps?://}.freeze # :nodoc:
-  # The header #save_vendored_package writes, read back to tell which CDN file
-  # a vendored file already is.
-  DOWNLOADED_FROM_REGEXP = %r{\A// \S+ downloaded from (\S+)}.freeze # :nodoc:
-  # jspm answers some files with `content-encoding: br` whatever the request
-  # advertises, and Net::HTTP decompresses gzip and deflate only: the body then
-  # arrives as brotli bytes, which read as invalid UTF-8 and take the source
-  # inspection down with an ArgumentError. Asking for an unencoded body is the
-  # lever a gem with no runtime dependencies has; the files are small and the
-  # CDN is on the other side of a compressed TLS connection either way.
+  # Asked for again when a body arrives encoded some way Net::HTTP can't undo;
+  # never up front, because supplying an Accept-Encoding at all stops it
+  # decoding the gzip it does understand (see #fetch_remote).
   IDENTITY_ENCODING = { "Accept-Encoding" => "identity" }.freeze # :nodoc:
 
   PROVIDER_HOSTS = {
@@ -218,51 +213,25 @@ class Importmap::Packager
       provenance_comment(version, provider: provider_for_url(url), minified: minify, vendored: vendored, locked: locked)
   end
 
-  # The line that maps the file graph vendored beside +package+'s entry:
-  #
-  #   pin_all_from "vendor/javascript/@popperjs--core", under: "@popperjs/core", to: "@popperjs--core" # @2.11.8 (graph of @popperjs/core)
-  #
-  # The directory is the entry's own filename without its extension, so a pin
-  # owns its graph outright and rebuilding one never deletes another's files.
-  # The keys are written under the package the CDN URL names, which is not
-  # always the package the pin's key names — jspm resolves Node's "buffer" to a
-  # file in @jspm/core — so two pins of one package map their shared files to
-  # one key and the browser evaluates each module once.
+  # The directory +package+'s sibling files are vendored into and the line that
+  # maps them. Everything about a vendored graph goes through this object, so
+  # the paths under vendor/javascript are still built in one place.
+  def vendored_graph(package)
+    Importmap::VendoredGraph.new(graph_path(package), importmap_path: @importmap_path)
+  end
+
+  # The pin_all_from line for +package+'s graph, carrying the entry's own
+  # preload. Its keys go under the package the CDN URL names, which is not
+  # always the package the pin's key names — jspm resolves Node's "buffer" to
+  # a file in @jspm/core.
   def graph_pin_for(package, url, preloads = nil)
-    dirname = graph_dirname(package)
-    under   = Importmap::PackageGraph.package_for(url)
-    to      = dirname == under ? "" : %(, to: "#{dirname}")
-
-    %(pin_all_from "#{@vendor_path.join(dirname)}", under: "#{under}") + to + preload(preloads) +
-      provenance_comment(extract_package_version_from(url), graph: under)
+    vendored_graph(package).line_for(under: Importmap::PackageGraph.package_for(url),
+                                     version: extract_package_version_from(url),
+                                     options: preload(preloads))
   end
 
-  # Whether the import map already maps a graph directory for +package+.
-  def graphed?(package)
-    importmap.match?(graph_line_regexp_for(package))
-  end
-
-  # The line that maps +package+'s graph directory, matched the way
-  # Importmap::Map.pin_line_regexp_for matches a pin: on the whole path, so a
-  # directory whose name ends in another's doesn't answer for it.
-  def graph_line_regexp_for(package)
-    /^.*pin_all_from\s+["']#{Regexp.escape(@vendor_path.join(graph_dirname(package)).to_s)}["'].*$/
-  end
-
-  # Drops a package's graph, directory and line together: a download that came
-  # back as one file, or a pin converted to a remote URL, leaves neither behind
-  # to keep pinning files nothing imports any more.
   def remove_graph(package)
-    remove_existing_graph(package)
-    return unless @importmap_path.exist? && graphed?(package)
-
-    lines = File.readlines(@importmap_path).grep_v(graph_line_regexp_for(package))
-    File.open(@importmap_path, "w") { |file| lines.each { |line| file.write(line) } }
-    reload!
-  end
-
-  def remove_existing_graph(package)
-    FileUtils.rm_rf graph_path(package)
+    reload! if vendored_graph(package).remove
   end
 
   # What the pin's version comment says a package was built with:
@@ -366,7 +335,8 @@ class Importmap::Packager
   # inspects nothing. Like #post_json, a failure the retry doesn't recognise
   # still comes out as this class's HTTPError rather than a backtrace.
   def fetch_remote(url, allow_missing: false)
-    response = with_retries("downloading #{url}") { Net::HTTP.get_response(URI(url), IDENTITY_ENCODING) }
+    response = get_response(url)
+    response = get_response(url, IDENTITY_ENCODING) if response.code == "200" && encoded?(response.body)
 
     if response.code == "200"
       response.body
@@ -512,9 +482,8 @@ class Importmap::Packager
 
     # " # @3.7.2 (esm.run, minified, locked)" — the details in their fixed
     # order, the parens only when there is something to say.
-    def provenance_comment(version, provider: nil, minified: false, vendored: false, remote: nil, locked: false, graph: nil)
+    def provenance_comment(version, provider: nil, minified: false, vendored: false, remote: nil, locked: false)
       details = []
-      details << "graph of #{graph}" if graph
       details << provider if provider && provider != DEFAULT_PROVIDER
       details << "minified" if minified
       details << VENDORED_DETAIL if vendored
@@ -627,6 +596,17 @@ class Importmap::Packager
       nil
     end
 
+    def get_response(url, headers = nil)
+      with_retries("downloading #{url}") { Net::HTTP.get_response(URI(url), headers) }
+    end
+
+    # An encoding Net::HTTP couldn't undo is the one thing that reaches this
+    # class as bytes no JavaScript file has: every CDN serves source as UTF-8,
+    # and Net::HTTP hands back what it decoded as ASCII-8BIT either way.
+    def encoded?(body)
+      !body.dup.force_encoding("UTF-8").valid_encoding?
+    end
+
     def importmap
       @importmap ||= File.read(@importmap_path)
     end
@@ -667,18 +647,15 @@ class Importmap::Packager
 
       source = self.class.minifier.call(source) if minify
 
-      save_vendored_graph(package, @last_graph, minify: minify)
-      save_vendored_package(package, url, source, minified: minify)
+      save_vendored_package(package, url, source, minified: minify, graph: @last_graph)
 
       dependencies || []
     end
 
     # The sibling files a chunked download needs, crawled and rewritten, or nil
-    # when it is one file. The crawl reads the source Importmap::ModuleInspector
-    # read, so every relative import the check counted comes back rewritten and
-    # the check below passes on what is about to be written. A file the crawl
-    # can't own keeps the whole package remote, carrying the hash of the bytes
-    # the CDN served so the pin doesn't fetch them a second time.
+    # when it is one file. A file the crawl can't own keeps the whole package
+    # remote, carrying the hash of the bytes the CDN served so the pin doesn't
+    # fetch them a second time.
     def graph_for(package, url, source, body)
       Importmap::PackageGraph.build(url, source, package: package, known: vendored_entry_urls,
                                                  forbidden: pinned_packages - [ package ]) do |file_url|
@@ -691,53 +668,30 @@ class Importmap::Packager
       raise Unvendorable.new(refusal.reasons, integrity: Importmap::Integrity.for(body))
     end
 
-    # The CDN URL every vendored file was downloaded from, by the pin key that
-    # names it, read back out of the header #save_vendored_package wrote. A
-    # crawl that reaches one of these URLs has reached another pin's file: it
-    # rewrites the specifier to that pin's key rather than copying the file,
-    # because two copies of one module in an import map are two modules.
     def vendored_entry_urls
-      pinned_packages.each_with_object({}) do |key, urls|
-        path = vendored_package_path(key)
-        next unless path.file?
-
-        # Read as bytes: a vendored file the gem didn't write, or wrote before
-        # it asked CDNs not to encode the body, can hold a sequence no UTF-8
-        # regexp will match without raising, and one such file must not stop
-        # every other package from being pinned.
-        url = File.open(path, "rb") { |file| file.gets.to_s }[DOWNLOADED_FROM_REGEXP, 1]
-        urls[url] = key if url
-      end
+      Importmap::VendoredGraph.entry_urls(pinned_packages.to_h { |key| [ key, vendored_package_path(key) ] })
     end
 
-    # The directory is built beside its target and renamed over it, the way a
-    # vendored file is, so a crawl that dies partway leaves the directory the
-    # app has. It is replaced whole rather than merged: a file the package
-    # dropped between versions would otherwise stay in the directory, and the
-    # pin_all_from line that maps it would keep pinning it.
-    def save_vendored_graph(package, graph, minify: false)
-      return remove_existing_graph(package) unless graph
-
-      target  = graph_path(package)
-      partial = Pathname.new("#{target}.#{Process.pid}.download")
-      FileUtils.rm_rf partial
-
-      begin
-        FileUtils.mkdir_p partial
-
-        graph.files.each do |path, source|
-          file = partial.join(path)
-          FileUtils.mkdir_p file.dirname
-          source = self.class.minifier.call(source) if minify
-          File.write(file, remove_sourcemap_comment_from(source))
-        end
-
-        FileUtils.rm_rf target
-        File.rename(partial, target)
-      rescue
-        FileUtils.rm_rf partial
-        raise
+    # The download is prepared beside its targets and moved over them last, so
+    # a write that fails partway leaves the files the app already had rather
+    # than half of the new ones; the partials carry the pid so two shells
+    # pinning one package can't write each other's. An entry and its graph
+    # directory are one unit, so both partials are built before either is
+    # committed: an entry whose specifiers name the new chunks is broken beside
+    # the old directory, and the old entry is broken beside the new one.
+    def save_vendored_package(package, url, source, minified: false, graph: nil)
+      vendored      = vendored_graph(package)
+      entry_partial = write_entry_partial(package, url, source, minified: minified)
+      graph_partial = graph && vendored.write(graph) do |file_source|
+        remove_sourcemap_comment_from(minified ? self.class.minifier.call(file_source) : file_source)
       end
+
+      vendored.commit(graph_partial)
+      commit_entry(package, entry_partial)
+    rescue
+      FileUtils.rm_f entry_partial if entry_partial
+      FileUtils.rm_rf graph_partial if graph_partial
+      raise
     end
 
     # Both questions are asked of one inspection of one download. Standing alone
@@ -756,17 +710,8 @@ class Importmap::Packager
       raise NotAnEsModule.new(integrity: integrity)
     end
 
-    # The download is written beside its target and renamed over it, so a write
-    # that fails partway — a full disk, a killed process — leaves the file the
-    # app already had rather than half of the new one. Rename replaces a file
-    # atomically; a directory in the way is the one case it can't, and that gets
-    # cleared first the way it always was.
-    #
-    # The partial carries the pid so two shells pinning the same package can't
-    # write each other's file, or clean each other's up on the way out.
-    def save_vendored_package(package, url, source, minified: false)
-      target  = vendored_package_path(package)
-      partial = Pathname.new("#{target}.#{Process.pid}.download")
+    def write_entry_partial(package, url, source, minified: false)
+      partial = Pathname.new("#{vendored_package_path(package)}.#{Process.pid}.download")
 
       File.open(partial, "w+") do |vendored_package|
         vendored_package.write "// #{package}#{extract_package_version_from(url)} downloaded from #{url}#{" (minified)" if minified}\n\n"
@@ -774,11 +719,14 @@ class Importmap::Packager
         vendored_package.write remove_sourcemap_comment_from(source).force_encoding("UTF-8")
       end
 
-      remove_existing_package_file(package) if target.directory?
-      File.rename(partial, target)
-    rescue
-      FileUtils.rm_f(partial)
-      raise
+      partial
+    end
+
+    # Rename replaces a file atomically; a directory in the way is the one case
+    # it can't, and that gets cleared first the way it always was.
+    def commit_entry(package, partial)
+      remove_existing_package_file(package) if vendored_package_path(package).directory?
+      File.rename(partial, vendored_package_path(package))
     end
 
     # Turns import "/npm/dep@1.2.3/+esm" into import "dep" so the bundle
@@ -855,6 +803,8 @@ class Importmap::Packager
     def graph_path(package)
       @vendor_path.join(graph_dirname(package))
     end
+
+
 
     def graph_dirname(package)
       package_filename(package).delete_suffix(".js")

@@ -834,8 +834,10 @@ class CommandsTest < ActiveSupport::TestCase
     assert_equal 48, imports.count { |key, _path| key.start_with?("@popperjs/core") }
   end
 
-  test "pin command with --remote keeps a chunked package on its CDN and vendors no graph" do
+  test "pin command with --remote keeps a chunked package on its CDN and takes the graph it had" do
     importmap_config("")
+    run_importmap_command("pin", "@popperjs/core@2.11.8")
+    assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core/lib/enums.js"), "expected the graph to be vendored first"
 
     out, _err = run_importmap_command("pin", "@popperjs/core@2.11.8", "--remote")
 
@@ -863,6 +865,7 @@ class CommandsTest < ActiveSupport::TestCase
   test "unpin command removes a vendored graph with its pin" do
     importmap_config("")
     run_importmap_command("pin", "@popperjs/core@2.11.8")
+    assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core/lib/enums.js"), "expected the graph to be vendored first"
 
     out, _err = run_importmap_command("unpin", "@popperjs/core@2.11.8")
 
@@ -885,9 +888,24 @@ class CommandsTest < ActiveSupport::TestCase
     assert_equal 1, File.read("#{@tmpdir}/dummy/config/importmap.rb").scan("pin_all_from").size
   end
 
+  # A bundling CDN answers with one file, so the graph goes — line and all,
+  # or pin_all_from is left mapping a directory that no longer exists.
+  test "pristine command with --from esm.run drops the graph a jspm pin had" do
+    importmap_config("")
+    run_importmap_command("pin", "@popperjs/core@2.11.8")
+
+    run_importmap_command("pristine", "--from", "esm.run")
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, %(pin "@popperjs/core", to: "@popperjs--core.js" # @2.11.8 (esm.run)\n)
+    assert_not_includes content, "pin_all_from"
+    assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core")
+  end
+
   test "pin command with --vendor drops the graph a package had" do
     importmap_config("")
     run_importmap_command("pin", "@popperjs/core@2.11.8")
+    assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core/lib/enums.js"), "expected the graph to be vendored first"
 
     run_importmap_command("pin", "@popperjs/core@2.11.8", "--vendor")
 

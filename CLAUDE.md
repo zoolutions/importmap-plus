@@ -23,7 +23,7 @@ Durable project memory lives in `lode/` (index: `lode/lode-map.md`). Read it bef
 
 1. **NO breaking the importmap-rails surface** — every constant, helper, DSL method, option, generator and rake task importmap-rails ships must keep working unchanged. Additions only; a rename or removal is a fork-breaking change.
 2. **NO new runtime dependencies** — the gemspec lists railties, activesupport and actionpack. Minification shells out to a bun/esbuild/terser already on the machine; it does not bundle one.
-3. **NO touching import specifiers in vendored files** — minification is transform-only (`--no-bundle`, `--format=esm`), so bare specifiers stay exactly as the CDN resolved them and the import map keeps resolving them. The one deliberate exception is `rewrite_esm_run_imports`, which turns a jsDelivr bundle's `/npm/dep@ver/+esm` imports into bare specifiers.
+3. **NO touching import specifiers in vendored files** — minification is transform-only (`--no-bundle`, `--format=esm`), so bare specifiers stay exactly as the CDN resolved them and the import map keeps resolving them. There are two deliberate exceptions, both turning a URL the import map can't resolve into a bare key it can: `rewrite_esm_run_imports`, for a jsDelivr bundle's `/npm/dep@ver/+esm` imports, and `Importmap::PackageGraph#rewrite_specifiers`, for the relative imports of a package vendored with its file graph.
 4. **NO losing a pin's provenance or options on rewrite** — the `# @<version> (<provider>[, minified][, vendored][, remote[: <reason>]][, locked])` comment plus `preload:` and `integrity:` must survive `pin`, `update`, `pristine` and `unpin`. Dropping them silently drifts a package back to jspm on the next update.
 5. **NO raw `Net::HTTP` calls in Packager or Npm** — every outbound request goes through `with_retries` (`Importmap::HttpRetries`) and raises the class's own `HTTPError` once the attempts are spent.
 6. **NO network access on the request path** — engine → `Map` → helpers never reach a CDN or registry. Only the CLI (`Commands` → `Packager` / `Npm`) does.
@@ -92,6 +92,9 @@ Packager       lib/importmap/packager.rb                        resolves via api
 Npm            lib/importmap/npm.rb                             registry.npmjs.org: outdated, audit, packages_with_versions
 Minifier       lib/importmap/minifier.rb                        bun / esbuild / terser, transform-only                (fork-only file)
 HttpRetries    lib/importmap/http_retries.rb                    bounded retries shared by Packager and Npm            (fork-only file)
+ModuleInspector lib/importmap/module_inspector.rb               whether a download can be served as one file          (fork-only file)
+PackageGraph   lib/importmap/package_graph.rb                   crawls a chunked package's siblings, rewrites them    (fork-only file)
+VendoredGraph  lib/importmap/vendored_graph.rb                  the graph directory and the pin_all_from line         (fork-only file)
 Installer      lib/install/, lib/tasks/importmap_tasks.rake     rails importmap:install
 ```
 
@@ -106,6 +109,7 @@ Two paths, kept apart: the **request path** (engine → Map → helpers, no I/O 
 - keep a remote pin (`to: "https://…"`) remote and re-resolve it from the same CDN; leave a custom URL alone
 - re-emit the provenance comment `# @<version> (<provider>[, minified][, vendored][, remote[: <reason>]][, locked])` — `jspm.io` is the default provider and is omitted; the tokens appear in that order (`Packager#provenance_comment`)
 - name a vendored file `package.gsub("/", "--") + ".js"` (`@hotwired/stimulus` → `@hotwired--stimulus.js`)
+- leave the one line that isn't a pin alone unless it is the graph directory being written: `pin_all_from "<vendor>/<file without .js>", under: "<package>"[, to: …][, preload: …] # @<version> (graph of <package>)`, matched by its own directory and its own comment (`Importmap::VendoredGraph`), and invisible to every regex above
 
 ## Fork tracking
 
@@ -115,7 +119,7 @@ Two paths, kept apart: the **request path** (engine → Map → helpers, no I/O 
 | Gemspec | `importmap-rails.gemspec` (deleted here) | `importmap-plus.gemspec` |
 | Entry point | `lib/importmap-rails.rb` (kept — still the real entry) | `lib/importmap-plus.rb` requires it |
 | Release | `bin/release` pushed from a laptop with an API key | `bin/release` → GitHub Release → trusted publishing (`release.yml`) |
-| Fork-only files | — | `minifier.rb`, `http_retries.rb`, `CHANGELOG.md`, `release.yml`, `deploy-docs.yml`, `docs-ci.yml`, `docs/` |
+| Fork-only files | — | `minifier.rb`, `http_retries.rb`, `module_inspector.rb`, `package_graph.rb`, `vendored_graph.rb`, `provider_chain.rb`, `integrity.rb`, `CHANGELOG.md`, `release.yml`, `deploy-docs.yml`, `docs-ci.yml`, `docs/` |
 
 Upstream files this fork has modified heavily, which WILL conflict on sync: `commands.rb`, `packager.rb`, `npm.rb`, `README.md`, `ci.yml`, `test/commands_test.rb`, `test/packager_test.rb`. Per-file resolution rules: `.claude/rules/upstream-sync.md`.
 

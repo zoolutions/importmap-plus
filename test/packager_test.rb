@@ -1030,16 +1030,31 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
   end
 
   # jspm answers some files brotli-encoded however the request advertises
-  # itself, and Net::HTTP decompresses gzip and deflate only.
-  test "fetch_remote asks the CDN not to encode the body" do
-    headers = nil
-    response = Struct.new(:code, :body).new("200", "export default 1")
+  # itself, and Net::HTTP decompresses gzip and deflate only — so the body
+  # arrives as bytes no source file has.
+  test "fetch_remote asks again for an unencoded body when the CDN encoded one Net::HTTP can't read" do
+    sent = []
+    encoded = Struct.new(:code, :body).new("200", "\x1b!\x06\x00\x8c\xd3".dup.force_encoding("ASCII-8BIT"))
+    plain   = Struct.new(:code, :body).new("200", "export default 1")
 
-    Net::HTTP.stub(:get_response, ->(_uri, sent = nil) { headers = sent; response }) do
+    Net::HTTP.stub(:get_response, ->(_uri, headers = nil) { sent << headers; sent.size == 1 ? encoded : plain }) do
       assert_equal "export default 1", @packager.fetch_remote("https://ga.jspm.io/npm:md5@2.2.0/md5.js")
     end
 
-    assert_equal "identity", headers["Accept-Encoding"]
+    assert_equal [ nil, { "Accept-Encoding" => "identity" } ], sent
+  end
+
+  # Supplying an Accept-Encoding at all stops Net::HTTP decoding the gzip it
+  # does understand, so a body it could read is never asked for twice.
+  test "fetch_remote lets Net::HTTP negotiate an encoding it can read" do
+    sent = []
+    response = Struct.new(:code, :body).new("200", "export default 1")
+
+    Net::HTTP.stub(:get_response, ->(_uri, headers = nil) { sent << headers; response }) do
+      @packager.fetch_remote("https://ga.jspm.io/npm:md5@2.2.0/md5.js")
+    end
+
+    assert_equal [ nil ], sent
   end
 
   test "fetch_remote wraps a failure the retry doesn't know as its own HTTPError" do
@@ -1104,7 +1119,7 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       end
 
       assert_equal [ "workers" ], error.reasons
-      assert_match %r{\Asha384-}, error.integrity
+      assert_equal Importmap::Integrity.for(source), error.integrity
       assert_empty Dir.glob("#{vendor_dir}/*")
     end
   end
@@ -1124,9 +1139,9 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     end
   end
 
-  test "download without a graph vendors the entry alone and drops the graph it had" do
+  test "download without a graph vendors the entry alone and drops the directory its pin maps" do
     Dir.mktmpdir do |vendor_dir|
-      packager = graph_packager(vendor_dir)
+      packager = graph_packager(vendor_dir, %(pin_all_from "#{vendor_dir}/pkg", under: "pkg" # @1.0.0 (graph of pkg)\n))
       FileUtils.mkdir_p("#{vendor_dir}/pkg")
       File.write("#{vendor_dir}/pkg/stale.js", "export default 0")
 
@@ -1135,6 +1150,20 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       assert_includes File.read("#{vendor_dir}/pkg.js"), %(from"./util.js")
       assert_nil packager.last_graph
       assert_not File.exist?("#{vendor_dir}/pkg")
+    end
+  end
+
+  # An app's own vendor/javascript/<name> directory is not this gem's to
+  # delete: only a directory the import map maps was written by a download.
+  test "download without a graph leaves a directory the import map doesn't map" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir, %(pin_all_from "#{vendor_dir}/pkg", under: "pkg"\n))
+      FileUtils.mkdir_p("#{vendor_dir}/pkg")
+      File.write("#{vendor_dir}/pkg/theirs.js", "export default 0")
+
+      stub_cdn(CHUNKED_PACKAGE) { packager.download("pkg", "#{GRAPH_ROOT}dist/index.js", force: true, graph: false) }
+
+      assert_equal "export default 0", File.read("#{vendor_dir}/pkg/theirs.js")
     end
   end
 
@@ -1193,7 +1222,7 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     end
   end
 
-  test "graphed? and remove_graph read and drop the line that maps a directory" do
+  test "remove_graph drops the line that maps a directory and the directory with it" do
     Dir.mktmpdir do |vendor_dir|
       importmap = create_temp_importmap(<<~RUBY)
         pin "pkg" # @1.0.0
@@ -1203,12 +1232,12 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       packager = Importmap::Packager.new(importmap, vendor_path: Pathname.new(vendor_dir))
       FileUtils.mkdir_p("#{vendor_dir}/pkg")
 
-      assert packager.graphed?("pkg")
-      assert_not packager.graphed?("nothing")
+      assert packager.vendored_graph("pkg").mapped?
+      assert_not packager.vendored_graph("nothing").mapped?
 
       packager.remove_graph("pkg")
 
-      assert_not packager.graphed?("pkg")
+      assert_not packager.vendored_graph("pkg").mapped?
       assert_not File.exist?("#{vendor_dir}/pkg")
       assert_includes File.read(importmap), %(pin_all_from "#{vendor_dir}/other")
       assert_includes File.read(importmap), %(pin "pkg" # @1.0.0)
@@ -1230,6 +1259,9 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       assert_equal "", File.read(importmap).strip
       assert_not File.exist?("#{vendor_dir}/pkg")
       assert_not File.exist?("#{vendor_dir}/pkg.js")
+      # The same instance is asked again: #importmap is memoised, and a caller
+      # that removes a pin and then looks for it must not see the old file.
+      assert_not packager.packaged?("pkg")
     end
   end
 

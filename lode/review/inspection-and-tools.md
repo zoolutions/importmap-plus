@@ -58,3 +58,13 @@ How `Importmap::ModuleInspector` reads a download without parsing JavaScript, an
 - **Where:** `lib/importmap/minifier.rb#initialize` (with `TOOLS`, `#call`)
 - **Proven by:** `test/minifier_test.rb:"accepts a tool name as a symbol"`
 - **Origin:** cubic learning 4c9f52bf
+
+### Not a bug: a relative specifier in a *line* comment is fetched, and 404s the whole package
+- **Holds because:** `ModuleInspector#code` discounts block comments only — line comments are kept on purpose, because stripping them means reading `//` as an opener inside a regex literal such as `[//]` and dropping code that decides whether a package can be vendored. `PackageGraph` reads the same text, so `// import legacy from "./legacy.js"` is crawled, the CDN answers 404 and the package stays remote. That is the same verdict the same source gets without the crawl — the inspector reports `relative imports` for it either way — so nothing regressed, and the direction is the safe one.
+- **Where:** `lib/importmap/module_inspector.rb#without_block_comments`; `lib/importmap/package_graph.rb#discover`
+- **Origin:** gate round 1 (parser), PR #30
+
+### Accepted limit: a data string that spells out an import statement is rewritten inside the string
+- **Holds because:** `PackageGraph::IMPORT_REGEXP` is anchored on the keyword and doesn't parse JavaScript, exactly like `Packager::ESM_RUN_IMPORT_REGEXP`, so `export const doc = 'import x from "./util.js"'` comes out as `'import x from "pkg/util"'`. The gem takes no JavaScript parser as a dependency; a published bundle carrying such a string has not been seen, and the alternative — a scanner that tracks literals through a `gsub` — is the parser this class exists to avoid. Recorded so the next reviewer doesn't raise it as new.
+- **Where:** `lib/importmap/package_graph.rb#IMPORT_REGEXP`, `#rewrite_specifiers`
+- **Origin:** gate round 1 (parser), PR #30

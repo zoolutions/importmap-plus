@@ -190,6 +190,87 @@ class Importmap::PackageGraphTest < ActiveSupport::TestCase
     assert_equal [ "util.js" ], graph.files.keys
   end
 
+  test "keeps the whole package remote when a specifier it crawled comes back unrewritten" do
+    error = assert_raises Importmap::PackageGraph::Unownable do
+      build_graph("mid.js", {
+        "mid.js"  => %(export default await import(/* webpackChunkName: "leaf" */ "./leaf.js")),
+        "leaf.js" => %(export default 1)
+      })
+    end
+
+    assert_equal [ "relative imports" ], error.reasons
+  end
+
+  test "keeps the whole package remote when a relative path leaves the package root sideways" do
+    [ "..//tmp/evil.js", ".//a.js", "./sub//a.js" ].each do |specifier|
+      error = assert_raises Importmap::PackageGraph::Unownable, "expected #{specifier} to be refused" do
+        build_graph("dist/index.js", { "dist/index.js" => %(export{default}from"#{specifier}") })
+      end
+
+      assert_equal [ "relative imports" ], error.reasons
+    end
+  end
+
+  test "keeps the whole package remote when a sibling hides in a dot directory" do
+    error = assert_raises Importmap::PackageGraph::Unownable do
+      build_graph("index.js", {
+        "index.js"           => %(export{default}from"./.internal/x.js"),
+        ".internal/x.js"     => %(export default 1)
+      })
+    end
+
+    assert_equal [ "relative imports" ], error.reasons
+  end
+
+  test "keeps the whole package remote when two files differ only in case" do
+    error = assert_raises Importmap::PackageGraph::Unownable do
+      build_graph("index.js", {
+        "index.js"  => %(import a from"./Locale.js";import b from"./locale.js";export{a,b}),
+        "Locale.js" => %(export default 1),
+        "locale.js" => %(export default 2)
+      })
+    end
+
+    assert_equal [ "relative imports" ], error.reasons
+  end
+
+  test "crawls a dynamic import and an export star" do
+    graph = build_graph("index.js", {
+      "index.js"   => %(export*from"./star.js";export const load=()=>import("./lazy.js")),
+      "star.js"    => %(export default 1),
+      "lazy.js"    => %(export default 2)
+    })
+
+    assert_equal %w[ lazy.js star.js ], graph.files.keys.sort
+    assert_equal %(export*from"pkg/star";export const load=()=>import("pkg/lazy")), graph.entry_source
+  end
+
+  test "crawls an import statement split over several lines" do
+    graph = build_graph("index.js", {
+      "index.js" => %(import {\n  a\n} from\n  "./util.js";\nexport default a),
+      "util.js"  => %(export default 1)
+    })
+
+    assert_equal [ "util.js" ], graph.files.keys
+    assert_includes graph.entry_source, %("pkg/util")
+  end
+
+  test "keeps the whole package remote when a specifier carries a query or no extension" do
+    [ "./h.js?v=1", "./h.js#frag", "./sub/i", "./j.jsm" ].each do |specifier|
+      assert_raises Importmap::PackageGraph::Unownable, "expected #{specifier} to be refused" do
+        build_graph("index.js", { "index.js" => %(export{default}from"#{specifier}") })
+      end
+    end
+  end
+
+  test "reads the package out of a jsDelivr bundle URL and a prerelease version" do
+    assert_equal "md5", Importmap::PackageGraph.package_for("https://cdn.jsdelivr.net/npm/md5@2.2.0/+esm")
+    assert_equal "pkg", Importmap::PackageGraph.package_for("https://unpkg.com/pkg@1.0.0-beta.1+build.5/dist/a.js")
+    assert_nil Importmap::PackageGraph.package_for("https://unpkg.com/pkg/dist/a.js")
+    assert_nil Importmap::PackageGraph.package_for("http://unpkg.com/pkg@1.0.0/dist/a.js")
+    assert_nil Importmap::PackageGraph.package_for("https://GA.JSPM.IO/npm:pkg@1.0.0/index.js")
+  end
+
   test "the keys it writes are the keys pin_all_from gives the directory it writes" do
     graph = build_graph("dist/index.js", {
       "dist/index.js"   => %(import a from"./nested/index.js";import b from"./util.mjs";export{a,b}),

@@ -146,6 +146,56 @@ Tests zero the wait: `packager_test.rb:928-934`'s `without_retry_wait` sets `Imp
 | Every ESM statement spelling | `import{a}from"b"`, `export * from`, `export default`, `export const/async function` | ES module | yes — `:149-159` |
 | Multiple reasons on one file | relative import + dynamic import + worker + import.meta.url + wasm all present | all five reported in order; `reason` is the first | yes — `:127-140` |
 
+## `Importmap::PackageGraph` — the file-graph crawl (fork-only)
+
+`lib/importmap/package_graph.rb`. Given an entry URL, its source and the pin key,
+`PackageGraph.build` returns the sibling files the entry needs, each rewritten so
+the import map can serve it — or nil when this download is one file, and
+`Unownable` when the graph can't be taken over whole. It is called from
+`Packager#graph_for`, which turns `Unownable` into `Unvendorable` carrying the
+hash of the bytes the CDN served.
+
+- **When it engages** — the entry's `ModuleInspector` reasons are exactly
+  `["relative imports"]`, it is an ES module, and the URL matches one of
+  `ROOT_REGEXPS` (`ga.jspm.io/npm:`, `cdn.jsdelivr.net/npm/`, `unpkg.com`), whose
+  capture is the package the keys are written under. esm.sh and skypack name no
+  package directory in their paths, so a download from them stays remote. Reasons
+  *besides* relative imports raise `Unownable` with only those, so a pin kept
+  remote records the reason the graph can't answer for.
+- **What it crawls** — breadth-first over `ModuleInspector#code` (block comments
+  discounted, which is why a JSDoc `@typedef {import('./x.js')}` naming a file the
+  package never ships doesn't 404 the pin), each specifier resolved against the
+  file that imports it, each file fetched once.
+- **Keys** — `<package>/<path without the extension>`, with a trailing `index`
+  dropped, matching `Importmap::Map#module_name_from` exactly; `.mjs` is saved as
+  `.js` because Map's glob is `**/*.js{,m}`.
+- **What it refuses** (all as `Unownable("relative imports")`, because a remote pin
+  works and a graph with a hole doesn't): a path that leaves the package root, one
+  the CDN answers 404 for, one that isn't `.js`/`.mjs`, one whose segments aren't
+  plain names (`..`, `a//b`, a leading `/`, a dot-directory), two files that would
+  collapse to one key or differ only in case, a key the entry pin or another pin
+  already owns, and — the backstop — any file whose rewritten source still carries
+  a relative import, which is how a form the rewrite can't read (a magic comment
+  between the keyword and the specifier) is caught rather than shipped.
+- **Accepted limit** — like `ESM_RUN_IMPORT_REGEXP`, `IMPORT_REGEXP` doesn't parse
+  JavaScript, so a data string spelling out an import statement is rewritten inside
+  the string too.
+
+## `Importmap::VendoredGraph` — the directory and its line (fork-only)
+
+`lib/importmap/vendored_graph.rb`. The graph directory is
+`vendor/javascript/<entry filename without .js>/` — named for the *pin*, so two
+pins of one package each own their own — while the keys go under the package the
+*CDN URL* names, so a module they share resolves to one key and is evaluated once
+(jspm resolves Node's `buffer` and `crypto` into `@jspm/core`). `to:` on the line
+is what makes the asset path match the directory.
+
+Ownership is the line: `mapped?` requires both the directory path and the
+`(graph of …)` comment, so a `pin_all_from` an app wrote itself is never rewritten
+and its directory is never deleted. `write` builds a pid-suffixed partial beside
+the target and `commit` renames the old directory aside, moves the new one in and
+removes the old — restoring it if the move fails.
+
 ## Related
 
 - [../packager/summary.md](../packager/summary.md) — pin-line rewriting, provenance, provider resolution; how `Unvendorable`/`NotAnEsModule` (raised from `ensure_servable`) feed a pin's `remote: <reason>` detail.

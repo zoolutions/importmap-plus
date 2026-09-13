@@ -54,3 +54,21 @@ How `bin/importmap` decides what to pin, where to resolve it from, and what to l
 - **Where:** `lib/importmap/commands.rb#pin_vendored_package` (and the same sentence in `#pristine`); `lib/importmap/packager.rb#package_filename`
 - **Proven by:** `test/commands_test.rb:"update command resolves a subpath pin from the CDN its package's pin names"` asserts the upstream wording verbatim
 - **Origin:** PR #23
+
+### `pristine` reports the packages it can't restore, restores the rest, and exits non-zero
+- **Holds because:** it is the repair command, and a graphed pin now re-crawls, so one sibling URL the CDN has stopped serving raises `Unvendorable` where nothing used to raise at all. Left unrescued that took the whole batch down with a backtrace and every package after it went unrestored. `restore_package` rescues `Unvendorable`/`NotAnEsModule` per package, prints `Couldn't restore "<pkg>": it …`, and the command exits 1 having done the rest — the same shape as `update`'s treatment of a package the registry couldn't answer for.
+- **Where:** `lib/importmap/commands.rb#pristine`, `#restore_package`
+- **Safe direction:** a printed sentence and a non-zero exit says what didn't happen; a backtrace halfway through a repair leaves an app half-repaired and no list of what is missing.
+- **Origin:** gate round 1 (correctness), PR #30
+
+### A `pristine` that moves a graphed package to a CDN that bundles takes the graph line with the directory
+- **Holds because:** `pristine --from esm.run` on a jspm-graphed pin downloads a `+esm` bundle, which has no relative imports, so no graph is built and the directory is removed — and the `pin_all_from` line was left mapping a directory that no longer exists, with `mapped?` still answering true on every later run. `restore_package` calls `remove_graph` whenever the download came back without one.
+- **Where:** `lib/importmap/commands.rb#restore_package`; `lib/importmap/packager.rb#remove_graph`
+- **Proven by:** `test/commands_test.rb:"pristine command with --from esm.run drops the graph a jspm pin had"`
+- **Origin:** gate round 1 (correctness), PR #30
+
+### A pin whose key a vendored graph already maps is pinned, and said out loud
+- **Holds because:** `Importmap::Map#expanded_packages_and_directories` expands directories *over* packages, so a key a `pin_all_from` defines resolves to that file however the pin beside it is written — `pin date-fns/format@2.29.3` next to a graph of `date-fns@2.30.0` writes a line that never takes effect. The graph itself refuses to define a key an existing pin owns (`forbidden`), but nothing can stop the reverse, so `pin` prints `Note: the graph of "<package>" already maps "<key>", and a mapped directory wins over a pin`.
+- **Where:** `lib/importmap/commands.rb#report_graph_shadowing`; `lib/importmap/vendored_graph.rb#mapping_for`; `lib/importmap/map.rb#expanded_packages_and_directories`
+- **Proven by:** `test/vendored_graph_test.rb:"mapping_for names the package whose directory already maps a key"` (the note itself is not asserted)
+- **Origin:** gate round 1 (correctness), PR #30

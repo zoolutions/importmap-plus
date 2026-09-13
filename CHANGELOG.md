@@ -50,11 +50,11 @@
   URL and the reason goes on the pin:
 
   ```
-  $ bin/importmap pin @popperjs/core@2.11.8
-  Pinning "@popperjs/core" to https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js (kept remote: relative imports)
+  $ bin/importmap pin fflate@0.8.2
+  Pinning "fflate" to https://ga.jspm.io/npm:fflate@0.8.2/esm/browser.js (kept remote: workers)
   ```
   ```ruby
-  pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js" # @2.11.8 (remote: relative imports)
+  pin "fflate", to: "https://ga.jspm.io/npm:fflate@0.8.2/esm/browser.js" # @0.8.2 (remote: workers)
   ```
 
   The pin then behaves like any other remote pin — `pin` and `update`

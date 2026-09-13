@@ -161,7 +161,14 @@ class Views::Docs::Pages::Updating < DocsUI::Page
         crawled again and the directory rebuilt — that is what restoring such a pin
         means. `pristine` restores, it never re-decides: a package pinned as one
         file stays one file, and gets a graph only when a `pin` or `update` gives it
-        one. See [Packages that ship more than one file](/docs/pinning).
+        one. A `--from` that moves such a package to a CDN that bundles takes the
+        graph away again, directory and line together. See
+        [Packages that ship more than one file](/docs/pinning).
+
+        A package the CDN can no longer serve the way its pin describes is reported
+        and skipped — `Couldn't restore "pdfjs-dist": it can't be vendored as a
+        single file (workers)` — and the rest of the packages are still restored;
+        the command exits non-zero to say it didn't do all of it.
       MD
     end
   end

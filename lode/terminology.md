@@ -2,7 +2,7 @@
 
 - pin — one `pin "name", to: …` line in `config/importmap.rb`; the unit the CLI reads and rewrites.
 - pin line — the literal source line, matched by regex (`Importmap::Map.pin_line_regexp_for`); there is no AST.
-- provenance comment — the trailing `# @<version> (<provider>[, minified][, vendored][, remote[: <reason>]][, locked])`; the fork's metadata, ignored by upstream.
+- provenance comment — the trailing `# @<version> (<provider>[, minified][, vendored][, remote[: <reason>]][, locked])`; the fork's metadata, ignored by upstream. A graph line carries its own one-detail form, `# @<version> (graph of <package>)`.
 - provider — the CDN a pin came from: `jspm.io` (default, omitted from the comment), `esm.run` (jsDelivr's bundled builds), and the hosts in `PROVIDER_HOSTS` — `jsdelivr`, `unpkg`, `skypack`, `esm.sh`.
 - provider chain — the order `pin` tries providers when one cannot resolve a package (`provider_chain.rb`).
 - vendored pin — a pin whose file was downloaded to `vendor/javascript/<name>.js`; `to:` is absent or local.
@@ -11,8 +11,11 @@
 - locked — a pin held at its version; `update` skips it and `pin` keeps it when a CDN resolves it as a dependency.
 - subpath pin — `pkg/sub`; vendored as `pkg--sub.js`; answers for its own provider first, then its package's.
 - scoped package — `@scope/name`; vendored as `@scope--name.js`.
+- file graph — the closed set of files a chunked package's entry reaches through relative imports, all under the package's own version directory on the CDN (`package_graph.rb`).
+- graph directory — `vendor/javascript/<entry filename without .js>/`, holding those files; owned by the one pin that wrote it and replaced whole on every download (`vendored_graph.rb`).
+- graph line — the `pin_all_from "<graph directory>", under: "<package>"[, to: …] # @<version> (graph of <package>)` that maps it. Invisible to every pin regex; found by its own directory *and* its own comment, so a `pin_all_from` an app wrote itself is never rewritten and its directory is never deleted.
 - single-file check — `ModuleInspector`'s decision whether a downloaded file can stand alone; a file that cannot is kept remote with a reason. Three things skip the check: `--vendor` for the packages it names, `pristine` (always `force: true`), and a pin already marked `(vendored)`.
-- remote reason — one of `relative imports`, `dynamic imports`, `workers`, `import.meta.url`, `wasm`, `not an ES module`.
+- remote reason — one of `relative imports`, `dynamic imports`, `workers`, `import.meta.url`, `wasm`, `not an ES module`. `relative imports` reaches a pin only when the graph couldn't be taken over whole, or the CDN is one whose package directory can't be addressed.
 - esm.run bundle — a jsDelivr `+esm` build whose `/npm/dep@ver/+esm` imports the packager rewrites to bare specifiers.
 - minify — transform-only compression (`--no-bundle`, `--format=esm`) by bun, esbuild or terser already on the machine.
 - preload / integrity — upstream pin options every rewrite path carries through: `preload:` as `true`/`false`, a quoted string or a double-quoted array (a single-quoted array raises `JSON::ParserError` in `preload_from_string` and `[]` is dropped — issue #28), `integrity:` only as the boolean `INTEGRITY_OPTION_REGEXP` captures. A literal SRI hash is not round-tripped, so a rewrite that changes the URL drops it rather than leaving a hash that no longer matches the file.
