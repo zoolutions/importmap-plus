@@ -2,6 +2,7 @@ require "net/http"
 require "uri"
 require "json"
 require "importmap/minifier"
+require "importmap/module_inspector"
 require "importmap/http_retries"
 
 class Importmap::Packager
@@ -50,11 +51,33 @@ class Importmap::Packager
   # today rather than mistaken for a provider name.
   LOCK_DETAIL        = "locked".freeze # :nodoc:
   LOCK_DETAIL_REGEXP = /\Alocked(?::\s*(.+))?\z/.freeze # :nodoc:
+  # Why a package was left pinned to its CDN URL instead of vendored, and the
+  # mark that says a vendored file was kept despite that check:
+  #   pin "@popperjs/core", to: "https://…" # @2.11.8 (remote: relative imports)
+  #   pin "@popperjs/core", to: "@popperjs--core.js" # @2.11.8 (vendored)
+  # Both sit in the same slot — a pin is one or the other, never both — and
+  # both have to be excluded when the provider is read, or "vendored" and
+  # "remote: workers" are taken for CDN names.
+  REMOTE_DETAIL        = "remote".freeze # :nodoc:
+  REMOTE_DETAIL_REGEXP = /\Aremote(?::\s*(.+))?\z/.freeze # :nodoc:
+  VENDORED_DETAIL      = "vendored".freeze # :nodoc:
   DEFAULT_PROVIDER = "jspm.io".freeze # :nodoc:
 
   Error        = Class.new(StandardError)
   HTTPError    = Class.new(Error)
   ServiceError = Error.new(Error)
+
+  # A download that can't be served as the one file an import map entry points
+  # at. Raised before anything is written, so the vendored file an app already
+  # has survives; #reasons lists every pattern Importmap::ModuleInspector found.
+  class Unvendorable < Error
+    attr_reader :reasons
+
+    def initialize(reasons)
+      @reasons = Array(reasons)
+      super("can't be vendored as a single file (#{@reasons.join(", ")})")
+    end
+  end
 
   singleton_class.attr_accessor :endpoint
   self.endpoint = URI("https://api.jspm.io/generate")
@@ -112,18 +135,21 @@ class Importmap::Packager
     end
   end
 
-  # A remote pin has no version comment unless it is locked; then the version
-  # in its URL is written out so the lock has something to hold:
+  # A remote pin has no version comment unless it is locked or was kept remote
+  # because its file can't stand alone; then the version in its URL is written
+  # out so the lock and the reason have something to hang off:
   #
   #   pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js" # @2.2.0 (locked)
+  #   pin "@popperjs/core", to: "https://ga.jspm.io/…" # @2.11.8 (remote: relative imports)
   #
-  def pin_for(package, url = nil, preloads: nil, integrity: nil, locked: false)
+  def pin_for(package, url = nil, preloads: nil, integrity: nil, locked: false, remote: nil)
     to = url ? %(, to: "#{url}") : ""
     preload_param = preload(preloads)
     integrity_param = integrity.nil? ? "" : %(, integrity: #{integrity})
-    version = extract_package_version_from(url.to_s) if locked
+    version = extract_package_version_from(url.to_s) if locked || remote
 
-    %(pin "#{package}") + to + preload_param + integrity_param + (version ? provenance_comment(version, locked: true) : "")
+    %(pin "#{package}") + to + preload_param + integrity_param +
+      (version ? provenance_comment(version, remote: remote, locked: locked) : "")
   end
 
   # The pin line for a vendored download. The version comment also records
@@ -133,17 +159,18 @@ class Importmap::Packager
   #   pin "luxon" # @3.7.2
   #   pin "luxon" # @3.7.2 (esm.run, minified, locked)
   #
-  def vendored_pin_for(package, url, preloads = nil, minify: false, integrity: nil, locked: false)
+  def vendored_pin_for(package, url, preloads = nil, minify: false, integrity: nil, locked: false, vendored: false)
     filename = package_filename(package)
     version  = extract_package_version_from(url)
     to = "#{package}.js" != filename ? filename : nil
 
     pin_for(package, to, preloads: preloads, integrity: integrity) +
-      provenance_comment(version, provider: provider_for_url(url), minified: minify, locked: locked)
+      provenance_comment(version, provider: provider_for_url(url), minified: minify, vendored: vendored, locked: locked)
   end
 
   # What the pin's version comment says a package was built with:
-  # { version:, provider:, minified:, locked: }, or nil for a pin without one.
+  # { version:, provider:, minified:, vendored:, remote:, locked: }, or nil for
+  # a pin without one.
   def pin_provenance(package)
     provenance_of(pin_line_for(package))
   end
@@ -218,10 +245,11 @@ class Importmap::Packager
   # updates keep minifying. Returns the dependencies an esm.run bundle imports
   # as [package, url] pairs (empty for every other provider), with the bundle's
   # absolute /npm/... imports rewritten to bare specifiers on the way in.
-  def download(package, url, minify: false)
+  # Raises Unvendorable unless +force+, when the download imports a sibling
+  # file, spawns a worker or otherwise needs more than itself on disk.
+  def download(package, url, minify: false, force: false)
     ensure_vendor_directory_exists
-    remove_existing_package_file(package)
-    download_package_file(package, url, minify: minify)
+    download_package_file(package, url, minify: minify, force: force)
   end
 
   def remove(package)
@@ -255,6 +283,20 @@ class Importmap::Packager
     provider = provider_for_url(url)
 
     { provider: provider == DEFAULT_PROVIDER ? nil : provider, minified: minify ? true : false }
+  end
+
+  # Why a pin was kept remote, as its comment records it: the reason string,
+  # true for a bare "(remote)", or nil. Passed back to #pin_for on a rewrite so
+  # update and pristine don't drop it.
+  def remote_reason(package)
+    pin_provenance(package)&.dig(:remote)
+  end
+
+  # Whether the pin says it was vendored on purpose — `pin --vendor` overriding
+  # the single-file check — so a later update vendors it again instead of
+  # converting it back to a remote pin.
+  def vendored?(package)
+    pin_provenance(package)&.dig(:vendored) || false
   end
 
   def remote_pin?(package)
@@ -315,19 +357,37 @@ class Importmap::Packager
       minified = details.delete("minified") ? true : false
       locked   = without_lock(details).size != details.size
 
-      { version: match[1], provider: without_lock(details).first, minified: minified, locked: locked }
+      { version: match[1], provider: without_named_details(details).first, minified: minified,
+        vendored: details.include?(VENDORED_DETAIL), remote: remote_detail_of(details), locked: locked }
     end
 
     def without_lock(details)
       details.reject { |detail| detail.match?(LOCK_DETAIL_REGEXP) }
     end
 
+    # The provider is read as the first detail left over, so every named detail
+    # has to come out of the list first or it is taken for a CDN name.
+    def without_named_details(details)
+      without_lock(details).reject { |detail| detail == VENDORED_DETAIL || detail.match?(REMOTE_DETAIL_REGEXP) }
+    end
+
+    # "remote: relative imports" carries its reason; a bare "remote" says only
+    # that the pin was kept remote, which is still worth keeping on a rewrite.
+    def remote_detail_of(details)
+      match = details.filter_map { |detail| detail.match(REMOTE_DETAIL_REGEXP) }.first
+      return unless match
+
+      match[1] || true
+    end
+
     # " # @3.7.2 (esm.run, minified, locked)" — the details in their fixed
     # order, the parens only when there is something to say.
-    def provenance_comment(version, provider: nil, minified: false, locked: false)
+    def provenance_comment(version, provider: nil, minified: false, vendored: false, remote: nil, locked: false)
       details = []
       details << provider if provider && provider != DEFAULT_PROVIDER
       details << "minified" if minified
+      details << VENDORED_DETAIL if vendored
+      details << (remote == true ? REMOTE_DETAIL : "#{REMOTE_DETAIL}: #{remote}") if remote
       details << LOCK_DETAIL if locked
 
       %( # @#{version.to_s.delete_prefix("@")}) + (details.any? ? %( (#{details.join(", ")})) : "")
@@ -454,12 +514,21 @@ class Importmap::Packager
       end
     end
 
-    def download_package_file(package, url, minify: false)
+    # The file an app already has is replaced only once the new one is known to
+    # be downloadable, minifiable and servable on its own; a refusal here, or a
+    # failure above it, leaves the working file in place. The inspection runs on
+    # the source as it will be written — after an esm.run bundle's imports have
+    # become bare specifiers, before minifying, which rewrites nothing that
+    # matters to it.
+    def download_package_file(package, url, minify: false, force: false)
       response = with_retries("downloading #{url}") { Net::HTTP.get_response(URI(url)) }
 
       if response.code == "200"
         source = response.body.dup.force_encoding("UTF-8")
         source, dependencies = rewrite_esm_run_imports(source) if url.match?(ESM_RUN_URL_REGEXP)
+
+        ensure_vendorable(source) unless force
+
         source = self.class.minifier.call(source) if minify
 
         save_vendored_package(package, url, source, minified: minify)
@@ -470,12 +539,35 @@ class Importmap::Packager
       end
     end
 
+    def ensure_vendorable(source)
+      inspection = Importmap::ModuleInspector.new(source)
+
+      raise Unvendorable, inspection.reasons unless inspection.vendorable?
+    end
+
+    # The download is written beside its target and renamed over it, so a write
+    # that fails partway — a full disk, a killed process — leaves the file the
+    # app already had rather than half of the new one. Rename replaces a file
+    # atomically; a directory in the way is the one case it can't, and that gets
+    # cleared first the way it always was.
+    #
+    # The partial carries the pid so two shells pinning the same package can't
+    # write each other's file, or clean each other's up on the way out.
     def save_vendored_package(package, url, source, minified: false)
-      File.open(vendored_package_path(package), "w+") do |vendored_package|
+      target  = vendored_package_path(package)
+      partial = Pathname.new("#{target}.#{Process.pid}.download")
+
+      File.open(partial, "w+") do |vendored_package|
         vendored_package.write "// #{package}#{extract_package_version_from(url)} downloaded from #{url}#{" (minified)" if minified}\n\n"
 
         vendored_package.write remove_sourcemap_comment_from(source).force_encoding("UTF-8")
       end
+
+      remove_existing_package_file(package) if target.directory?
+      File.rename(partial, target)
+    rescue
+      FileUtils.rm_f(partial)
+      raise
     end
 
     # Turns import "/npm/dep@1.2.3/+esm" into import "dep" so the bundle

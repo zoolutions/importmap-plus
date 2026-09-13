@@ -11,6 +11,7 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
   def content
     vendoring
     choosing_a_cdn
+    cant_be_vendored_alone
     remote_pins
     custom_urls
     options_survive
@@ -69,6 +70,93 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
         go back to it — an unpkg download stays on unpkg through `update` and
         `pristine`. Pass `--from` again to move a package to another CDN. See
         [Provenance](/docs/provenance).
+      MD
+    end
+  end
+
+  def cant_be_vendored_alone
+    DocsUI::Section("Packages that can't be vendored alone",
+                    description: "Pinned to the CDN instead of downloaded, with the reason on the pin.") do
+      md <<~'MD'
+        A vendored package is exactly one file, served under a digested asset path.
+        Plenty of packages ship a file that expects the rest of the package beside
+        it — it imports a sibling by relative path, spawns a worker, or reads
+        `import.meta.url` to find its own directory. Downloaded on its own, every one
+        of those references 404s in the browser, and you find out on the page.
+
+        `pin` reads what it downloaded before writing anything to
+        `vendor/javascript`. A file that can't stand alone is pinned to its CDN URL
+        instead, and the pin comment records why:
+      MD
+      DocsUI::Code(<<~SHELL, lexer: :console)
+        $ ./bin/importmap pin @popperjs/core@2.11.8
+        Pinning "@popperjs/core" to https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js (kept remote: relative imports)
+      SHELL
+      DocsUI::Code(<<~RUBY, filename: "config/importmap.rb")
+        pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js" # @2.11.8 (remote: relative imports)
+      RUBY
+      md <<~'MD'
+        From then on the pin behaves like any other remote pin: `pin` and `update`
+        re-resolve it from the same CDN and keep the reason, and `pristine` skips it.
+        The vendored file an app already has is never removed by a refusal — the
+        download is inspected before anything on disk is touched.
+
+        Five things are looked for, and all of them are reported:
+      MD
+      DocsUI::Table(
+        [ "Reason", "What was found" ],
+        [
+          [ [ :code, "relative imports" ], [ :md, 'An `import` or `export` from `"./x"` or `"../x"` — a sibling file that was never downloaded.' ] ],
+          [ [ :code, "dynamic imports" ], [ :md, "An `import()` of something other than a string literal, so what it loads isn't knowable here." ] ],
+          [ [ :code, "workers" ], [ :md, "`new Worker(…)` or `new SharedWorker(…)`. A worker is fetched as its own script and never goes through the import map." ] ],
+          [ [ :code, "import.meta.url" ], [ :md, "The file asking for its own URL, which is a digested asset path, not the directory the package was published to." ] ],
+          [ [ :code, "wasm" ], [ :md, "A string naming a `.wasm` binary, fetched at runtime from a path that isn't there." ] ]
+        ]
+      )
+      md <<~'MD'
+        The check reads the source with regular expressions rather than parsing
+        JavaScript. Block comments and regex literals are discounted first — a
+        published bundle is full of `/** @typedef {import('./slide.js').Slide} Slide */`,
+        naming files it never loads — but string literals are read as they stand. So
+        a string containing `import "./x.js"` keeps a package remote, while a bare
+        `const path = "./x.js"` matches nothing: the first four patterns are anchored
+        on the keyword. Only `wasm` matches a plain string, since a `.wasm` path
+        needs no keyword to be fetched.
+
+        That asymmetry is deliberate, because the two mistakes are not equal: a
+        package wrongly kept remote still works, while one wrongly vendored 404s in
+        the browser. When you know better, `--vendor` downloads it anyway:
+      MD
+      DocsUI::Code(<<~SHELL, lexer: :console)
+        $ ./bin/importmap pin @popperjs/core@2.11.8 --vendor
+        Pinning "@popperjs/core" to vendor/javascript/@popperjs/core.js via download from https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js
+      SHELL
+      DocsUI::Code(<<~RUBY, filename: "config/importmap.rb")
+        pin "@popperjs/core", to: "@popperjs--core.js" # @2.11.8 (vendored)
+      RUBY
+      md <<~'MD'
+        The sentence names the package, `@popperjs/core`, while the file on disk is
+        `@popperjs--core.js` — a `/` in a package name becomes `--`, as the pin's
+        `to:` shows.
+
+        `--vendor` also converts a pin that was kept remote back to a download. The
+        `vendored` mark is what makes the override stick: without it the next
+        `update` would inspect the new download, refuse it again and quietly undo
+        your decision.
+
+        It applies only to the packages you name, not to the dependencies a CDN
+        resolves alongside them: `pin bootstrap --vendor` vendors bootstrap, while
+        its `@popperjs/core` dependency is still checked and kept remote, so the
+        override can't quietly vendor something you never asked about. Pass
+        `--remote` and `--vendor` together and `--remote` wins — it names a
+        destination, where `--vendor` only overrides a check.
+
+        Packages an app already vendored before this check existed are not rewritten
+        on their own, and `bin/importmap pristine` downloads them again exactly as
+        their pins say. The next `pin` or `update` that touches one does re-resolve
+        it, though, and converts it if its file can't stand alone — which is the fix
+        arriving rather than a surprise, since that vendored file was already
+        404ing for the siblings it wanted.
       MD
     end
   end

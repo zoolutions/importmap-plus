@@ -758,6 +758,90 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes out, "2 outdated packages found"
   end
 
+  test "pin command keeps a package remote when its file can't stand alone, and says why" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "@popperjs/core@2.11.8")
+
+    assert_includes out, 'Pinning "@popperjs/core" to https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js (kept remote: relative imports)'
+    assert_not_includes out, "via download"
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, %(pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js" # @2.11.8 (remote: relative imports)\n)
+    assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core.js")
+  end
+
+  test "pin command with --vendor downloads a package that can't stand alone anyway" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "@popperjs/core@2.11.8", "--vendor")
+
+    assert_includes out, 'Pinning "@popperjs/core" to vendor/javascript/@popperjs/core.js via download'
+    assert_not_includes out, "kept remote"
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, %(pin "@popperjs/core", to: "@popperjs--core.js" # @2.11.8 (vendored)\n)
+    assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core.js")
+  end
+
+  test "pin command with --vendor converts a pin that was kept remote back to a download" do
+    importmap_config('pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js" # @2.11.8 (remote: relative imports)')
+
+    run_importmap_command("pin", "@popperjs/core@2.11.8", "--vendor")
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, %(pin "@popperjs/core", to: "@popperjs--core.js" # @2.11.8 (vendored)\n)
+    assert_not_includes content, "remote:"
+    assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core.js")
+  end
+
+  test "update command leaves a pin that was kept remote remote, with its reason" do
+    importmap_config('pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.7/lib/index.js" # @2.11.7 (remote: relative imports)')
+
+    out, _err = run_importmap_command("update")
+
+    assert_includes out, 'Pinning "@popperjs/core"'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_match %r{^pin "@popperjs/core", to: "https://ga\.jspm\.io/npm:@popperjs/core@2\.11\.\d+/lib/index\.js" # @2\.11\.\d+ \(remote: relative imports\)$}, content
+    assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core.js")
+  end
+
+  test "update command keeps a package vendored with --vendor vendored" do
+    importmap_config("")
+
+    run_importmap_command("pin", "@popperjs/core@2.11.7", "--vendor")
+
+    out, _err = run_importmap_command("update")
+
+    assert_includes out, 'Pinning "@popperjs/core"'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_match %r{^pin "@popperjs/core", to: "@popperjs--core\.js" # @2\.11\.\d+ \(vendored\)$}, content
+    assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core.js")
+  end
+
+  test "pin command with --lock locks a package it kept remote" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "@popperjs/core@2.11.8", "--lock")
+
+    assert_includes out, "kept remote: relative imports"
+    assert_includes out, 'Locked "@popperjs/core" at 2.11.8'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, %(# @2.11.8 (remote: relative imports, locked)\n)
+  end
+
+  test "pin command keeps the options of a pin it keeps remote" do
+    importmap_config('pin "@popperjs/core", to: "@popperjs--core.js", preload: false # @2.11.7')
+
+    run_importmap_command("pin", "@popperjs/core@2.11.8")
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, %(pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js", preload: false # @2.11.8 (remote: relative imports)\n)
+  end
+
   test "update command with a package name re-pins every key of that package" do
     importmap_config(<<~PINS)
       pin "photoswipe" # @5.3.0 (jsdelivr)

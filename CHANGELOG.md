@@ -1,9 +1,45 @@
 # Changelog
 
-## 1.1.2
+## 1.2.0
+
+### Added
+
+- **`pin` keeps a package remote when its file can't stand alone, and says
+  why.** A vendored package is one file served under a digested asset path,
+  but plenty of packages ship a file that imports a sibling by relative path,
+  spawns a `Worker`, reads `import.meta.url` or fetches a `.wasm` binary —
+  every one of those 404s in the browser, and importmap-rails vendors it
+  anyway. `pin` now reads the download before writing anything to
+  `vendor/javascript`; a file that needs more than itself is pinned to its CDN
+  URL and the reason goes on the pin:
+
+  ```
+  $ bin/importmap pin @popperjs/core@2.11.8
+  Pinning "@popperjs/core" to https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js (kept remote: relative imports)
+  ```
+  ```ruby
+  pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js" # @2.11.8 (remote: relative imports)
+  ```
+
+  The pin then behaves like any other remote pin — `pin` and `update`
+  re-resolve it from the same CDN and keep the reason, `pristine` skips it.
+  `pin --vendor` downloads the package anyway and records `(vendored)` on the
+  pin, so a later `update` doesn't undo the override; it also converts a pin
+  that was kept remote back to a download. Nothing an app already vendored is
+  rewritten on its own — `pristine` redownloads those pins as it always has —
+  but the next `pin` or `update` that touches one re-resolves it, and a package
+  whose file can't stand alone converts to a remote pin then. That is the fix
+  arriving, not a surprise: the vendored file it replaces was already 404ing
+  for its siblings. pdf.js is the package most apps will see this on — see
+  the upgrading page for what to expect and how `--vendor` puts it back.
 
 ### Fixed
 
+- **A failed download no longer deletes the file an app already has.**
+  `pin` and `pristine` removed `vendor/javascript/<package>.js` before
+  fetching, so a CDN that answered 500 — or, now, a file that can't be
+  vendored — left the app with no file at all. The existing file is replaced
+  only once the new one has arrived and been found fit to serve.
 - **`update <package>` moves every pin of that package, not just the bare
   one.** An app with `pin "pdfjs-dist"` and
   `pin "pdfjs-dist/build/pdf.worker.min.mjs"` ran `update pdfjs-dist` and got

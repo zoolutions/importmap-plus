@@ -38,10 +38,28 @@ class Importmap::PackagerIntegrationTest < ActiveSupport::TestCase
 
       package_url = "https://ga.jspm.io/npm:react@17.0.2/index.js"
       vendored_package_file = Pathname.new(vendor_dir).join("react.js")
-      @packager.download("react", package_url)
+      # This react imports a sibling file, so it is one of the packages a plain
+      # download refuses; forced, because what is under test here is the
+      # download, the file header and remove.
+      @packager.download("react", package_url, force: true)
       assert File.exist?(vendored_package_file)
       assert_equal "// react@17.0.2 downloaded from #{package_url}", File.readlines(vendored_package_file).first.strip
       @packager.remove("react")
+      assert_not File.exist?(Pathname.new(vendor_dir).join("react.js"))
+    end
+  end
+
+  test "download refuses a live package whose file can't stand alone" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = Importmap::Packager.new \
+        Rails.root.join("config/importmap.rb"),
+        vendor_path: Pathname.new(vendor_dir)
+
+      error = assert_raises(Importmap::Packager::Unvendorable) do
+        packager.download("react", "https://ga.jspm.io/npm:react@17.0.2/index.js")
+      end
+
+      assert_equal [ "relative imports" ], error.reasons
       assert_not File.exist?(Pathname.new(vendor_dir).join("react.js"))
     end
   end
