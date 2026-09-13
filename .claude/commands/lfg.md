@@ -2,7 +2,7 @@
 description: "Executes the full autonomous engineering workflow with verification. Use when implementing a complete feature, tackling a GitHub issue, or running an end-to-end development cycle on importmap-plus."
 model: opus
 argument-hint: "GitHub issue number/URL, a docs/plans/*.md path, or a feature description"
-allowed-tools: Bash(gh issue view:*), Bash(gh search:*), Bash(gh issue list:*), Bash(gh pr create:*), Bash(gh pr view:*), Bash(bundle exec:*), Bash(bundle install:*), Bash(BUNDLE_GEMFILE=*), Bash(git:*), Bash(cd:*), Read, Write, Edit, Glob, Grep, Agent
+allowed-tools: Bash(gh issue view:*), Bash(gh search:*), Bash(gh issue list:*), Bash(gh pr create:*), Bash(gh pr view:*), Bash(bundle exec:*), Bash(bundle install:*), Bash(BUNDLE_GEMFILE=*), Bash(git:*), Bash(cd:*), Read, Write, Edit, Glob, Grep, Agent, Skill
 ---
 
 # LFG — Full Autonomous Workflow
@@ -196,9 +196,15 @@ Confirm the `--minify` tests **ran** (not skipped) — install bun if they didn'
 
 ---
 
+## Phase 6.5: Gate
+
+Run Phase 7's **Commit** step now — commit only, no push — then run `/lode:gate`. It reviews the branch with fresh-context agents against `CLAUDE.md`, the rules and `lode/review/`, proves every new test fails without the change, and loops until nothing at P1 or P2 remains. Each round's fixes are their own commit, so by the time the gate is clean the tree is committed and Phase 7 starts at **Push & PR**. The push hook refuses `git push` and `gh pr create` until the gate has passed on the exact tree at `HEAD`, so any later edit means another round. Let the gate run `/lode:learn gate` so the confirmed findings land in `lode/review/` in this PR, and keep its `## Gate` section for the PR body.
+
 ## Phase 7: Commit & PR
 
 ### Commit
+
+Already done in Phase 6.5 if you came through it; run this only for work the gate has not yet seen.
 
 ```bash
 git add <specific files>       # never -A: docs/ may hold untracked build output
@@ -235,6 +241,9 @@ Closes #<issue>
 
 ## Deviations & judgment calls
 <contents of implementation-notes.md, or "None — the plan held.">
+
+## Gate
+<the ## Gate section /lode:gate printed in Phase 6.5>
 EOF
 gh pr create --title "feat(cli): brief description" --body-file /tmp/pr-body.md
 rm /tmp/pr-body.md implementation-notes.md
@@ -242,7 +251,7 @@ rm /tmp/pr-body.md implementation-notes.md
 
 With a single-quoted heredoc, backticks and `$` pass through verbatim — never escape them. `--body-file` sidesteps the shell entirely and is the default here because PR bodies for this gem quote pin lines and commands.
 
-The PR body MUST end with a `## Deviations & judgment calls` section. It is read first in review — the audit trail for every decision the plan didn't make.
+The PR body MUST end with a `## Deviations & judgment calls` section followed by the `## Gate` section from Phase 6.5. It is read first in review — the audit trail for every decision the plan didn't make.
 
 ---
 
@@ -264,7 +273,8 @@ The tests prove the code; this keeps the user's mental model right. End your fin
 - [ ] Docs page and CHANGELOG updated for user-visible changes
 - [ ] Upstream-owned file diffs are additive and in upstream's style
 - [ ] `config/importmap.rb` output still parses under importmap-rails
-- [ ] PR created; body ends with Deviations & judgment calls
+- [ ] `/lode:gate` clean on the exact tree pushed, and `/lode:learn gate` run
+- [ ] PR created; body ends with Deviations & judgment calls, then the Gate section
 - [ ] Comprehension close-out delivered
 
 Now execute this workflow for: $ARGUMENTS

@@ -4,6 +4,10 @@ A drop-in replacement for [rails/importmap-rails](https://github.com/rails/impor
 
 This is a **maintained fork that still tracks upstream**. The `upstream` remote points at rails/importmap-rails, `Importmap::UPSTREAM_VERSION` names the release currently merged in, and `Importmap::VERSION` is this gem's own semver. The fork rules are in `.claude/rules/upstream-sync.md`.
 
+## Memory
+
+Durable project memory lives in `lode/` (index: `lode/lode-map.md`). Read it before exploring the code. `lode/review/` holds accepted review findings as rules about the system; `/lode:gate` enforces them before any push and `/lode:learn` adds to them. The lode describes the system as it is; `CHANGELOG.md` records what changed.
+
 ## Tech Stack
 
 - **Ruby**: >= 3.1 (CI: 3.1–4.0) | **Rails**: >= 6.0 (CI: 6.1 → main, sprockets and propshaft)
@@ -20,7 +24,7 @@ This is a **maintained fork that still tracks upstream**. The `upstream` remote 
 1. **NO breaking the importmap-rails surface** — every constant, helper, DSL method, option, generator and rake task importmap-rails ships must keep working unchanged. Additions only; a rename or removal is a fork-breaking change.
 2. **NO new runtime dependencies** — the gemspec lists railties, activesupport and actionpack. Minification shells out to a bun/esbuild/terser already on the machine; it does not bundle one.
 3. **NO touching import specifiers in vendored files** — minification is transform-only (`--no-bundle`, `--format=esm`), so bare specifiers stay exactly as the CDN resolved them and the import map keeps resolving them. The one deliberate exception is `rewrite_esm_run_imports`, which turns a jsDelivr bundle's `/npm/dep@ver/+esm` imports into bare specifiers.
-4. **NO losing a pin's provenance or options on rewrite** — the `# @version (provider, minified, locked)` comment plus `preload:` and `integrity:` must survive `pin`, `update`, `pristine` and `unpin`. Dropping them silently drifts a package back to jspm on the next update.
+4. **NO losing a pin's provenance or options on rewrite** — the `# @<version> (<provider>[, minified][, vendored][, remote[: <reason>]][, locked])` comment plus `preload:` and `integrity:` must survive `pin`, `update`, `pristine` and `unpin`. Dropping them silently drifts a package back to jspm on the next update.
 5. **NO raw `Net::HTTP` calls in Packager or Npm** — every outbound request goes through `with_retries` (`Importmap::HttpRetries`) and raises the class's own `HTTPError` once the attempts are spent.
 6. **NO network access on the request path** — engine → `Map` → helpers never reach a CDN or registry. Only the CLI (`Commands` → `Packager` / `Npm`) does.
 7. **NO hand-merging `Gemfile.lock`, `docs/Gemfile.lock` or `docs/bun.lock`** — regenerate them (`.claude/rules/git-workflow.md`). `gemfiles/*.lock` are gitignored; CI deletes and re-resolves them.
@@ -69,6 +73,9 @@ The `--minify` tests **skip** unless bun, esbuild or terser is on `PATH` or in `
 | `/finish-prs` | Drive a stack of open PRs to merge-ready, one at a time, in order |
 | `/debug-flaky` | Root-cause an intermittent test — evidence → repro → stress-proofed fix; never skip/retry |
 | `/upstream-sync` | Merge a new importmap-rails release, bump `UPSTREAM_VERSION`, re-sync the docs |
+| `/lode:gate` | Pre-PR gate (plugin `lode@zoolutions`): fresh-context review against the rules and `lode/review/`, mutation check, loops until clean; the push hook requires it |
+| `/lode:learn` | Write accepted review findings into `lode/review/`; promote cross-repo classes to zoolutions/claude-plugins |
+| `/lode:sync` | Keep `lode/` true to the code after a change; `audit`, `handover` |
 
 Commands pin a model tier via frontmatter aliases — `sonnet` for pattern-following implementation, `opus` for orchestration, security and full review, `fable` for read-only planning — so they track the latest model per tier. Subagents doing mechanical work (file finding, pattern scans) get a cheaper model passed explicitly.
 
@@ -92,12 +99,12 @@ Two paths, kept apart: the **request path** (engine → Map → helpers, no I/O 
 
 ## The pin-line contract
 
-`config/importmap.rb` is both the app's source of truth and the file the CLI rewrites in place. The Packager's regexes — `PIN_REGEX`, `PRELOAD_OPTION_REGEXP`, `TO_OPTION_REGEXP`, `PIN_PROVENANCE_REGEXP`, `PACKAGE_SPEC_REGEXP` — are the parser; there is no AST. Every rewrite must:
+`config/importmap.rb` is both the app's source of truth and the file the CLI rewrites in place. The Packager's regexes — `PIN_REGEX`, `PRELOAD_OPTION_REGEXP`, `INTEGRITY_OPTION_REGEXP`, `TO_OPTION_REGEXP`, `REMOTE_URL_REGEXP`, `PIN_PROVENANCE_REGEXP`, `PACKAGE_SPEC_REGEXP`, `ESM_RUN_URL_REGEXP`, `ESM_RUN_IMPORT_REGEXP` — are the parser; there is no AST (`lode/packager/summary.md` quotes each one). Every rewrite must:
 
 - match the pin with `Importmap::Map.pin_line_regexp_for(package)` and replace only that line
 - preserve `preload:` and `integrity:` exactly, including `preload: false` and array preloads
 - keep a remote pin (`to: "https://…"`) remote and re-resolve it from the same CDN; leave a custom URL alone
-- re-emit the provenance comment `# @<version> (<provider>[, minified][, locked])` — `jspm.io` is the default provider and is omitted
+- re-emit the provenance comment `# @<version> (<provider>[, minified][, vendored][, remote[: <reason>]][, locked])` — `jspm.io` is the default provider and is omitted; the tokens appear in that order (`Packager#provenance_comment`)
 - name a vendored file `package.gsub("/", "--") + ".js"` (`@hotwired/stimulus` → `@hotwired--stimulus.js`)
 
 ## Fork tracking
