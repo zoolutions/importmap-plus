@@ -884,11 +884,17 @@ class CommandsTest < ActiveSupport::TestCase
     out, _err = run_importmap_command("update")
 
     # The remote pin says jsdelivr, so the subpath is asked of jsdelivr. Taking
-    # the package's skypack instead grouped the two together, and one spec
-    # skypack can't answer for fails the whole batch, subpath included.
+    # the package's skypack instead grouped the two into one request, and one
+    # spec skypack can't answer for fails the whole batch, subpath included.
     content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
     assert_match %r{^pin "photoswipe/lightbox", to: "https://cdn\.jsdelivr\.net/npm/photoswipe@5\.4\.\d+/dist/photoswipe-lightbox\.esm\.js"$}, content
-    assert_not_includes out, %(Couldn't find any packages in ["photoswipe", "photoswipe/lightbox"])
+
+    # Both sides are asserted so neither can fail quietly. skypack stopped
+    # publishing years ago and has no photoswipe 5.4, so the package's own pin
+    # can't move — but it now fails alone rather than taking the subpath down
+    # with it, which is the whole point: the batch names one spec, not two.
+    assert_includes out, %(Couldn't find any packages in ["photoswipe"] on skypack)
+    assert_includes content, %(pin "photoswipe" # @5.3.0 (skypack)\n)
   end
 
   test "update command with a subpath name re-pins only that key" do
