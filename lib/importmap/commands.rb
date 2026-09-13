@@ -421,20 +421,25 @@ class Importmap::Commands < Thor
     # A subpath pin that names no CDN of its own comes from wherever its
     # package's pin came from: pdfjs-dist and pdfjs-dist/build/pdf.worker.min.mjs
     # were pinned together, and jspm, the default, can't resolve either.
+    # A pin answers for itself first and only then for its subpaths: the URL on
+    # pin "photoswipe/lightbox" says more about where that file comes from than
+    # its package's pin does. Asking the package first grouped the two together,
+    # and one spec the CDN can't answer for fails the whole batch.
     def vendored_provider_for(spec)
       key  = packager.package_key_for(spec)
       name = packager.package_name_for(key)
 
-      packager.pin_provenance(key)&.dig(:provider) ||
-        (provider_of_package_pin(name) if key != name)
+      return packager.pin_provenance(key)&.dig(:provider) if key == name
+
+      provider_of_pin(key) || provider_of_pin(name)
     end
 
-    # Only a subpath falls back to its package's pin, and only that pin's URL is
-    # read: a vendored pin records the CDN in its comment, while a remote one
-    # carries it in the URL and, unlocked, has no comment at all. Reading the
-    # URL of every pin instead would change where a plain remote pin resolves
-    # its dependencies from, which is not this fallback's business.
-    def provider_of_package_pin(package)
+    # A vendored pin records its CDN in the version comment; a remote one
+    # carries it in the URL and, unlocked, has no comment at all. Only a subpath
+    # asks this, and a bare package pin above stops at its comment: reading the
+    # URL of every pin would change where a plain remote pin resolves its
+    # dependencies from, which is not this lookup's business.
+    def provider_of_pin(package)
       packager.pin_provenance(package)&.dig(:provider) ||
         packager.provider_for_url(packager.extract_existing_pin_options(package).dig(package, :to))
     end

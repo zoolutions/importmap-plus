@@ -875,6 +875,22 @@ class CommandsTest < ActiveSupport::TestCase
     assert_match %r{^pin "photoswipe/lightbox", to: "photoswipe--lightbox\.js" # @5\.4\.\d+ \(jsdelivr\)$}, content
   end
 
+  test "update command resolves a subpath pin from its own CDN, not its package's" do
+    importmap_config(<<~PINS)
+      pin "photoswipe" # @5.3.0 (skypack)
+      pin "photoswipe/lightbox", to: "https://cdn.jsdelivr.net/npm/photoswipe@5.3.0/dist/photoswipe-lightbox.esm.js"
+    PINS
+
+    out, _err = run_importmap_command("update")
+
+    # The remote pin says jsdelivr, so the subpath is asked of jsdelivr. Taking
+    # the package's skypack instead grouped the two together, and one spec
+    # skypack can't answer for fails the whole batch, subpath included.
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_match %r{^pin "photoswipe/lightbox", to: "https://cdn\.jsdelivr\.net/npm/photoswipe@5\.4\.\d+/dist/photoswipe-lightbox\.esm\.js"$}, content
+    assert_not_includes out, %(Couldn't find any packages in ["photoswipe", "photoswipe/lightbox"])
+  end
+
   test "update command with a subpath name re-pins only that key" do
     importmap_config(<<~PINS)
       pin "photoswipe" # @5.3.0 (jsdelivr)
