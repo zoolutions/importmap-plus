@@ -90,6 +90,20 @@ class Importmap::ModuleInspectorTest < ActiveSupport::TestCase
     # documented caveat, and the harmless direction.
     assert_reason "relative imports", %(const marker = "/* @typedef {import('./x.js')} */";export default marker)
 
+    # A regex literal is code, and a comment opener inside one is not a
+    # comment: /[/*]/ would otherwise swallow the file to the next "*/".
+    assert_reason "relative imports", %(const re = /[/*]/; import y from "./sibling.js"; const end = "*/";)
+    assert_reason "workers", %(const re = /[/*]/; const w = new Worker(u); const end = "*/";)
+
+    # A quote inside a regex literal can only ever leave a comment in place,
+    # never hide code: a span read as a string is kept verbatim, not dropped.
+    assert_reason "relative imports", <<~JS
+      const re = /["']/;
+      /* import "./commented.js" */
+      import y from "./sibling.js";
+    JS
+    assert_reason "relative imports", %(const re = /["']/; /* c */ import y from "./sibling.js";)
+
     # Only the comment is discounted; code beside it still counts.
     assert_reason "relative imports", <<~JS
       /** @typedef {import('./types.js').Type} Type */

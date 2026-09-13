@@ -115,10 +115,13 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
       )
       md <<~'MD'
         The check reads the source with regular expressions rather than parsing
-        JavaScript. Block comments are discounted first — a published bundle is full
-        of `/** @typedef {import('./slide.js').Slide} Slide */`, naming files it
-        never loads — but string literals are read as they stand, so a package that
-        merely mentions `"./x.js"` in a string is kept remote too.
+        JavaScript. Block comments and regex literals are discounted first — a
+        published bundle is full of `/** @typedef {import('./slide.js').Slide} Slide */`,
+        naming files it never loads — but string literals are read as they stand. So
+        a string containing `import "./x.js"` keeps a package remote, while a bare
+        `const path = "./x.js"` matches nothing: the first four patterns are anchored
+        on the keyword. Only `wasm` matches a plain string, since a `.wasm` path
+        needs no keyword to be fetched.
 
         That asymmetry is deliberate, because the two mistakes are not equal: a
         package wrongly kept remote still works, while one wrongly vendored 404s in
@@ -140,6 +143,13 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
         `vendored` mark is what makes the override stick: without it the next
         `update` would inspect the new download, refuse it again and quietly undo
         your decision.
+
+        It applies only to the packages you name, not to the dependencies a CDN
+        resolves alongside them: `pin bootstrap --vendor` vendors bootstrap, while
+        its `@popperjs/core` dependency is still checked and kept remote, so the
+        override can't quietly vendor something you never asked about. Pass
+        `--remote` and `--vendor` together and `--remote` wins — it names a
+        destination, where `--vendor` only overrides a check.
 
         Packages an app already vendored before this check existed are not rewritten
         on their own, and `bin/importmap pristine` downloads them again exactly as

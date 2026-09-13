@@ -52,6 +52,19 @@ class Importmap::ModuleInspector
   # A string literal, consumed whole so nothing inside it is ever read as
   # code. Unterminated, it simply doesn't match and the quote is stepped over.
   STRING_REGEXP = /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/m.freeze # :nodoc:
+  # A regex literal, consumed whole for the same reason: `/[/*]/` otherwise
+  # hands the block-comment matcher an opener and loses the file to the next
+  # `*/`. The body allows an escape or a character class, since both can hold
+  # the delimiter.
+  REGEXP_LITERAL_REGEXP = %r{/(?![*/])(?:[^/\\\n\[]|\\.|\[(?:[^\]\\\n]|\\.)*\])+/[dgimsuvy]*}.freeze # :nodoc:
+  # Whether a `/` opens a regex literal or divides depends on the token before
+  # it. Getting it wrong can only keep text that should have been dropped —
+  # never drop text that should have been kept — so the cautious reading is
+  # the safe one here too. Only the tail of what has been kept is looked at:
+  # matching the whole buffer at every slash is quadratic, and pdf.js is a
+  # megabyte of minified source with a slash in every other line.
+  BEFORE_REGEXP_LITERAL_REGEXP =
+    /(?:[(,=:\[!&|?{};+\-*%~^<>]|\b(?:return|typeof|case|in|of|do|else|yield|await|delete|void|instanceof|new))\s*\z/.freeze # :nodoc:
   BLOCK_COMMENT_REGEXP = %r{/\*.*?\*/}m.freeze # :nodoc:
 
   attr_reader :source
@@ -103,7 +116,8 @@ class Importmap::ModuleInspector
       until scanner.eos?
         if scanner.skip(BLOCK_COMMENT_REGEXP)
           next
-        elsif (literal = scanner.scan(STRING_REGEXP))
+        elsif (literal = scanner.scan(STRING_REGEXP)) ||
+              (regexp_literal_next?(kept, scanner) && (literal = scanner.scan(REGEXP_LITERAL_REGEXP)))
           kept << literal
         else
           kept << scanner.getch
@@ -111,5 +125,14 @@ class Importmap::ModuleInspector
       end
 
       kept
+    end
+
+    # Wide enough for the longest keyword above plus its whitespace; a keyword
+    # the window cuts in half simply reads as division, which keeps less.
+    REGEXP_LOOKBEHIND_LIMIT = 16 # :nodoc:
+
+    def regexp_literal_next?(kept, scanner)
+      scanner.match?(%r{/}) &&
+        (kept[-REGEXP_LOOKBEHIND_LIMIT..] || kept).match?(BEFORE_REGEXP_LITERAL_REGEXP)
     end
 end
