@@ -1,0 +1,44 @@
+lib/importmap/packager.rb
+  s_5fef69aff71435::t_43a696ca43720f 166-167
+  s_5fef69aff71435::t_aeefa0f547ab3b 274-284
+docs/app/views/docs/pages/integrity.rb
+  s_5fef69aff71435::t_b551c4bb155149 13,53-64,66-67,69-99,145-148
+  s_5fef69aff71435::t_40e8c9c837b7d5 65,68
+docs/app/views/docs/pages/pinning.rb
+  s_5fef69aff71435::t_bb9fcdd60c5292 272-276
+  s_5fef69aff71435::t_2aab6eddd82a97 153,156,191,194
+  s_5fef69aff71435::t_f39d27fa58da5e 266,269
+lib/importmap/integrity.rb
+  s_5fef69aff71435::t_8f8861bb57ee16 1-25
+docs/app/views/docs/pages/cli.rb
+  s_5fef69aff71435::t_f39d27fa58da5e 55
+test/packager_test.rb
+  s_5fef69aff71435::t_4b82a2d6e8ebef 927-980
+CHANGELOG.md
+  s_5fef69aff71435::t_a31ba4e6368793 72-100
+test/integrity_test.rb
+  s_5fef69aff71435::t_b30eef634c09d6 1-29
+test/commands_test.rb
+  s_5fef69aff71435::t_21ac294bf2e931 17-20,412-413,433-434,546-547,562,615,627,644-645,673,748,775,811,847,895
+  s_5fef69aff71435::t_39f7ac8a1ac476 1064
+  s_5fef69aff71435::t_84b0434dd5bc92 100-101,112-113,1036-1063,1065-1098
+lib/importmap/commands.rb
+  s_5fef69aff71435::t_b87cf00977caac 5,23,36-37,187,198-199,201,203-204,210,216-217,219-220,505-506,523,526,533,535,541-552
+  s_5fef69aff71435::t_db55f52eb34a75 508-512
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1369c16418d7fd9a03f53fdc5ad7d37cd15ae962",
+  "prompts": {},
+  "sessions": {
+    "s_5fef69aff71435": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5bfc24da-1618-4449-a823-62acb82f6ba2",
+        "model": "claude-opus-5"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
