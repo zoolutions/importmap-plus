@@ -1,0 +1,21 @@
+lib/importmap/module_inspector.rb
+  s_688ed81e664ef7::t_7b2887153e8b5a 66-69,71,134-137
+test/module_inspector_test.rb
+  s_688ed81e664ef7::t_74dc9666344d6e 98-110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c3b69b72544a3be89b98392972b69af34bfa4dee",
+  "prompts": {},
+  "sessions": {
+    "s_688ed81e664ef7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f61ca9f7-e2a4-4c3a-b586-b2cb2cd631a6",
+        "model": "claude-opus-5"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
