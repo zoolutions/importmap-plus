@@ -196,6 +196,10 @@ Confirm the `--minify` tests **ran** (not skipped) — install bun if they didn'
 
 ---
 
+## Phase 6.5: Gate
+
+Commit first (Phase 7's commit step, without the push), then run `/lode:gate`. It reviews the branch with fresh-context agents against `CLAUDE.md`, the rules and `lode/review/`, proves every new test fails without the change, and loops until nothing at P1 or P2 remains. The push hook refuses `git push` and `gh pr create` until it has passed on the exact tree. Paste its `## Gate` section into the PR body, and let it run `/lode:learn gate` so the confirmed findings land in `lode/review/` in this PR.
+
 ## Phase 7: Commit & PR
 
 ### Commit
@@ -242,7 +246,7 @@ rm /tmp/pr-body.md implementation-notes.md
 
 With a single-quoted heredoc, backticks and `$` pass through verbatim — never escape them. `--body-file` sidesteps the shell entirely and is the default here because PR bodies for this gem quote pin lines and commands.
 
-The PR body MUST end with a `## Deviations & judgment calls` section. It is read first in review — the audit trail for every decision the plan didn't make.
+The PR body MUST end with a `## Deviations & judgment calls` section followed by the `## Gate` section from Phase 6.5. It is read first in review — the audit trail for every decision the plan didn't make.
 
 ---
 

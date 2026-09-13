@@ -1,0 +1,28 @@
+# Terminology
+
+- pin — one `pin "name", to: …` line in `config/importmap.rb`; the unit the CLI reads and rewrites.
+- pin line — the literal source line, matched by regex (`Importmap::Map.pin_line_regexp_for`); there is no AST.
+- provenance comment — the trailing `# @<version> (<provider>[, minified][, locked][, vendored][, remote: <reason>])`; the fork's metadata, ignored by upstream.
+- provider — the CDN a pin came from: `jspm.io` (default, omitted from the comment), `esm.run` (jsDelivr's bundled builds), `jsdelivr`, `unpkg`, `skypack`.
+- provider chain — the order `pin` tries providers when one cannot resolve a package (`provider_chain.rb`).
+- vendored pin — a pin whose file was downloaded to `vendor/javascript/<name>.js`; `to:` is absent or local.
+- remote pin — a pin with `to: "https://…"`; re-resolved from the same CDN on `update`, never downloaded by `pristine`.
+- custom URL — a remote pin whose host is not a known provider; the CLI leaves it alone.
+- locked — a pin held at its version; `update` skips it and `pin` keeps it when a CDN resolves it as a dependency.
+- subpath pin — `pkg/sub`; vendored as `pkg--sub.js`; answers for its own provider first, then its package's.
+- scoped package — `@scope/name`; vendored as `@scope--name.js`.
+- single-file check — `ModuleInspector`'s decision whether a downloaded file can stand alone; a file that cannot is kept remote with a reason.
+- remote reason — one of `relative imports`, `dynamic imports`, `workers`, `import.meta.url`, `wasm`, `not an ES module`.
+- esm.run bundle — a jsDelivr `+esm` build whose `/npm/dep@ver/+esm` imports the packager rewrites to bare specifiers.
+- minify — transform-only compression (`--no-bundle`, `--format=esm`) by bun, esbuild or terser already on the machine.
+- preload / integrity — upstream pin options (`preload:`, `integrity:`) that every rewrite path must carry through unchanged.
+- request path — engine → `Map` → helpers; runs on every page; no network.
+- command path — CLI → `Packager` / `Npm` → CDN or registry; the only place network happens.
+- upstream-owned file — a file rails/importmap-rails also has; edited additively, in upstream's style.
+- fork-only file — a file that exists only here; owned outright.
+- `UPSTREAM_VERSION` — the importmap-rails release merged in; moves only in a sync PR.
+- `VERSION` — this gem's own semver; moves in a feature PR that opens a minor, or in `bin/release`.
+- appraisal cell — one Rails × asset-pipeline combination in CI (`gemfiles/*.gemfile`).
+- live test — a test that hits jspm, jsDelivr or the npm registry (`commands_test.rb`, `*_integration_test.rb`).
+- lode — this directory: the repo's durable memory; `lode/review/` holds accepted review findings as rules.
+- gate — `/lode:gate`, the pre-PR review that must pass on the exact tree before a push.

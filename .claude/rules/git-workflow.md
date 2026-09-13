@@ -62,9 +62,10 @@ There is no RuboCop at the gem root. Don't add one in a feature PR; upstream fil
 
 1. Branch off `main`
 2. Commit in small steps; run the checklist
-3. `git push -u origin <branch>` and `gh pr create` with a summary and a test plan. Write the body to a file and pass `--body-file` when it has code fences — with a single-quoted heredoc backticks pass through verbatim, so never escape them.
-4. `/github-review-pr` when CI or a reviewer says something; `/finish-prs` for a stack
-5. Squash merge on `main` when green and approved
+3. `/lode:gate` — the push hook refuses `git push` and `gh pr create` until it has passed on the exact tree; paste its report into the PR body
+4. `git push -u origin <branch>` and `gh pr create` with a summary and a test plan. Write the body to a file and pass `--body-file` when it has code fences — with a single-quoted heredoc backticks pass through verbatim, so never escape them.
+5. `/github-review-pr` when CI or a reviewer says something; `/finish-prs` for a stack
+6. Squash merge on `main` when green and approved
 
 A `feat:` PR also updates `CHANGELOG.md` under the next version heading and the relevant `docs/` page in the same PR.
 
