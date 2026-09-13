@@ -35,3 +35,9 @@ What the docs site and CHANGELOG must keep saying, and how the docs app itself i
 - **Where:** `docs/config/initializers/rack_attack.rb` (`Rack::Attack.throttled_responder`)
 - **Proven by:** no test
 - **Origin:** cubic learning 227c1986
+
+### The provenance grammar is written in six places and every one matches `Packager#provenance_comment`'s token order
+- **Holds because:** the comment is `# @<version> (<provider>[, minified][, vendored][, remote[: <reason>]][, locked])`, lock always last (`packager.rb:48-49`, `test/packager_test.rb` "locked_pin_line puts the lock last"). The grammar is stated in `CLAUDE.md` (the Never-Do rule and the pin-line contract), `lode/summary.md`, `lode/terminology.md`, `lode/packager/summary.md`, `lode/docs-site/summary.md` and `docs/app/views/docs/pages/provenance.rb`. The first gate on the seeding branch found it stated three different ways; a reader who trusts the wrong one writes a pin `PIN_PROVENANCE_REGEXP` still reads but `rewrite_provenance` re-emits reordered, which looks like an unexplained diff on the next `update`.
+- **Where:** `lib/importmap/packager.rb#provenance_comment`; the six files above
+- **Proven by:** `test/packager_test.rb:"locked_pin_line puts the lock last"` for the order; the prose has no test — grep `vendored\]\[, remote` across `CLAUDE.md lode docs` before changing it
+- **Origin:** gate on chore/lode, 2026-09-13
