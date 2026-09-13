@@ -562,10 +562,10 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       RUBY
       packager = Importmap::Packager.new(importmap_path)
 
-      assert_equal({ version: "17.0.2", provider: nil, minified: false, locked: false }, packager.pin_provenance("react"))
-      assert_equal({ version: "3.7.2", provider: "esm.run", minified: true, locked: false }, packager.pin_provenance("luxon"))
-      assert_equal({ version: "2.2.0", provider: "unpkg", minified: false, locked: false }, packager.pin_provenance("md5"))
-      assert_equal({ version: "11.2.4", provider: nil, minified: true, locked: false }, packager.pin_provenance("choices.js"))
+      assert_equal({ version: "17.0.2", provider: nil, minified: false, vendored: false, remote: nil, locked: false }, packager.pin_provenance("react"))
+      assert_equal({ version: "3.7.2", provider: "esm.run", minified: true, vendored: false, remote: nil, locked: false }, packager.pin_provenance("luxon"))
+      assert_equal({ version: "2.2.0", provider: "unpkg", minified: false, vendored: false, remote: nil, locked: false }, packager.pin_provenance("md5"))
+      assert_equal({ version: "11.2.4", provider: nil, minified: true, vendored: false, remote: nil, locked: false }, packager.pin_provenance("choices.js"))
       assert_nil packager.pin_provenance("application")
       assert_nil packager.pin_provenance("not-pinned")
     end
@@ -580,11 +580,11 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       pin "stimulus-use" # @0.53.1 (esm.run)
     RUBY
 
-    assert_equal({ version: "17.0.2", provider: nil, minified: false, locked: true }, packager.pin_provenance("react"))
-    assert_equal({ version: "3.7.2", provider: "esm.run", minified: true, locked: true }, packager.pin_provenance("luxon"))
-    assert_equal({ version: "2.2.0", provider: nil, minified: false, locked: true }, packager.pin_provenance("md5"))
-    assert_equal({ version: "4.4.0", provider: "unpkg", minified: false, locked: true }, packager.pin_provenance("chart.js"))
-    assert_equal({ version: "0.53.1", provider: "esm.run", minified: false, locked: false }, packager.pin_provenance("stimulus-use"))
+    assert_equal({ version: "17.0.2", provider: nil, minified: false, vendored: false, remote: nil, locked: true }, packager.pin_provenance("react"))
+    assert_equal({ version: "3.7.2", provider: "esm.run", minified: true, vendored: false, remote: nil, locked: true }, packager.pin_provenance("luxon"))
+    assert_equal({ version: "2.2.0", provider: nil, minified: false, vendored: false, remote: nil, locked: true }, packager.pin_provenance("md5"))
+    assert_equal({ version: "4.4.0", provider: "unpkg", minified: false, vendored: false, remote: nil, locked: true }, packager.pin_provenance("chart.js"))
+    assert_equal({ version: "0.53.1", provider: "esm.run", minified: false, vendored: false, remote: nil, locked: false }, packager.pin_provenance("stimulus-use"))
   end
 
   test "vendored_pin_for and pin_for record a lock in the version comment" do
@@ -713,6 +713,159 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     RUBY
 
     assert_equal({ preload: false, to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js" }, extract_options_for_package(packager, "md5"))
+  end
+
+  test "download refuses a source that can't stand alone and leaves the vendored file it has" do
+    response = Class.new do
+      def code() "200" end
+      def body() %(export{top}from"./enums.js";const w=new Worker(u)) end
+    end.new
+
+    Dir.mktmpdir do |vendor_dir|
+      existing = Pathname.new(vendor_dir).join("@popperjs--core.js")
+      File.write(existing, "// the file that works today")
+      packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+      error = Net::HTTP.stub(:get_response, response) do
+        assert_raises(Importmap::Packager::Unvendorable) do
+          packager.download("@popperjs/core", "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js")
+        end
+      end
+
+      assert_equal [ "relative imports", "workers" ], error.reasons
+      assert_equal "// the file that works today", File.read(existing)
+    end
+  end
+
+  test "download leaves the file an app has when the replacement can't be written" do
+    response = Class.new do
+      def code() "200" end
+      def body() "export default 1" end
+    end.new
+
+    Dir.mktmpdir do |vendor_dir|
+      existing = Pathname.new(vendor_dir).join("react.js")
+      File.write(existing, "// the file that works today")
+      packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+      Net::HTTP.stub(:get_response, response) do
+        File.stub(:rename, ->(*) { raise Errno::ENOSPC }) do
+          assert_raises(Errno::ENOSPC) { packager.download("react", "https://ga.jspm.io/npm:react@17.0.2/index.js") }
+        end
+      end
+
+      assert_equal "// the file that works today", File.read(existing)
+      assert_empty Dir.glob("#{vendor_dir}/*.download"), "expected the partial download to be cleaned up"
+    end
+  end
+
+  test "download with force vendors a source that can't stand alone anyway" do
+    response = Class.new do
+      def code() "200" end
+      def body() %(export{top}from"./enums.js") end
+    end.new
+
+    Dir.mktmpdir do |vendor_dir|
+      packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+      dependencies = Net::HTTP.stub(:get_response, response) do
+        packager.download("@popperjs/core", "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js", force: true)
+      end
+
+      assert_equal [], dependencies
+      assert_includes File.read(Pathname.new(vendor_dir).join("@popperjs--core.js")), %(from"./enums.js")
+    end
+  end
+
+  test "download inspects an esm.run bundle after its imports become bare specifiers" do
+    bundle = %(import{a}from"/npm/charenc@0.0.2/+esm";export default a)
+    response = Class.new do
+      define_method(:code) { "200" }
+      define_method(:body) { bundle }
+    end.new
+
+    Dir.mktmpdir do |vendor_dir|
+      packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
+
+      dependencies = Net::HTTP.stub(:get_response, response) do
+        packager.download("md5", "https://cdn.jsdelivr.net/npm/md5@2.2.0/+esm")
+      end
+
+      assert_equal [ [ "charenc", "https://cdn.jsdelivr.net/npm/charenc@0.0.2/+esm" ] ], dependencies
+    end
+  end
+
+  test "pin_provenance reads a remote reason back without mistaking it for a provider" do
+    packager = Importmap::Packager.new(file_fixture("remote_reason_import_map.rb").to_s)
+
+    assert_equal({ version: "2.11.8", provider: nil, minified: false, vendored: false,
+                   remote: "relative imports", locked: false },
+                 packager.pin_provenance("@popperjs/core"))
+    assert_equal({ version: "0.52.2", provider: nil, minified: false, vendored: false,
+                   remote: "workers", locked: true },
+                 packager.pin_provenance("monaco-editor"))
+    assert_equal({ version: "3.7.2", provider: "esm.run", minified: true, vendored: false,
+                   remote: nil, locked: false },
+                 packager.pin_provenance("luxon"))
+  end
+
+  test "pin_provenance reads a bare remote detail and a vendored detail" do
+    packager = Importmap::Packager.new(create_temp_importmap(<<~RUBY))
+      pin "shiki", to: "https://ga.jspm.io/npm:shiki@1.0.0/index.js" # @1.0.0 (remote)
+      pin "@popperjs/core", to: "@popperjs--core.js" # @2.11.8 (vendored)
+      pin "chart.js" # @4.4.0 (unpkg, minified, vendored, locked)
+    RUBY
+
+    assert_equal true, packager.pin_provenance("shiki")[:remote]
+    assert_equal true, packager.pin_provenance("@popperjs/core")[:vendored]
+    assert_equal({ version: "4.4.0", provider: "unpkg", minified: true, vendored: true,
+                   remote: nil, locked: true },
+                 packager.pin_provenance("chart.js"))
+  end
+
+  test "remote_reason and vendored? read the pin's decision back" do
+    packager = Importmap::Packager.new(file_fixture("remote_reason_import_map.rb").to_s)
+
+    assert_equal "relative imports", packager.remote_reason("@popperjs/core")
+    assert_equal "workers", packager.remote_reason("monaco-editor")
+    assert_nil packager.remote_reason("luxon")
+    assert_nil packager.remote_reason("not-pinned")
+    assert_not packager.vendored?("luxon")
+  end
+
+  test "pin_for records why a pin was kept remote, with the lock last" do
+    assert_equal %(pin "@popperjs/core", to: "https://cdn/core@2.11.8/i.js" # @2.11.8 (remote: workers)),
+                 @packager.pin_for("@popperjs/core", "https://cdn/core@2.11.8/i.js", remote: "workers")
+    assert_equal %(pin "@popperjs/core", to: "https://cdn/core@2.11.8/i.js", preload: false # @2.11.8 (remote: relative imports, locked)),
+                 @packager.pin_for("@popperjs/core", "https://cdn/core@2.11.8/i.js", preloads: [ "false" ],
+                                                     remote: "relative imports", locked: true)
+    assert_equal %(pin "shiki", to: "https://cdn/shiki@1.0.0/i.js" # @1.0.0 (remote)),
+                 @packager.pin_for("shiki", "https://cdn/shiki@1.0.0/i.js", remote: true)
+    assert_equal %(pin "md5", to: "https://cdn.example.com/md5.js"),
+                 @packager.pin_for("md5", "https://cdn.example.com/md5.js", remote: "workers")
+  end
+
+  test "vendored_pin_for records a deliberate vendor ahead of the lock" do
+    assert_equal %(pin "@popperjs/core", to: "@popperjs--core.js" # @2.11.8 (vendored)),
+                 @packager.vendored_pin_for("@popperjs/core", "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js", vendored: true)
+    assert_equal %(pin "luxon" # @3.7.2 (esm.run, minified, vendored, locked)),
+                 @packager.vendored_pin_for("luxon", "https://cdn.jsdelivr.net/npm/luxon@3.7.2/+esm", minify: true, vendored: true, locked: true)
+    assert_equal %(pin "react" # @17.0.2),
+                 @packager.vendored_pin_for("react", "https://ga.jspm.io/npm:react@17.0.2/index.js")
+  end
+
+  test "locked_pin_line and unlocked_pin_line keep the remote and vendored details" do
+    packager = Importmap::Packager.new(create_temp_importmap(<<~RUBY))
+      pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js" # @2.11.8 (remote: relative imports)
+      pin "monaco-editor", to: "https://cdn/monaco@0.52.2/api.js" # @0.52.2 (remote: workers, locked)
+      pin "chart.js" # @4.4.0 (unpkg, vendored, locked)
+    RUBY
+
+    assert_equal %(pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js" # @2.11.8 (remote: relative imports, locked)),
+                 packager.locked_pin_line("@popperjs/core")
+    assert_equal %(pin "monaco-editor", to: "https://cdn/monaco@0.52.2/api.js" # @0.52.2 (remote: workers)),
+                 packager.unlocked_pin_line("monaco-editor")
+    assert_equal %(pin "chart.js" # @4.4.0 (unpkg, vendored)), packager.unlocked_pin_line("chart.js")
   end
 
   private

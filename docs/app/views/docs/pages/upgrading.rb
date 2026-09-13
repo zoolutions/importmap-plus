@@ -48,7 +48,8 @@ class Views::Docs::Pages::Upgrading < DocsUI::Page
           [ "A package vendored from unpkg moves back to jspm on update.", "The pin comment records the CDN; update and pristine go back to it." ],
           [ "update takes no arguments.", "update takes package names, --all and --force." ],
           [ "outdated exits 1 for any outdated package.", "outdated exits 1 only for an outdated package that isn't locked." ],
-          [ "A failed CDN request is a raw backtrace.", "Requests are retried three times with a growing pause; the failure then names the URL." ]
+          [ "A failed CDN request is a raw backtrace.", "Requests are retried three times with a growing pause; the failure then names the URL." ],
+          [ "A download that imports sibling files, spawns a worker or fetches a .wasm is vendored anyway and 404s in the browser.", "It is pinned to its CDN URL instead, the pin says why, and pin --vendor overrides. See below." ]
         ]
       )
       md <<~'MD'
@@ -56,6 +57,25 @@ class Views::Docs::Pages::Upgrading < DocsUI::Page
         `pin "react" # @19.1.0 (unpkg)` where it used to say `# @19.1.0` — and
         that's a change you'll want to commit. Read
         [Provenance](/docs/provenance) for the grammar.
+
+        ### Packages you vendored that can't stand alone
+
+        Some packages you have in `vendor/javascript` today will be kept remote the
+        next time `pin` or `update` touches them — pdf.js is the usual one: its main
+        file spawns a `Worker` and its worker fetches `.wasm` decoders beside itself.
+        `update` prints the reason and the pin becomes
+        `pin "pdfjs-dist", to: "https://cdn.jsdelivr.net/…" # @6.3.289 (remote: dynamic imports)`.
+
+        Nothing is rewritten until you run one of those commands: until then
+        `pristine` keeps redownloading the file exactly as the pin says. Afterwards
+        the pin is a remote pin like any other, so `pristine` skips it — there is no
+        longer a vendored file to restore — and the vendored one is removed.
+
+        If the vendored file worked for you — you configure the worker URL yourself,
+        say — `bin/importmap pin pdfjs-dist --vendor` puts it back and marks the pin
+        `(vendored)` so it stays that way. If it didn't, and a `.wasm` decoder or a
+        sibling module was quietly 404ing, the remote pin is the fix arriving. See
+        [Packages that can't be vendored alone](/docs/pinning).
       MD
     end
   end
