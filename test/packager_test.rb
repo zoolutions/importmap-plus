@@ -266,10 +266,15 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
 
   private
 
+  # Tempfile unlinks its file from a finalizer, so handing back only the path
+  # leaves the import map alive at the mercy of the next GC: the Packager then
+  # takes #extract_existing_pin_options' "no file" branch and every option
+  # reads back nil. Hold the object for the length of the test instead.
   def create_temp_importmap(content)
     temp_file = Tempfile.new(['importmap', '.rb'])
     temp_file.write(content)
     temp_file.close
+    (@temp_importmaps ||= []) << temp_file
     temp_file.path
   end
 
