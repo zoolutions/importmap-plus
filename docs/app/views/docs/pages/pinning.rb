@@ -150,10 +150,10 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
       MD
       DocsUI::Code(<<~SHELL, lexer: :console)
         $ ./bin/importmap pin google-libphonenumber@3.2.42 --from jsdelivr
-        Pinning "google-libphonenumber" to https://cdn.jsdelivr.net/npm/google-libphonenumber@3.2.42/dist/libphonenumber.js (kept remote: not an ES module)
+        Pinning "google-libphonenumber" to https://cdn.jsdelivr.net/npm/google-libphonenumber@3.2.42/dist/libphonenumber.js (kept remote: not an ES module) (integrity sha384-5MZuONtIM2yEzrksaOeJteNW8bmvGovwqxtzk2kVpXG+CWbh7A7KXOaZmBFdxadr)
       SHELL
       DocsUI::Code(<<~RUBY, filename: "config/importmap.rb")
-        pin "google-libphonenumber", to: "https://cdn.jsdelivr.net/npm/google-libphonenumber@3.2.42/dist/libphonenumber.js" # @3.2.42 (remote: not an ES module)
+        pin "google-libphonenumber", to: "https://cdn.jsdelivr.net/npm/google-libphonenumber@3.2.42/dist/libphonenumber.js", integrity: "sha384-5MZuONtIM2yEzrksaOeJteNW8bmvGovwqxtzk2kVpXG+CWbh7A7KXOaZmBFdxadr" # @3.2.42 (remote: not an ES module)
       RUBY
       md <<~'MD'
         A file counts as an ES module when it has a top-level `import` or `export`
@@ -188,10 +188,10 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
       MD
       DocsUI::Code(<<~SHELL, lexer: :console)
         $ ./bin/importmap pin @popperjs/core@2.11.8
-        Pinning "@popperjs/core" to https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js (kept remote: relative imports)
+        Pinning "@popperjs/core" to https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js (kept remote: relative imports) (integrity sha384-bfekMOfeUlr1dHZfNaAFiuuOeD7r+Qh45AQ2HHJY7EAAI4QGJ6qx1Qq9gsbvS+60)
       SHELL
       DocsUI::Code(<<~RUBY, filename: "config/importmap.rb")
-        pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js" # @2.11.8 (remote: relative imports)
+        pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js", integrity: "sha384-bfekMOfeUlr1dHZfNaAFiuuOeD7r+Qh45AQ2HHJY7EAAI4QGJ6qx1Qq9gsbvS+60" # @2.11.8 (remote: relative imports)
       RUBY
       md <<~'MD'
         From then on the pin behaves like any other remote pin: `pin` and `update`
@@ -263,12 +263,17 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
     DocsUI::Section("Pinning to a remote URL", description: "--remote pins the CDN URL instead of vendoring a download.") do
       DocsUI::Code(<<~SHELL, lexer: :console)
         $ ./bin/importmap pin react --remote
-        Pinning "react" to https://ga.jspm.io/npm:react@19.1.0/index.js
+        Pinning "react" to https://ga.jspm.io/npm:react@19.1.0/index.js (integrity sha384-TtdSzSbIb/Umu/UA9WoDsfoMftva85E4FjTOLHn7E6GcaWaHx3METoF40cBklJJj)
       SHELL
       DocsUI::Code(<<~RUBY, filename: "config/importmap.rb")
-        pin "react", to: "https://ga.jspm.io/npm:react@19.1.0/index.js"
+        pin "react", to: "https://ga.jspm.io/npm:react@19.1.0/index.js", integrity: "sha384-TtdSzSbIb/Umu/UA9WoDsfoMftva85E4FjTOLHn7E6GcaWaHx3METoF40cBklJJj"
       RUBY
       md <<~'MD'
+        The URL is fetched once to hash it, so the pin carries a
+        [subresource-integrity](/docs/integrity) hash of the bytes the browser will
+        get; `--no-integrity` skips that, and `enable_integrity!` is what puts the
+        hash on the page.
+
         A remote pin is respected from then on, no flag needed. When the package is
         pinned again or picked up by `update` — directly or as a dependency of
         another package — the pin stays remote: the URL is re-resolved from the CDN

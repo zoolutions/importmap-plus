@@ -14,6 +14,10 @@ class CommandsTest < ActiveSupport::TestCase
     FileUtils.remove_entry(@tmpdir) if @tmpdir
   end
 
+  # Every pin that stays remote carries the hash of what the CDN served. Tests
+  # about anything else match the option rather than pinning its value.
+  INTEGRITY_OPTION = %r{, integrity: "sha384-[A-Za-z0-9+/]+=*"}.freeze
+
   test "json command prints JSON with imports" do
     out, _err = run_importmap_command("json")
 
@@ -85,7 +89,7 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes updated_content, 'pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.3.0/md5.js", preload: "custom"'
   end
 
-  test "update command removes existing integrity" do
+  test "update command replaces a stale integrity hash on a remote pin" do
     importmap_config('pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", integrity: "sha384-oldintegrity"')
 
     out, _err = run_importmap_command("update")
@@ -93,10 +97,11 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes out, "Pinning"
 
     updated_content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
-    assert_not_includes updated_content, "integrity:"
+    assert_not_includes updated_content, "sha384-oldintegrity"
+    assert_match(%r{^pin "md5", to: "https://cdn\.jsdelivr\.net/npm/md5@2\.3\.0/md5\.js"#{INTEGRITY_OPTION}$}, updated_content)
   end
 
-  test "update command keeps pin remote and preload option but drops integrity" do
+  test "update command keeps pin remote and preload option and refreshes integrity" do
     importmap_config('pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: false, integrity: "sha384-oldintegrity"')
 
     out, _err = run_importmap_command("update")
@@ -104,8 +109,8 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes out, "Pinning"
 
     updated_content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
-    assert_includes updated_content, 'pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.3.0/md5.js", preload: false'
-    assert_not_includes updated_content, "integrity:"
+    assert_includes updated_content, 'pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.3.0/md5.js", preload: false, integrity: "sha384-'
+    assert_not_includes updated_content, "sha384-oldintegrity"
   end
 
   test "update command preserves a boolean integrity option" do
@@ -404,8 +409,8 @@ class CommandsTest < ActiveSupport::TestCase
     out, _err = run_importmap_command("pin", "md5@2.2.0", "--lock", "--remote")
 
     assert_includes out, 'Locked "md5" at 2.2.0'
-    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"),
-                    %(pin "md5", to: "https://ga.jspm.io/npm:md5@2.2.0/md5.js" # @2.2.0 (locked)\n)
+    assert_match %r{^pin "md5", to: "https://ga\.jspm\.io/npm:md5@2\.2\.0/md5\.js"#{INTEGRITY_OPTION} # @2\.2\.0 \(locked\)$},
+                 File.read("#{@tmpdir}/dummy/config/importmap.rb")
   end
 
   test "pin command skips a locked package" do
@@ -425,8 +430,8 @@ class CommandsTest < ActiveSupport::TestCase
     out, _err = run_importmap_command("pin", "md5@2.3.0", "--force")
 
     assert_includes out, 'Locked "md5" at 2.3.0'
-    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"),
-                    %(pin "md5", to: "https://ga.jspm.io/npm:md5@2.3.0/md5.js" # @2.3.0 (locked)\n)
+    assert_match %r{^pin "md5", to: "https://ga\.jspm\.io/npm:md5@2\.3\.0/md5\.js"#{INTEGRITY_OPTION} # @2\.3\.0 \(locked\)$},
+                 File.read("#{@tmpdir}/dummy/config/importmap.rb")
   end
 
   test "pin command with --lock re-locks at the new version and --no-lock drops the lock" do
@@ -538,8 +543,8 @@ class CommandsTest < ActiveSupport::TestCase
     out, _err = run_importmap_command("update", "--force")
 
     assert_includes out, 'Locked "md5" at 2.3.0'
-    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"),
-                    %(pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.3.0/md5.js", preload: true # @2.3.0 (locked)\n)
+    assert_match %r{^pin "md5", to: "https://cdn\.jsdelivr\.net/npm/md5@2\.3\.0/md5\.js", preload: true#{INTEGRITY_OPTION} # @2\.3\.0 \(locked\)$},
+                 File.read("#{@tmpdir}/dummy/config/importmap.rb")
   end
 
   test "update command with named packages updates only those" do
@@ -554,7 +559,7 @@ class CommandsTest < ActiveSupport::TestCase
     assert_not_includes out, "luxon"
 
     content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
-    assert_includes content, %(pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.3.0/md5.js", preload: false\n)
+    assert_match %r{^pin "md5", to: "https://cdn\.jsdelivr\.net/npm/md5@2\.3\.0/md5\.js", preload: false#{INTEGRITY_OPTION}$}, content
     assert_includes content, %(pin "luxon", to: "https://cdn.jsdelivr.net/npm/luxon@3.0.0/build/es6/luxon.mjs"\n)
   end
 
@@ -607,7 +612,7 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes out, 'Pinning "photoswipe/lightbox"'
 
     content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
-    assert_match %r{^pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5\.4\.\d+/dist/photoswipe-lightbox\.esm\.js"$}, content
+    assert_match %r{^pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5\.4\.\d+/dist/photoswipe-lightbox\.esm\.js"#{INTEGRITY_OPTION}$}, content
     assert_not_includes content, "photoswipe@5.3.0"
   end
 
@@ -619,7 +624,7 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes out, 'Pinning "photoswipe/lightbox"'
 
     content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
-    assert_match %r{^pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5\.4\.\d+/dist/photoswipe-lightbox\.esm\.js"$}, content
+    assert_match %r{^pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5\.4\.\d+/dist/photoswipe-lightbox\.esm\.js"#{INTEGRITY_OPTION}$}, content
     assert_not_includes content, "photoswipe@5.3.0"
     assert_no_match %r{^pin "photoswipe"}, content
   end
@@ -636,8 +641,8 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes out, 'Pinning "photoswipe/lightbox"'
 
     content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
-    assert_match %r{^pin "photoswipe", to: "https://ga.jspm.io/npm:photoswipe@5\.4\.\d+/dist/photoswipe\.esm\.js"$}, content
-    assert_match %r{^pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5\.4\.\d+/dist/photoswipe-lightbox\.esm\.js"$}, content
+    assert_match %r{^pin "photoswipe", to: "https://ga.jspm.io/npm:photoswipe@5\.4\.\d+/dist/photoswipe\.esm\.js"#{INTEGRITY_OPTION}$}, content
+    assert_match %r{^pin "photoswipe/lightbox", to: "https://ga.jspm.io/npm:photoswipe@5\.4\.\d+/dist/photoswipe-lightbox\.esm\.js"#{INTEGRITY_OPTION}$}, content
     assert_not_includes content, "photoswipe@5.3.0"
     assert_equal 2, content.lines.count { |line| line.start_with?("pin ") }
   end
@@ -665,7 +670,7 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes out, 'Pinning "photoswipe/lightbox"'
 
     content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
-    assert_match %r{^pin "photoswipe/lightbox", to: "https://cdn\.jsdelivr\.net/npm/photoswipe@5\.4\.\d+/dist/photoswipe-lightbox\.esm\.js"$}, content
+    assert_match %r{^pin "photoswipe/lightbox", to: "https://cdn\.jsdelivr\.net/npm/photoswipe@5\.4\.\d+/dist/photoswipe-lightbox\.esm\.js"#{INTEGRITY_OPTION}$}, content
   end
 
   test "update command reports a name whose package is pinned under another key" do
@@ -740,7 +745,7 @@ class CommandsTest < ActiveSupport::TestCase
 
     content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
     assert_includes content, "md5@2.2.0"
-    assert_match %r{^pin "luxon", to: "https://cdn.jsdelivr.net/npm/luxon@3\.\d+\.\d+/build/es6/luxon\.mjs"$}, content
+    assert_match %r{^pin "luxon", to: "https://cdn.jsdelivr.net/npm/luxon@3\.\d+\.\d+/build/es6/luxon\.mjs"#{INTEGRITY_OPTION}$}, content
     assert_not_includes content, "luxon@3.0.0"
   end
 
@@ -767,7 +772,7 @@ class CommandsTest < ActiveSupport::TestCase
     assert_not_includes out, "via download"
 
     content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
-    assert_includes content, %(pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js" # @2.11.8 (remote: relative imports)\n)
+    assert_match %r{^pin "@popperjs/core", to: "https://ga\.jspm\.io/npm:@popperjs/core@2\.11\.8/lib/index\.js"#{INTEGRITY_OPTION} # @2\.11\.8 \(remote: relative imports\)$}, content
     assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core.js")
   end
 
@@ -803,7 +808,7 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes out, 'Pinning "@popperjs/core"'
 
     content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
-    assert_match %r{^pin "@popperjs/core", to: "https://ga\.jspm\.io/npm:@popperjs/core@2\.11\.\d+/lib/index\.js" # @2\.11\.\d+ \(remote: relative imports\)$}, content
+    assert_match %r{^pin "@popperjs/core", to: "https://ga\.jspm\.io/npm:@popperjs/core@2\.11\.\d+/lib/index\.js"#{INTEGRITY_OPTION} # @2\.11\.\d+ \(remote: relative imports\)$}, content
     assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core.js")
   end
 
@@ -839,7 +844,7 @@ class CommandsTest < ActiveSupport::TestCase
     run_importmap_command("pin", "@popperjs/core@2.11.8")
 
     content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
-    assert_includes content, %(pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js", preload: false # @2.11.8 (remote: relative imports)\n)
+    assert_match %r{^pin "@popperjs/core", to: "https://ga\.jspm\.io/npm:@popperjs/core@2\.11\.8/lib/index\.js", preload: false#{INTEGRITY_OPTION} # @2\.11\.8 \(remote: relative imports\)$}, content
   end
 
   test "update command with a package name re-pins every key of that package" do
@@ -887,7 +892,7 @@ class CommandsTest < ActiveSupport::TestCase
     # the package's skypack instead grouped the two into one request, and one
     # spec skypack can't answer for fails the whole batch, subpath included.
     content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
-    assert_match %r{^pin "photoswipe/lightbox", to: "https://cdn\.jsdelivr\.net/npm/photoswipe@5\.4\.\d+/dist/photoswipe-lightbox\.esm\.js"$}, content
+    assert_match %r{^pin "photoswipe/lightbox", to: "https://cdn\.jsdelivr\.net/npm/photoswipe@5\.4\.\d+/dist/photoswipe-lightbox\.esm\.js"#{INTEGRITY_OPTION}$}, content
 
     # Both sides are asserted so neither can fail quietly. skypack stopped
     # publishing years ago and has no photoswipe 5.4, so the package's own pin
@@ -1026,6 +1031,80 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes out, %(Couldn't find any packages in ["mermaid@10.6.0"] on jspm)
     assert_match(/cytoscape/, out)
     assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "mermaid" # @10.6.0\n)
+  end
+
+  test "pin command with --remote writes a subresource integrity hash" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0", "--remote")
+
+    assert_match(%r{Pinning "md5" to https://ga\.jspm\.io/npm:md5@2\.2\.0/md5\.js \(integrity sha384-[A-Za-z0-9+/]+=*\)}, out)
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_match(%r{^pin "md5", to: "https://ga\.jspm\.io/npm:md5@2\.2\.0/md5\.js"#{INTEGRITY_OPTION}$}, content)
+  end
+
+  test "pin command with --no-integrity pins a remote package without a hash" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0", "--remote", "--no-integrity")
+
+    assert_includes out, 'Pinning "md5" to https://ga.jspm.io/npm:md5@2.2.0/md5.js'
+    assert_not_includes out, "integrity"
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, %(pin "md5", to: "https://ga.jspm.io/npm:md5@2.2.0/md5.js"\n)
+  end
+
+  test "pin command leaves a remote pin that turned integrity off alone" do
+    importmap_config('pin "md5", to: "https://ga.jspm.io/npm:md5@2.2.0/md5.js", integrity: false')
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0", "--remote")
+
+    assert_includes out, %(Pinning "md5" to https://ga.jspm.io/npm:md5@2.2.0/md5.js\n)
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, %(pin "md5", to: "https://ga.jspm.io/npm:md5@2.2.0/md5.js", integrity: false\n)
+  end
+
+  test "pin command hashes a package it keeps remote" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "@popperjs/core@2.11.8")
+
+    assert_includes out, "(kept remote: relative imports)"
+    assert_match(/\(integrity sha384-/, out)
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_match(%r{^pin "@popperjs/core", to: "https://ga\.jspm\.io/\S+"#{INTEGRITY_OPTION} # @2\.11\.8 \(remote: relative imports\)$}, content)
+  end
+
+  test "pin command replaces integrity: true on a remote pin with a hash" do
+    importmap_config('pin "md5", to: "https://ga.jspm.io/npm:md5@2.2.0/md5.js", integrity: true')
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0", "--remote")
+
+    assert_match(/Pinning "md5" to \S+ \(integrity sha384-/, out)
+    assert_match(%r{^pin "md5", to: "https://ga\.jspm\.io/npm:md5@2\.2\.0/md5\.js"#{INTEGRITY_OPTION}$}, File.read("#{@tmpdir}/dummy/config/importmap.rb"))
+  end
+
+  test "pin command with --no-integrity says when it drops the hash a pin carried" do
+    importmap_config('pin "md5", to: "https://ga.jspm.io/npm:md5@2.2.0/md5.js", integrity: "sha384-old"')
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0", "--remote", "--no-integrity")
+
+    assert_includes out, %(Dropping the integrity hash on "md5" (--no-integrity)\n)
+    assert_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), %(pin "md5", to: "https://ga.jspm.io/npm:md5@2.2.0/md5.js"\n)
+  end
+
+  test "pin command writes no integrity hash for a vendored download" do
+    importmap_config("")
+
+    run_importmap_command("pin", "md5@2.2.0")
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, %(pin "md5" # @2.2.0\n)
+    assert_not_includes content, "integrity:"
   end
 
   private
