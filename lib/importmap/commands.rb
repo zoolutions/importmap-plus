@@ -416,7 +416,7 @@ class Importmap::Commands < Thor
     # its own; without it the reason the pin already records is carried over, so
     # update and a plain pin don't drop it.
     def pin_remote_package(package, url, preload, integrity: nil, locked: false, kept_remote: nil)
-      puts %(Pinning "#{package}" to #{url}#{" (kept remote: #{kept_remote.join(" and ")})" if kept_remote})
+      puts %(Pinning "#{package}" to #{url}#{" (kept remote: #{kept_remote.to_sentence})" if kept_remote})
 
       remote = kept_remote&.first || packager.remote_reason(package)
 

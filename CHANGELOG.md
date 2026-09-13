@@ -30,7 +30,8 @@
   but the next `pin` or `update` that touches one re-resolves it, and a package
   whose file can't stand alone converts to a remote pin then. That is the fix
   arriving, not a surprise: the vendored file it replaces was already 404ing
-  for its siblings.
+  for its siblings. pdf.js is the package most apps will see this on — see
+  the upgrading page for what to expect and how `--vendor` puts it back.
 
 ### Fixed
 
