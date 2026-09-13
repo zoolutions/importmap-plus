@@ -16,7 +16,7 @@ states and the `require` graph confirms (`commands.rb` requires
 
 ## 2. Every command
 
-| Command | Options (default) | Prints (exact) | Writes | Exit on failure |
+| Command | Options (default) | Prints (verbatim; `pluralize`d nouns shown as singular/plural) | Writes | Exit on failure |
 |---|---|---|---|---|
 | `pin [*PACKAGES]` | `--env/-e` ("production"), `--from/-f` (nil), `--preload` (repeatable), `--remote` (false), `--minify` (nil), `--lock` (nil), `--force` (false), `--vendor` (false) | `Resolved "#{name}" to #{latest} from the npm registry`; `Pinning "#{package}" to #{vendor_path}/#{package}.js via download from #{url}#{" (minified)" if minify}`; `Pinning "#{package}" to #{url}#{" (kept remote: ...)" if kept_remote}`; `Locked "#{package}" at #{version}`; `Skipping "..." (locked at ...)`; `Couldn't find any packages in ... on ...` | pin line(s) in `config/importmap.rb`; `vendor/javascript/<file>.js` unless `--remote`/kept remote | no explicit `exit`; `Packager::Error`/`ServiceError` propagates as a `Thor::Error` |
 | `lock [*PACKAGES]` | none | `Use "bin/importmap pin #{spec} --lock" ...`; `Couldn't find a pin for "..."`; `"..." is already locked at ...`; `Can't lock "...": its pin has no version`; `Locked "..." at ...` | adds `(locked)` to the pin's provenance comment | `exit 1 unless packages.map { lock_package }.all?` |
@@ -29,7 +29,7 @@ states and the `require` graph confirms (`commands.rb` requires
 | `update [*PACKAGES]` | `--all` (false), `--force` (false) | `Pass package names or --all, not both`; `Couldn't check "#{p.name}": #{p.error}`; `No outdated packages found`; `Nothing to update (every outdated package is locked; pass --force)`; plus `pin_package`'s sentences | rewrites pins for eligible keys | `exit 1` if `--all`+names both given, a named package unknown, or any package unchecked |
 | `packages` | none | one line per `"#{name} #{version}"` | nothing | none |
 
-`Commands.exit_on_failure? = false` (`commands.rb:9-11`) means a `Thor::Error`/
+`Commands.exit_on_failure? = false` (`commands.rb:8-10`) means a `Thor::Error`/
 `Packager::Error` prints and exits non-zero without Thor's crash-style output.
 `Commands` rescues `Packager::Error` itself only in `resolve_url_from_provider`
 (§3), downgrading it to a printed sentence and `nil`.
@@ -38,7 +38,7 @@ states and the `require` graph confirms (`commands.rb` requires
 
 **No version given** — `resolve_latest_versions` (`commands.rb:455-467`)
 matches each spec against `Packager::PACKAGE_SPEC_REGEXP`; if it has no
-version, it asks `Npm#latest_version(name)` (`npm.rb:47-52`, the registry's
+version, it asks `Npm#latest_version(name)` (`npm.rb:49-53`, the registry's
 `dist-tags.latest`, else the highest `versions.keys`) and rewrites the spec
 via `packager.package_spec_for(spec, "@#{latest}")` *before* the CDN sees it —
 "so falling back to another CDN can't quietly land the app on a different
@@ -206,7 +206,7 @@ so the chain and a pin's recorded provider compare equal.
 - `pin`/`update` fall back on a jspm miss; an explicit `--from` doesn't — `commands_test.rb:934` vs `:947` (live).
 - A download that can't stand alone is kept remote, never silently vendored/failed; `--vendor` overrides — `commands_test.rb:761`, `:983`, `:774`, `:995` (live).
 - A version-less spec resolves via the npm registry, not the CDN — `commands_test.rb:959` (live).
-- `outdated_packages` and `latest_version` degrade when the registry is unreachable (the error is recorded on the package, `npm_test.rb:329`); `vulnerable_packages` raises through `post_json`, so `audit` never reports a clean bill it cannot vouch for (`review/cli.md`).
+- `outdated_packages` and `latest_version` degrade when the registry is unreachable (the error is recorded on the package, `npm_test.rb:261`, `:284`; `latest_version` returns nil, `:329`); `vulnerable_packages` raises through `post_json`, so `audit` never reports a clean bill it cannot vouch for (`review/cli.md`).
 - Retries are bounded and shared — `npm_test.rb:245` (stubbed).
 - Live network contracts: `npm_integration_test.rb` (4 cases) and every `commands_test.rb` case (`CommandsTest` shells out to real `bin/importmap` inside a forked `ActiveSupport::Testing::Isolation` process per test, `commands_test.rb:1-15`). Stubbed: all of `npm_test.rb` except the integration file.
 

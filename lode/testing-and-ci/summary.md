@@ -7,7 +7,7 @@ The rules are `../../.claude/rules/testing.md` (TDD workflow, Minitest conventio
 | File | Network | Covers |
 |---|---|---|
 | `test_helper.rb` | none | boots `test/dummy`, wires engine fixtures for both old (`fixture_path=`) and new (`fixture_paths=`) Rails APIs |
-| `importmap_test.rb` (37 tests) | none | `Importmap::Map` DSL end to end against a map drawn in `setup` — local/remote/`pin_all_from` pins, `preload:` variants, integrity hashes, `to_json`, caching, digest |
+| `importmap_test.rb` (38 tests) | none | `Importmap::Map` DSL end to end against a map drawn in `setup` — local/remote/`pin_all_from` pins, `preload:` variants, integrity hashes, `to_json`, caching, digest |
 | `importmap_tags_helper_test.rb` (5 tests) | none | `javascript_importmap_tags` and friends via `ActionView::TestCase`, including CSP nonce handling (`FakeRequest`) |
 | `reloader_test.rb` (2 tests) | none | `Importmap::Reloader` re-draws `Rails.application.importmap` when `config/importmap.rb`'s mtime changes |
 | `module_inspector_test.rb` (19 tests) | none | `Importmap::ModuleInspector#vendorable?`/`reasons` — bare vs relative vs dynamic imports, worker construction, `import.meta`, `export from` forms |
@@ -67,7 +67,7 @@ Each fixture is a real `config/importmap.rb` exercising one pin-line shape, per 
 
 ## `.github/workflows/ci.yml`
 
-- `on: push: branches: [main]` + `pull_request` — a comment in the file (`.github/workflows/ci.yml:3-6`) explains why: a push to a PR branch used to trigger both a push run and a pull_request run, doubling the live-CDN traffic `commands_test.rb` generates.
+- `on: push: branches: [main]` + `pull_request` — a comment in the file (`.github/workflows/ci.yml:2-4`) explains why: a push to a PR branch used to trigger both a push run and a pull_request run, doubling the live-CDN traffic `commands_test.rb` generates.
 - Matrix: Ruby `3.1, 3.2, 3.3, 3.4, 4.0` x Rails `6.1, 7.0, 7.1, 7.2, 8.0, 8.1, main` x pipeline `sprockets, propshaft`, with `exclude:` entries dropping `6.1`+propshaft, `3.1`/`3.2`/`4.0` against version combinations that don't support them, and `8.0`/`8.1`/`main` against sprockets.
 - `BUNDLE_GEMFILE` and `ASSETS_PIPELINE` env vars select the cell; the cell's `.gemfile.lock` is deleted before `bundle install` so every run resolves fresh.
 - Installs `bun` (`oven-sh/setup-bun@v2`) specifically so the `--minify` command tests don't skip — a comment says so directly.

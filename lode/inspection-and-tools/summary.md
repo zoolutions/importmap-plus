@@ -87,7 +87,7 @@ Tests zero the wait: `packager_test.rb:928-934`'s `without_retry_wait` sets `Imp
 
 ## Invariants and contracts
 
-- A comment opener inside a string or regex literal is never read as a comment start, and deletion happens on exactly one branch (a matched comment) — every other span, even one the scanner isn't sure about, is kept — `module_inspector_test.rb:72-125` (esp. lines 111-118).
+- A comment opener inside a string or regex literal is never read as a comment start, and in the default scan deletion happens on exactly one branch (a matched block comment; `statements_only` also empties literals and skips line comments, by design) — every other span, even one the scanner isn't sure about, is kept — `module_inspector_test.rb:72-125` (esp. lines 111-118).
 - `reasons` precedence is fixed (relative imports, dynamic imports, workers, import.meta.url, wasm) — `module_inspector_test.rb:127-140`.
 - A file with neither an ESM statement nor a CommonJS signal is an ES module — `module_inspector_test.rb:183-186`.
 - An identifier merely ending in `import`/`export` is never a statement — `module_inspector_test.rb:188-192, 200-203`.
