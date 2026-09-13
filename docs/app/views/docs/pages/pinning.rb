@@ -12,6 +12,7 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
     vendoring
     resolving_a_version
     choosing_a_cdn
+    packages_with_many_files
     cant_be_vendored_alone
     not_an_es_module
     remote_pins
@@ -168,6 +169,64 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
         The default `pin` never reaches this, since jspm converts the package for
         you. `--vendor` downloads it anyway when you know better, and dropping
         `--from` lets jspm do the conversion.
+      MD
+    end
+  end
+
+  def packages_with_many_files
+    DocsUI::Section("Packages that ship more than one file",
+                    description: "The whole file graph is downloaded, and one pin_all_from line maps it.") do
+      md <<~'MD'
+        Plenty of published packages split themselves across files: the entry point
+        imports a sibling by relative path, and that sibling imports another.
+        Downloaded on its own, the entry asks the browser for `./enums.js` next to a
+        digested asset path, and gets a 404 — neither Propshaft nor Sprockets
+        rewrites `import` statements.
+
+        So `pin` downloads the rest. Everything the entry reaches through relative
+        imports lives under the package's own version directory on the CDN, which is
+        a closed, finite set; `pin` crawls it, and rewrites every relative specifier
+        to the bare key `<package>/<path without the extension>`:
+      MD
+      DocsUI::Code(<<~SHELL, lexer: :console)
+        $ ./bin/importmap pin @popperjs/core@2.11.8
+        Pinning "@popperjs/core" to vendor/javascript/@popperjs/core.js via download from https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js (with 47 sibling files)
+      SHELL
+      DocsUI::Code(<<~RUBY, filename: "config/importmap.rb")
+        pin "@popperjs/core", to: "@popperjs--core.js" # @2.11.8
+        pin_all_from "vendor/javascript/@popperjs--core", under: "@popperjs/core", to: "@popperjs--core" # @2.11.8 (graph of @popperjs/core)
+      RUBY
+      md <<~'MD'
+        The entry keeps the flat file and the plain pin it always had, so `update`,
+        `outdated`, `lock` and `pristine` see it exactly as before. Its siblings go
+        into a directory beside it, and the one `pin_all_from` line maps every file
+        in that directory to the key its specifiers were rewritten to:
+      MD
+      DocsUI::Code(<<~TEXT, lexer: :text)
+        vendor/javascript/@popperjs--core.js               # the entry, from "@popperjs/core/lib/enums"
+        vendor/javascript/@popperjs--core/lib/enums.js     # @popperjs/core/lib/enums
+        vendor/javascript/@popperjs--core/_/a0ba12d2.js    # @popperjs/core/_/a0ba12d2
+      TEXT
+      md <<~'MD'
+        Bare specifiers are left alone: a chunk that imports `"react"` still resolves
+        through your import map to your pin of react. A file another pin already
+        vendored is not copied a second time either — the specifier is rewritten to
+        that pin's key, so the browser evaluates the module once.
+
+        The directory belongs to the pin that wrote it and is replaced whole on every
+        `pin`, `update` and `pristine`, so a file the package dropped between versions
+        goes with it. `unpin` takes the directory and its line along with the pin, and
+        `pin --vendor` drops both — it downloads the entry on its own, which is what
+        overriding the check means.
+
+        Only jspm, jsDelivr and unpkg are crawled: their URLs say which package and
+        version a file belongs to, and so where the package's directory ends. A
+        download from esm.sh or skypack, or from a URL you wrote yourself, stays
+        remote. So does a package whose graph can't be taken over whole — a relative
+        path that climbs out of the package, a sibling the CDN hasn't got, a sibling
+        that isn't JavaScript, or two files that would collapse to one key. Refusing
+        the whole package is deliberate: a remote pin works, where a graph with a
+        hole in it is a page that doesn't load.
       MD
     end
   end

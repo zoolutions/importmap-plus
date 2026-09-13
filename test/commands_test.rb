@@ -766,14 +766,14 @@ class CommandsTest < ActiveSupport::TestCase
   test "pin command keeps a package remote when its file can't stand alone, and says why" do
     importmap_config("")
 
-    out, _err = run_importmap_command("pin", "@popperjs/core@2.11.8")
+    out, _err = run_importmap_command("pin", "fflate@0.8.2")
 
-    assert_includes out, 'Pinning "@popperjs/core" to https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js (kept remote: relative imports)'
+    assert_includes out, 'Pinning "fflate" to https://ga.jspm.io/npm:fflate@0.8.2/esm/browser.js (kept remote: workers)'
     assert_not_includes out, "via download"
 
     content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
-    assert_match %r{^pin "@popperjs/core", to: "https://ga\.jspm\.io/npm:@popperjs/core@2\.11\.8/lib/index\.js"#{INTEGRITY_OPTION} # @2\.11\.8 \(remote: relative imports\)$}, content
-    assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core.js")
+    assert_match %r{^pin "fflate", to: "https://ga\.jspm\.io/npm:fflate@0\.8\.2/esm/browser\.js"#{INTEGRITY_OPTION} # @0\.8\.2 \(remote: workers\)$}, content
+    assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/fflate.js")
   end
 
   test "pin command with --vendor downloads a package that can't stand alone anyway" do
@@ -800,16 +800,113 @@ class CommandsTest < ActiveSupport::TestCase
     assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core.js")
   end
 
+  test "pin command vendors the file graph a chunked package needs" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "@popperjs/core@2.11.8")
+
+    assert_includes out, 'Pinning "@popperjs/core" to vendor/javascript/@popperjs/core.js via download from https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js (with 47 sibling files)'
+    assert_not_includes out, "kept remote"
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, %(pin "@popperjs/core", to: "@popperjs--core.js" # @2.11.8\n)
+    assert_includes content, %(pin_all_from "vendor/javascript/@popperjs--core", under: "@popperjs/core", to: "@popperjs--core" # @2.11.8 (graph of @popperjs/core)\n)
+
+    entry = File.read("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core.js")
+    assert_includes entry, %(from"@popperjs/core/lib/enums")
+    assert_no_match %r{(?:from|import)\s*\(?\s*["']\.}, entry
+    assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core/lib/enums.js")
+    assert_equal 47, Dir.glob("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core/**/*.js").size
+  end
+
+  # The keys the crawl rewrote specifiers to have to be the keys the app's
+  # import map actually resolves, or every chunk 404s in the browser.
+  test "json command resolves every key a vendored graph defines" do
+    importmap_config("")
+
+    run_importmap_command("pin", "@popperjs/core@2.11.8")
+    out, _err = run_importmap_command("json")
+
+    imports = JSON.parse(out)["imports"]
+
+    assert_match %r{/assets/@popperjs--core}, imports["@popperjs/core"]
+    assert_match %r{/assets/@popperjs--core/lib/enums}, imports["@popperjs/core/lib/enums"]
+    assert_equal 48, imports.count { |key, _path| key.start_with?("@popperjs/core") }
+  end
+
+  test "pin command with --remote keeps a chunked package on its CDN and vendors no graph" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "@popperjs/core@2.11.8", "--remote")
+
+    assert_includes out, 'Pinning "@popperjs/core" to https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js'
+    assert_not_includes out, "sibling"
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_not_includes content, "pin_all_from"
+    assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core")
+  end
+
+  test "pin command vendors a pin the single-file check had kept remote" do
+    importmap_config('pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js" # @2.11.8 (remote: relative imports)')
+
+    out, _err = run_importmap_command("pin", "@popperjs/core@2.11.8")
+
+    assert_includes out, "(with 47 sibling files)"
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, %(pin "@popperjs/core", to: "@popperjs--core.js" # @2.11.8\n)
+    assert_not_includes content, "remote:"
+    assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core/lib/enums.js")
+  end
+
+  test "unpin command removes a vendored graph with its pin" do
+    importmap_config("")
+    run_importmap_command("pin", "@popperjs/core@2.11.8")
+
+    out, _err = run_importmap_command("unpin", "@popperjs/core@2.11.8")
+
+    assert_includes out, 'Unpinning and removing "@popperjs/core"'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_not_includes content, "@popperjs/core"
+    assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core.js")
+    assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core")
+  end
+
+  test "pristine command re-creates a vendored graph" do
+    importmap_config("")
+    run_importmap_command("pin", "@popperjs/core@2.11.8")
+    FileUtils.rm_rf("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core")
+
+    run_importmap_command("pristine")
+
+    assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core/lib/enums.js")
+    assert_equal 1, File.read("#{@tmpdir}/dummy/config/importmap.rb").scan("pin_all_from").size
+  end
+
+  test "pin command with --vendor drops the graph a package had" do
+    importmap_config("")
+    run_importmap_command("pin", "@popperjs/core@2.11.8")
+
+    run_importmap_command("pin", "@popperjs/core@2.11.8", "--vendor")
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_not_includes content, "pin_all_from"
+    assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core")
+    assert_includes File.read("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core.js"), %(from"./enums.js")
+  end
+
   test "update command leaves a pin that was kept remote remote, with its reason" do
-    importmap_config('pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.7/lib/index.js" # @2.11.7 (remote: relative imports)')
+    importmap_config('pin "fflate", to: "https://ga.jspm.io/npm:fflate@0.8.1/esm/browser.js" # @0.8.1 (remote: workers)')
 
     out, _err = run_importmap_command("update")
 
-    assert_includes out, 'Pinning "@popperjs/core"'
+    assert_includes out, 'Pinning "fflate"'
 
     content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
-    assert_match %r{^pin "@popperjs/core", to: "https://ga\.jspm\.io/npm:@popperjs/core@2\.11\.\d+/lib/index\.js"#{INTEGRITY_OPTION} # @2\.11\.\d+ \(remote: relative imports\)$}, content
-    assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core.js")
+    assert_match %r{^pin "fflate", to: "https://ga\.jspm\.io/npm:fflate@0\.8\.\d+/esm/browser\.js"#{INTEGRITY_OPTION} # @0\.8\.\d+ \(remote: workers\)$}, content
+    assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/fflate.js")
   end
 
   test "update command keeps a package vendored with --vendor vendored" do
@@ -829,22 +926,22 @@ class CommandsTest < ActiveSupport::TestCase
   test "pin command with --lock locks a package it kept remote" do
     importmap_config("")
 
-    out, _err = run_importmap_command("pin", "@popperjs/core@2.11.8", "--lock")
+    out, _err = run_importmap_command("pin", "fflate@0.8.2", "--lock")
 
-    assert_includes out, "kept remote: relative imports"
-    assert_includes out, 'Locked "@popperjs/core" at 2.11.8'
+    assert_includes out, "kept remote: workers"
+    assert_includes out, 'Locked "fflate" at 0.8.2'
 
     content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
-    assert_includes content, %(# @2.11.8 (remote: relative imports, locked)\n)
+    assert_includes content, %(# @0.8.2 (remote: workers, locked)\n)
   end
 
   test "pin command keeps the options of a pin it keeps remote" do
-    importmap_config('pin "@popperjs/core", to: "@popperjs--core.js", preload: false # @2.11.7')
+    importmap_config('pin "fflate", to: "fflate.js", preload: false # @0.8.1')
 
-    run_importmap_command("pin", "@popperjs/core@2.11.8")
+    run_importmap_command("pin", "fflate@0.8.2")
 
     content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
-    assert_match %r{^pin "@popperjs/core", to: "https://ga\.jspm\.io/npm:@popperjs/core@2\.11\.8/lib/index\.js", preload: false#{INTEGRITY_OPTION} # @2\.11\.8 \(remote: relative imports\)$}, content
+    assert_match %r{^pin "fflate", to: "https://ga\.jspm\.io/npm:fflate@0\.8\.2/esm/browser\.js", preload: false#{INTEGRITY_OPTION} # @0\.8\.2 \(remote: workers\)$}, content
   end
 
   test "update command with a package name re-pins every key of that package" do
@@ -1070,13 +1167,13 @@ class CommandsTest < ActiveSupport::TestCase
   test "pin command hashes a package it keeps remote" do
     importmap_config("")
 
-    out, _err = run_importmap_command("pin", "@popperjs/core@2.11.8")
+    out, _err = run_importmap_command("pin", "fflate@0.8.2")
 
-    assert_includes out, "(kept remote: relative imports)"
+    assert_includes out, "(kept remote: workers)"
     assert_match(/\(integrity sha384-/, out)
 
     content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
-    assert_match(%r{^pin "@popperjs/core", to: "https://ga\.jspm\.io/\S+"#{INTEGRITY_OPTION} # @2\.11\.8 \(remote: relative imports\)$}, content)
+    assert_match(%r{^pin "fflate", to: "https://ga\.jspm\.io/\S+"#{INTEGRITY_OPTION} # @0\.8\.2 \(remote: workers\)$}, content)
   end
 
   test "pin command replaces integrity: true on a remote pin with a hash" do

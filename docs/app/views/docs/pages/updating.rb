@@ -156,6 +156,12 @@ class Views::Docs::Pages::Updating < DocsUI::Page
         Remote pins are skipped, since there is nothing to redownload. A `--from` or
         `--minify` that changes a package's provenance is recorded on its pin, so the
         next `update` keeps it.
+
+        A package whose pin is followed by a `pin_all_from` line has its file graph
+        crawled again and the directory rebuilt — that is what restoring such a pin
+        means. `pristine` restores, it never re-decides: a package pinned as one
+        file stays one file, and gets a graph only when a `pin` or `update` gives it
+        one. See [Packages that ship more than one file](/docs/pinning).
       MD
     end
   end

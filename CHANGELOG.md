@@ -98,7 +98,52 @@
 
   [kept remote]: https://importmap-plus.zoolutions.llc/docs/pinning
 
+- **`pin` vendors a package's whole file graph, so a chunked package no longer
+  needs a CDN at runtime.** A package whose entry imports a sibling by relative
+  path — `@popperjs/core`, `date-fns`, `lodash-es`, and every package built by
+  a bundler that splits chunks — could not be vendored: the browser resolves
+  `./enums.js` against a digested asset path, and neither Propshaft nor
+  Sprockets rewrites `import` statements. Those packages were [kept remote].
+  `pin` now downloads the closed set of files the entry reaches, rewrites every
+  relative specifier to a bare key, and maps the directory with one
+  `pin_all_from` line:
+
+  ```
+  $ bin/importmap pin @popperjs/core@2.11.8
+  Pinning "@popperjs/core" to vendor/javascript/@popperjs/core.js via download from https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js (with 47 sibling files)
+  ```
+  ```ruby
+  pin "@popperjs/core", to: "@popperjs--core.js" # @2.11.8
+  pin_all_from "vendor/javascript/@popperjs--core", under: "@popperjs/core", to: "@popperjs--core" # @2.11.8 (graph of @popperjs/core)
+  ```
+
+  The entry keeps the flat file and the plain comment it always had, so
+  `update`, `outdated`, `lock` and `pristine` read it exactly as before, and a
+  `config/importmap.rb` written this way still parses under importmap-rails.
+  Bare specifiers are untouched, and a file another pin already vendored is
+  rewritten to that pin's key rather than copied, so the browser evaluates each
+  module once. `unpin` takes the directory and the line with the pin,
+  `pristine` rebuilds the directory, `pin --minify` minifies every file in it,
+  and `pin --vendor` still downloads the entry on its own.
+
+  Only jspm, jsDelivr and unpkg are crawled — their URLs say where a package's
+  directory ends. A graph that can't be taken over whole (a relative path that
+  climbs out of the package, a sibling the CDN hasn't got, a sibling that isn't
+  JavaScript, two files that would collapse to one key) keeps the whole package
+  remote, as does a download that also spawns a worker, reads
+  `import.meta.url`, computes an `import()` or names a `.wasm` file. A pin
+  importmap-plus had kept remote for its relative imports is converted back to
+  a download by the next `pin` or `update`, on the CDN its URL names.
+
 ### Fixed
+
+- **`fetch_remote` asks the CDN for an unencoded body.** jspm answers some
+  files with `content-encoding: br` whatever the request advertises, and
+  Net::HTTP decompresses gzip and deflate only:
+  `@popperjs/core@2.11.8/lib/utils/computeAutoPlacement.js` arrived as brotli
+  bytes, which read as invalid UTF-8 and took the source inspection down with
+  `ArgumentError: invalid byte sequence in UTF-8`. Inherited from
+  importmap-rails, which downloads the same way.
 
 - **`Importmap::Packager::ServiceError` is a class again.** It was assigned
   `Error.new(Error)` — an *instance* — so `rescue Packager::ServiceError`

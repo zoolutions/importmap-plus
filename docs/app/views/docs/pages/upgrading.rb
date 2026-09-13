@@ -61,6 +61,16 @@ class Views::Docs::Pages::Upgrading < DocsUI::Page
         that's a change you'll want to commit. Read
         [Provenance](/docs/provenance) for the grammar.
 
+        ### Packages that ship more than one file
+
+        A package whose entry imports a sibling by relative path — `@popperjs/core`,
+        `date-fns`, `lodash-es` — is vendored whole: the next `pin` or `update` that
+        touches it downloads the files it imports into a directory beside it and adds
+        one `pin_all_from` line mapping them. A pin importmap-plus had kept remote
+        for that reason is converted back to a download by the same command, on the
+        CDN its URL names. See
+        [Packages that ship more than one file](/docs/pinning).
+
         ### Packages you vendored that can't stand alone
 
         Some packages you have in `vendor/javascript` today will be kept remote the
@@ -91,6 +101,8 @@ class Views::Docs::Pages::Upgrading < DocsUI::Page
         - `config.importmap.paths`, `sweep_cache`, `cache_sweepers`, `rescuable_asset_errors`.
         - `Importmap::Map`, `Rails.application.importmap`, `stale_when_importmap_changes`.
         - `bin/importmap json`, `audit`, `packages`, `unpin`.
+        - The pin on a package vendored with its file graph: the entry keeps its flat
+          file and its plain comment, and the `pin_all_from` line sits beside it.
         - The pin comment format for a jspm download: `pin "react" # @19.1.0`.
       MD
     end

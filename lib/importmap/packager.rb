@@ -3,6 +3,7 @@ require "uri"
 require "json"
 require "importmap/minifier"
 require "importmap/module_inspector"
+require "importmap/package_graph"
 require "importmap/http_retries"
 require "importmap/integrity"
 
@@ -17,6 +18,16 @@ class Importmap::Packager
   INTEGRITY_OPTION_REGEXP = /integrity:\s*(true|false)\b/.freeze # :nodoc:
   INTEGRITY_HASH_REGEXP = /integrity:\s*["'][^"']+["']/.freeze # :nodoc:
   REMOTE_URL_REGEXP = %r{\Ahttps?://}.freeze # :nodoc:
+  # The header #save_vendored_package writes, read back to tell which CDN file
+  # a vendored file already is.
+  DOWNLOADED_FROM_REGEXP = %r{\A// \S+ downloaded from (\S+)}.freeze # :nodoc:
+  # jspm answers some files with `content-encoding: br` whatever the request
+  # advertises, and Net::HTTP decompresses gzip and deflate only: the body then
+  # arrives as brotli bytes, which read as invalid UTF-8 and take the source
+  # inspection down with an ArgumentError. Asking for an unencoded body is the
+  # lever a gem with no runtime dependencies has; the files are small and the
+  # CDN is on the other side of a compressed TLS connection either way.
+  IDENTITY_ENCODING = { "Accept-Encoding" => "identity" }.freeze # :nodoc:
 
   PROVIDER_HOSTS = {
     "ga.jspm.io"       => "jspm.io",
@@ -140,6 +151,12 @@ class Importmap::Packager
   # The reason is worth repeating to whoever asked, and to the next CDN's turn.
   attr_reader :last_import_error
 
+  # The file graph the most recent #download vendored beside its entry, or nil
+  # when that download was one file. A second reader rather than a second
+  # return value: #download's is the esm.run dependency list every caller
+  # already destructures.
+  attr_reader :last_graph
+
   def initialize(importmap_path = "config/importmap.rb", vendor_path: "vendor/javascript")
     @importmap_path = Pathname.new(importmap_path)
     @vendor_path    = Pathname.new(vendor_path)
@@ -199,6 +216,53 @@ class Importmap::Packager
 
     pin_for(package, to, preloads: preloads, integrity: integrity) +
       provenance_comment(version, provider: provider_for_url(url), minified: minify, vendored: vendored, locked: locked)
+  end
+
+  # The line that maps the file graph vendored beside +package+'s entry:
+  #
+  #   pin_all_from "vendor/javascript/@popperjs--core", under: "@popperjs/core", to: "@popperjs--core" # @2.11.8 (graph of @popperjs/core)
+  #
+  # The directory is the entry's own filename without its extension, so a pin
+  # owns its graph outright and rebuilding one never deletes another's files.
+  # The keys are written under the package the CDN URL names, which is not
+  # always the package the pin's key names — jspm resolves Node's "buffer" to a
+  # file in @jspm/core — so two pins of one package map their shared files to
+  # one key and the browser evaluates each module once.
+  def graph_pin_for(package, url, preloads = nil)
+    dirname = graph_dirname(package)
+    under   = Importmap::PackageGraph.package_for(url)
+    to      = dirname == under ? "" : %(, to: "#{dirname}")
+
+    %(pin_all_from "#{@vendor_path.join(dirname)}", under: "#{under}") + to + preload(preloads) +
+      provenance_comment(extract_package_version_from(url), graph: under)
+  end
+
+  # Whether the import map already maps a graph directory for +package+.
+  def graphed?(package)
+    importmap.match?(graph_line_regexp_for(package))
+  end
+
+  # The line that maps +package+'s graph directory, matched the way
+  # Importmap::Map.pin_line_regexp_for matches a pin: on the whole path, so a
+  # directory whose name ends in another's doesn't answer for it.
+  def graph_line_regexp_for(package)
+    /^.*pin_all_from\s+["']#{Regexp.escape(@vendor_path.join(graph_dirname(package)).to_s)}["'].*$/
+  end
+
+  # Drops a package's graph, directory and line together: a download that came
+  # back as one file, or a pin converted to a remote URL, leaves neither behind
+  # to keep pinning files nothing imports any more.
+  def remove_graph(package)
+    remove_existing_graph(package)
+    return unless @importmap_path.exist? && graphed?(package)
+
+    lines = File.readlines(@importmap_path).grep_v(graph_line_regexp_for(package))
+    File.open(@importmap_path, "w") { |file| lines.each { |line| file.write(line) } }
+    reload!
+  end
+
+  def remove_existing_graph(package)
+    FileUtils.rm_rf graph_path(package)
   end
 
   # What the pin's version comment says a package was built with:
@@ -286,21 +350,28 @@ class Importmap::Packager
   # as [package, url] pairs (empty for every other provider), with the bundle's
   # absolute /npm/... imports rewritten to bare specifiers on the way in.
   # Raises Unvendorable unless +force+, when the download imports a sibling
-  # file, spawns a worker or otherwise needs more than itself on disk.
-  def download(package, url, minify: false, force: false)
+  # file, spawns a worker or otherwise needs more than itself on disk. With
+  # +graph: false+ the entry is downloaded on its own and any graph directory
+  # it had is removed, which is what --vendor asks for; the caller decides,
+  # because only it knows whether the pin already maps one.
+  def download(package, url, minify: false, force: false, graph: true)
+    @last_graph = nil
+
     ensure_vendor_directory_exists
-    download_package_file(package, url, minify: minify, force: force)
+    download_package_file(package, url, minify: minify, force: force, graph: graph)
   end
 
   # The body at +url+ — the one GET this class makes, whether the file is
   # going to be vendored or only hashed for a remote pin. Writes nothing and
   # inspects nothing. Like #post_json, a failure the retry doesn't recognise
   # still comes out as this class's HTTPError rather than a backtrace.
-  def fetch_remote(url)
-    response = with_retries("downloading #{url}") { Net::HTTP.get_response(URI(url)) }
+  def fetch_remote(url, allow_missing: false)
+    response = with_retries("downloading #{url}") { Net::HTTP.get_response(URI(url), IDENTITY_ENCODING) }
 
     if response.code == "200"
       response.body
+    elsif response.code == "404" && allow_missing
+      nil
     else
       handle_failure_response(response)
     end
@@ -312,6 +383,7 @@ class Importmap::Packager
 
   def remove(package)
     remove_existing_package_file(package)
+    remove_graph(package)
     remove_package_from_importmap(package)
   end
 
@@ -440,8 +512,9 @@ class Importmap::Packager
 
     # " # @3.7.2 (esm.run, minified, locked)" — the details in their fixed
     # order, the parens only when there is something to say.
-    def provenance_comment(version, provider: nil, minified: false, vendored: false, remote: nil, locked: false)
+    def provenance_comment(version, provider: nil, minified: false, vendored: false, remote: nil, locked: false, graph: nil)
       details = []
+      details << "graph of #{graph}" if graph
       details << provider if provider && provider != DEFAULT_PROVIDER
       details << "minified" if minified
       details << VENDORED_DETAIL if vendored
@@ -570,6 +643,10 @@ class Importmap::Packager
       File.open(@importmap_path, "w") do |file|
         with_lines_removed.each { |line| file.write(line) }
       end
+
+      # Whatever asked to remove the pin may go on to ask whether it is still
+      # there, and #importmap answers from a memo of the file as it was.
+      reload!
     end
 
     # The file an app already has is replaced only once the new one is known to
@@ -578,18 +655,89 @@ class Importmap::Packager
     # the source as it will be written — after an esm.run bundle's imports have
     # become bare specifiers, before minifying, which rewrites nothing that
     # matters to it.
-    def download_package_file(package, url, minify: false, force: false)
+    def download_package_file(package, url, minify: false, force: false, graph: true)
       body   = fetch_remote(url)
       source = body.dup.force_encoding("UTF-8")
       source, dependencies = rewrite_esm_run_imports(source) if url.match?(ESM_RUN_URL_REGEXP)
+
+      @last_graph = graph_for(package, url, source, body) if graph
+      source = @last_graph.entry_source if @last_graph
 
       ensure_servable(source, body) unless force
 
       source = self.class.minifier.call(source) if minify
 
+      save_vendored_graph(package, @last_graph, minify: minify)
       save_vendored_package(package, url, source, minified: minify)
 
       dependencies || []
+    end
+
+    # The sibling files a chunked download needs, crawled and rewritten, or nil
+    # when it is one file. The crawl reads the source Importmap::ModuleInspector
+    # read, so every relative import the check counted comes back rewritten and
+    # the check below passes on what is about to be written. A file the crawl
+    # can't own keeps the whole package remote, carrying the hash of the bytes
+    # the CDN served so the pin doesn't fetch them a second time.
+    def graph_for(package, url, source, body)
+      Importmap::PackageGraph.build(url, source, package: package, known: vendored_entry_urls,
+                                                 forbidden: pinned_packages - [ package ]) do |file_url|
+        # Net::HTTP hands back ASCII-8BIT, which neither the rewrite's regexes
+        # nor the write that follows can read as text. The entry is tagged the
+        # same way before it is inspected.
+        fetch_remote(file_url, allow_missing: true)&.force_encoding("UTF-8")
+      end
+    rescue Importmap::PackageGraph::Unownable => refusal
+      raise Unvendorable.new(refusal.reasons, integrity: Importmap::Integrity.for(body))
+    end
+
+    # The CDN URL every vendored file was downloaded from, by the pin key that
+    # names it, read back out of the header #save_vendored_package wrote. A
+    # crawl that reaches one of these URLs has reached another pin's file: it
+    # rewrites the specifier to that pin's key rather than copying the file,
+    # because two copies of one module in an import map are two modules.
+    def vendored_entry_urls
+      pinned_packages.each_with_object({}) do |key, urls|
+        path = vendored_package_path(key)
+        next unless path.file?
+
+        # Read as bytes: a vendored file the gem didn't write, or wrote before
+        # it asked CDNs not to encode the body, can hold a sequence no UTF-8
+        # regexp will match without raising, and one such file must not stop
+        # every other package from being pinned.
+        url = File.open(path, "rb") { |file| file.gets.to_s }[DOWNLOADED_FROM_REGEXP, 1]
+        urls[url] = key if url
+      end
+    end
+
+    # The directory is built beside its target and renamed over it, the way a
+    # vendored file is, so a crawl that dies partway leaves the directory the
+    # app has. It is replaced whole rather than merged: a file the package
+    # dropped between versions would otherwise stay in the directory, and the
+    # pin_all_from line that maps it would keep pinning it.
+    def save_vendored_graph(package, graph, minify: false)
+      return remove_existing_graph(package) unless graph
+
+      target  = graph_path(package)
+      partial = Pathname.new("#{target}.#{Process.pid}.download")
+      FileUtils.rm_rf partial
+
+      begin
+        FileUtils.mkdir_p partial
+
+        graph.files.each do |path, source|
+          file = partial.join(path)
+          FileUtils.mkdir_p file.dirname
+          source = self.class.minifier.call(source) if minify
+          File.write(file, remove_sourcemap_comment_from(source))
+        end
+
+        FileUtils.rm_rf target
+        File.rename(partial, target)
+      rescue
+        FileUtils.rm_rf partial
+        raise
+      end
     end
 
     # Both questions are asked of one inspection of one download. Standing alone
@@ -702,5 +850,13 @@ class Importmap::Packager
 
     def package_filename(package)
       package.gsub("/", "--") + ".js"
+    end
+
+    def graph_path(package)
+      @vendor_path.join(graph_dirname(package))
+    end
+
+    def graph_dirname(package)
+      package_filename(package).delete_suffix(".js")
     end
 end

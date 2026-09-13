@@ -1,5 +1,6 @@
 require "thor"
 require "importmap/packager"
+require "importmap/package_graph"
 require "importmap/npm"
 require "importmap/provider_chain"
 require "importmap/integrity"
@@ -78,8 +79,12 @@ class Importmap::Commands < Thor
 
         # pristine restores what each pin already says, so a package vendored
         # before the single-file check existed — or on purpose with --vendor —
-        # is downloaded again rather than converted. pin is where that is decided.
-        pin_esm_run_dependencies packager.download(package, url, minify: minify, force: true), minify: minify
+        # is downloaded again rather than converted, and only a pin that
+        # already maps a graph directory has one crawled again. pin is where
+        # both of those are decided.
+        dependencies = packager.download(package, url, minify: minify, force: true, graph: packager.graphed?(package))
+
+        pin_esm_run_dependencies dependencies, minify: minify
         record_provenance(package, url, minify) if provenance_changed?(package, url, minify)
       end
     end
@@ -191,9 +196,14 @@ class Importmap::Commands < Thor
       # A pin vendored on purpose stays vendored: without this an update would
       # inspect the download again, refuse it again, and quietly undo --vendor.
       vendor ||= packager.vendored?(package)
+      # A pin kept remote only because its file imports siblings is vendored
+      # again now that the whole graph can be. The reason its comment records
+      # is one this gem has since learned to answer, and without this an app
+      # that hit the check once would never see the fix arrive.
+      regraph = packager.remote_reason(package) == Importmap::PackageGraph::REASON
       existing_url = existing_options[:to] if existing_options[:to].to_s.match?(Importmap::Packager::REMOTE_URL_REGEXP)
 
-      if existing_url && !vendor
+      if existing_url && !vendor && !regraph
         repin_remote_package(package, url, existing_url, preload, env: env, from: from, integrity: integrity, locked: locked)
       elsif remote
         pin_remote_package(package, url, preload, integrity: integrity, locked: locked)
@@ -208,14 +218,26 @@ class Importmap::Commands < Thor
       minify = vendored_minified?(package) if minify.nil?
 
       begin
-        dependencies = packager.download(package, url, minify: minify, force: vendor)
+        dependencies = packager.download(package, url, minify: minify, force: vendor, graph: !vendor)
       rescue Importmap::Packager::Unvendorable, Importmap::Packager::NotAnEsModule => refusal
         return pin_remote_package(package, url, preload, integrity: integrity, locked: locked, kept_remote: refusal)
       end
 
-      puts %(Pinning "#{package}" to #{packager.vendor_path}/#{package}.js via download from #{url}#{" (minified)" if minify})
+      graph = packager.last_graph
+
+      puts %(Pinning "#{package}" to #{packager.vendor_path}/#{package}.js via download from #{url}#{" (minified)" if minify}#{graph_note(graph)})
 
       update_importmap_with_pin(package, packager.vendored_pin_for(package, url, preload, minify: minify, integrity: integrity, locked: locked, vendored: vendor))
+
+      # The line that maps the graph directory goes with the download: a
+      # package that stopped needing one takes its line and its files with it,
+      # or pin_all_from keeps mapping files nothing imports.
+      if graph
+        update_importmap_with_graph_pin(package, packager.graph_pin_for(package, url, preload))
+      else
+        packager.remove_graph(package)
+      end
+
       report_lock(package) if locked
 
       pin_esm_run_dependencies(dependencies, preload: preload, minify: minify)
@@ -477,9 +499,21 @@ class Importmap::Commands < Thor
       key  = packager.package_key_for(spec)
       name = packager.package_name_for(key)
 
-      return packager.pin_provenance(key)&.dig(:provider) if key == name
+      return packager.pin_provenance(key)&.dig(:provider) || kept_remote_provider(key) if key == name
 
       provider_of_pin(key) || provider_of_pin(name)
+    end
+
+    # A pin the single-file check kept remote records its CDN only in its URL:
+    # the comment's provider slot is taken by the reason it was kept. Asking the
+    # URL keeps such a pin on its own CDN when it is re-pinned — and, now that a
+    # chunked package can be vendored whole, when it converts to a download.
+    # A pin the app made remote itself carries no reason and is left to
+    # repin_remote_package, which resolves it from its URL as it always did.
+    def kept_remote_provider(key)
+      return unless packager.remote_reason(key)
+
+      packager.provider_for_url(packager.extract_existing_pin_options(key).dig(key, :to))
     end
 
     # A vendored pin records its CDN in the version comment; a remote one
@@ -512,6 +546,7 @@ class Importmap::Commands < Thor
       remote = kept_remote&.reasons&.first || packager.remote_reason(package)
 
       packager.remove_existing_package_file(package)
+      packager.remove_graph(package)
 
       update_importmap_with_pin(package, packager.pin_for(package, url, preloads: preload, integrity: integrity,
                                                            locked: locked, remote: remote))
@@ -569,6 +604,22 @@ class Importmap::Commands < Thor
     rescue Importmap::Packager::Error => error
       puts %(Failed to resolve "#{package}" from #{provider}: #{error.message})
       nil
+    end
+
+    # How many files came down with the entry, so an app can see that a chunked
+    # package was vendored whole rather than as the one file that would 404.
+    def graph_note(graph)
+      %( (with #{graph.size} sibling #{"file".pluralize(graph.size)})) if graph && graph.size.positive?
+    end
+
+    def update_importmap_with_graph_pin(package, pin)
+      if packager.graphed?(package)
+        gsub_file("config/importmap.rb", packager.graph_line_regexp_for(package), pin, verbose: false)
+      else
+        append_to_file("config/importmap.rb", "#{pin}\n", verbose: false)
+      end
+
+      packager.reload!
     end
 
     def update_importmap_with_pin(package, pin)
