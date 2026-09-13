@@ -842,6 +842,92 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes content, %(pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js", preload: false # @2.11.8 (remote: relative imports)\n)
   end
 
+  test "update command with a package name re-pins every key of that package" do
+    importmap_config(<<~PINS)
+      pin "photoswipe" # @5.3.0 (jsdelivr)
+      pin "photoswipe/lightbox", to: "photoswipe--lightbox.js" # @5.3.0 (jsdelivr)
+    PINS
+
+    out, _err = run_importmap_command("update", "photoswipe")
+
+    assert_includes out, 'Pinning "photoswipe" to vendor/javascript/photoswipe.js via download from https://cdn.jsdelivr.net/npm/photoswipe@5.4.'
+    assert_includes out, 'Pinning "photoswipe/lightbox" to vendor/javascript/photoswipe/lightbox.js via download from https://cdn.jsdelivr.net/npm/photoswipe@5.4.'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_match %r{^pin "photoswipe" # @5\.4\.\d+ \(jsdelivr\)$}, content
+    assert_match %r{^pin "photoswipe/lightbox", to: "photoswipe--lightbox\.js" # @5\.4\.\d+ \(jsdelivr\)$}, content
+    assert_not_includes content, "@5.3.0"
+    assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/photoswipe--lightbox.js")
+  end
+
+  test "update command resolves a subpath pin from the CDN its package's remote pin points at" do
+    importmap_config(<<~PINS)
+      pin "photoswipe", to: "https://cdn.jsdelivr.net/npm/photoswipe@5.3.0/dist/photoswipe.esm.js"
+      pin "photoswipe/lightbox", to: "photoswipe--lightbox.js" # @5.3.0
+    PINS
+
+    out, _err = run_importmap_command("update")
+
+    assert_not_includes out, "ga.jspm.io"
+    assert_not_includes out, "Couldn't find any packages"
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_match %r{^pin "photoswipe/lightbox", to: "photoswipe--lightbox\.js" # @5\.4\.\d+ \(jsdelivr\)$}, content
+  end
+
+  test "update command resolves a subpath pin from its own CDN, not its package's" do
+    importmap_config(<<~PINS)
+      pin "photoswipe" # @5.3.0 (skypack)
+      pin "photoswipe/lightbox", to: "https://cdn.jsdelivr.net/npm/photoswipe@5.3.0/dist/photoswipe-lightbox.esm.js"
+    PINS
+
+    out, _err = run_importmap_command("update")
+
+    # The remote pin says jsdelivr, so the subpath is asked of jsdelivr. Taking
+    # the package's skypack instead grouped the two into one request, and one
+    # spec skypack can't answer for fails the whole batch, subpath included.
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_match %r{^pin "photoswipe/lightbox", to: "https://cdn\.jsdelivr\.net/npm/photoswipe@5\.4\.\d+/dist/photoswipe-lightbox\.esm\.js"$}, content
+
+    # Both sides are asserted so neither can fail quietly. skypack stopped
+    # publishing years ago and has no photoswipe 5.4, so the package's own pin
+    # can't move — but it now fails alone rather than taking the subpath down
+    # with it, which is the whole point: the batch names one spec, not two.
+    assert_includes out, %(Couldn't find any packages in ["photoswipe"] on skypack)
+    assert_includes content, %(pin "photoswipe" # @5.3.0 (skypack)\n)
+  end
+
+  test "update command with a subpath name re-pins only that key" do
+    importmap_config(<<~PINS)
+      pin "photoswipe" # @5.3.0 (jsdelivr)
+      pin "photoswipe/lightbox", to: "photoswipe--lightbox.js" # @5.3.0 (jsdelivr)
+    PINS
+
+    out, _err = run_importmap_command("update", "photoswipe/lightbox")
+
+    assert_includes out, 'Pinning "photoswipe/lightbox"'
+    assert_not_includes out, 'Pinning "photoswipe" '
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, %(pin "photoswipe" # @5.3.0 (jsdelivr)\n)
+    assert_match %r{^pin "photoswipe/lightbox", to: "photoswipe--lightbox\.js" # @5\.4\.\d+ \(jsdelivr\)$}, content
+  end
+
+  test "update command resolves a subpath pin from the CDN its package's pin names" do
+    importmap_config(<<~PINS)
+      pin "photoswipe" # @5.3.0 (jsdelivr)
+      pin "photoswipe/lightbox", to: "photoswipe--lightbox.js" # @5.3.0
+    PINS
+
+    out, _err = run_importmap_command("update")
+
+    assert_includes out, 'Pinning "photoswipe/lightbox" to vendor/javascript/photoswipe/lightbox.js via download from https://cdn.jsdelivr.net/npm/photoswipe@5.4.'
+    assert_not_includes out, "ga.jspm.io"
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_match %r{^pin "photoswipe/lightbox", to: "photoswipe--lightbox\.js" # @5\.4\.\d+ \(jsdelivr\)$}, content
+  end
+
   private
     # A registry that can't answer for a package is the case under test, and
     # the live registry won't produce it on demand. Stub the one method that

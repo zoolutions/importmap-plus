@@ -315,10 +315,18 @@ class Importmap::Commands < Thor
 
     # The registry knows a package by name and the import map by key: a pin of
     # "photoswipe/lightbox" is outdated when "photoswipe" is. A named update
-    # re-pins the keys that were asked for, not the name the registry answered with.
+    # re-pins the keys that were asked for: a package name means every pin
+    # that carries it, the way outdated reports it and a bare update moves it,
+    # while "photoswipe/lightbox" means that one key.
     def requested_keys_for(specs, outdated_names)
-      specs.map { |spec| packager.package_key_for(spec) }
+      specs.flat_map { |spec| keys_for(packager.package_key_for(spec)) }
            .select { |key| outdated_names.include?(packager.package_name_for(key)) }
+    end
+
+    def keys_for(key)
+      return [ key ] unless key == packager.package_name_for(key)
+
+      versioned_keys_by_package[key] || [ key ]
     end
 
     # An outdated package is outdated in every pin that carries it, so a bare
@@ -334,10 +342,12 @@ class Importmap::Commands < Thor
     # doesn't match its key (pin "buffer", to: ".../npm:jspm-core@..."); it is
     # still the only handle there is, so it goes through as itself.
     def outdated_keys_for(names)
-      keys = packager.pinned_packages.select { |key| packager.pin_version(key) }
-                                     .group_by { |key| packager.package_name_for(key) }
+      names.flat_map { |name| versioned_keys_by_package[name] || [ name ] }
+    end
 
-      names.flat_map { |name| keys[name] || [ name ] }
+    def versioned_keys_by_package
+      packager.pinned_packages.select { |key| packager.pin_version(key) }
+                              .group_by { |key| packager.package_name_for(key) }
     end
 
     def locked_pin_covering(name)
@@ -408,8 +418,30 @@ class Importmap::Commands < Thor
       end
     end
 
+    # A subpath pin that names no CDN of its own comes from wherever its
+    # package's pin came from: pdfjs-dist and pdfjs-dist/build/pdf.worker.min.mjs
+    # were pinned together, and jspm, the default, can't resolve either.
+    # A pin answers for itself first and only then for its subpaths: the URL on
+    # pin "photoswipe/lightbox" says more about where that file comes from than
+    # its package's pin does. Asking the package first grouped the two together,
+    # and one spec the CDN can't answer for fails the whole batch.
     def vendored_provider_for(spec)
-      packager.pin_provenance(packager.package_key_for(spec))&.dig(:provider)
+      key  = packager.package_key_for(spec)
+      name = packager.package_name_for(key)
+
+      return packager.pin_provenance(key)&.dig(:provider) if key == name
+
+      provider_of_pin(key) || provider_of_pin(name)
+    end
+
+    # A vendored pin records its CDN in the version comment; a remote one
+    # carries it in the URL and, unlocked, has no comment at all. Only a subpath
+    # asks this, and a bare package pin above stops at its comment: reading the
+    # URL of every pin would change where a plain remote pin resolves its
+    # dependencies from, which is not this lookup's business.
+    def provider_of_pin(package)
+      packager.pin_provenance(package)&.dig(:provider) ||
+        packager.provider_for_url(packager.extract_existing_pin_options(package).dig(package, :to))
     end
 
     # +kept_remote+ is the reasons a download just turned out not to stand on

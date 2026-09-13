@@ -40,6 +40,23 @@
   fetching, so a CDN that answered 500 — or, now, a file that can't be
   vendored — left the app with no file at all. The existing file is replaced
   only once the new one has arrived and been found fit to serve.
+- **`update <package>` moves every pin of that package, not just the bare
+  one.** An app with `pin "pdfjs-dist"` and
+  `pin "pdfjs-dist/build/pdf.worker.min.mjs"` ran `update pdfjs-dist` and got
+  a new main file next to a worker still at the old version — the two are
+  built together and don't tolerate that. A package name now means every
+  key that carries it, the same set `outdated` reports and a bare `update`
+  moves; `update pdfjs-dist/build/pdf.worker.min.mjs` still means that one
+  key.
+- **A subpath pin without a CDN in its comment resolves from the CDN its
+  package's pin names.** The worker pin above, written before provenance
+  existed, was sent to jspm — which can't resolve pdf.js at all — and
+  reported "Couldn't find any packages" on every update while the main pin
+  moved on from jsdelivr. Siblings pinned together come from the same place;
+  the next update records it on the pin. A pin answers for itself first — its
+  own comment, then its own `to:` URL — and only then does its package answer
+  for it, whether that pin is vendored, recording the CDN in its comment, or
+  remote, carrying it in the URL with no comment at all.
 
 ## 1.1.0
 
