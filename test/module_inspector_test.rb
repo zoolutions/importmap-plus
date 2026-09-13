@@ -146,6 +146,71 @@ class Importmap::ModuleInspectorTest < ActiveSupport::TestCase
     assert_equal "import.meta.url", inspector.reason
   end
 
+  test "a file with a top-level import or export statement is an ES module" do
+    assert_es_module %(export default 1)
+    assert_es_module %(import "./polyfill.js")
+    assert_es_module %(export { a } from "b")
+    assert_es_module %(import r from"crypt";import t from"charenc";var e={};export default e)
+    assert_es_module %(export * from "./utils.js")
+    assert_es_module %(export const VERSION = "1.0.0")
+    assert_es_module %(export async function render() {})
+    assert_es_module %(import{select}from"d3-selection";export{select})
+    assert_es_module %(import a, { b } from "c"; export default a)
+  end
+
+  # jsDelivr serves a package's own dist file, which for plenty of packages is
+  # the UMD bundle npm has always shipped. Vendoring one gives an import map
+  # entry that resolves to a file exporting nothing.
+  test "a CommonJS or UMD bundle is not an ES module" do
+    assert_not_es_module %(module.exports = md5)
+    assert_not_es_module %(const crypt = require("crypt"); module.exports = crypt)
+    assert_not_es_module %((function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}})(function(){}))
+    assert_not_es_module %(var a = require("./util"))
+  end
+
+  # lodash never writes `module.exports` in code — it reaches its exports
+  # through `freeModule.exports` and spells the name out only in a comment,
+  # which is stripped before any of this is read. The UMD sniff it opens with
+  # is what gives it away.
+  test "a UMD bundle that only sniffs for its loader is not an ES module" do
+    assert_not_es_module %(var freeExports = typeof exports == 'object' && exports && !exports.nodeType && exports)
+    assert_not_es_module %(if (typeof define == 'function' && define.amd) { define(function() { return _ }) })
+    assert_not_es_module %(/** Detect `module.exports`. */ var moduleExports = freeModule && freeModule.exports === freeExports)
+  end
+
+  # Nothing says CommonJS and nothing says ESM: a side-effect-only module looks
+  # exactly like this, and it is what every CDN in the chain would answer with.
+  test "a file that claims neither is taken for an ES module" do
+    assert_es_module %(console.log("hello"))
+    assert_es_module %()
+  end
+
+  test "an identifier or method that merely ends in import or export is not a statement" do
+    assert_not_es_module %(module.exports = { reimport: 1, myexport: 2, loader.import: 3 })
+    assert_not_es_module %(module.exports = obj.import("x"))
+    assert_not_es_module %(const exports2 = require("x"); module.exports = exports2)
+  end
+
+  # The two clauses read different text on purpose, each in the direction that
+  # keeps a non-module out: an import statement is only believed outside a
+  # string literal, a module.exports is believed wherever it appears.
+  # lodash builds a template compiler out of variables called importsKeys and
+  # importsValues; without a space between the keyword and the name, `imports,`
+  # reads as an import of `s`.
+  test "an identifier starting with import is not an import statement" do
+    assert_not_es_module %(var importsKeys = keys(imports), importsValues = values(imports); module.exports = importsKeys)
+    assert_not_es_module %(module.exports = function(imports, importsKeys) {})
+  end
+
+  test "an import statement quoted inside a CommonJS bundle is not an export" do
+    assert_not_es_module %(const usage = "import md5 from 'md5'"; module.exports = usage)
+    assert_not_es_module %(module.exports = { snippet: `export default 1` })
+  end
+
+  test "a module.exports written about in a comment still counts against the file" do
+    assert_not_es_module %(/** sets module.exports */ var a = require("x"))
+  end
+
   private
     def inspect_source(source)
       Importmap::ModuleInspector.new(source)
@@ -162,5 +227,13 @@ class Importmap::ModuleInspectorTest < ActiveSupport::TestCase
       inspector = inspect_source(source)
 
       assert inspector.vendorable?, "expected #{source.inspect} to be vendorable, got #{inspector.reasons.inspect}"
+    end
+
+    def assert_es_module(source)
+      assert inspect_source(source).es_module?, "expected #{source.inspect} to be an ES module"
+    end
+
+    def assert_not_es_module(source)
+      assert_not inspect_source(source).es_module?, "expected #{source.inspect} not to be an ES module"
     end
 end
