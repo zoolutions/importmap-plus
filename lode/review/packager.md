@@ -78,8 +78,8 @@ How `Importmap::Packager` resolves, downloads and rewrites pins — the invarian
 - **Origin:** PR #30
 
 ### A graph directory is replaced only when the import map maps it as ours, never merely because it is in the way
-- **Holds because:** the directory is named for the pin, so it can collide with one an app vendored by hand and mapped with its own `pin_all_from` (no `(graph of …)` comment). `#commit` renames the old directory aside and removes it, which for such a directory is unrecoverable loss of files this gem never wrote. Round 1 guarded the *delete* path and left the *replace* path open; both now go through `mapped?`, and a directory that exists without being mapped as ours raises `VendoredGraph::Occupied`. `pin` prints `Skipping "<pkg>": <dir> already exists and isn't a graph directory this gem wrote` and writes nothing at all — not even the pin — so the app can move its directory and try again.
-- **Where:** `lib/importmap/vendored_graph.rb#commit`, `Occupied`; `lib/importmap/commands.rb#pin_vendored_package`, `#restore_package`
+- **Holds because:** the directory is named for the pin, so it can collide with one an app vendored by hand and mapped with its own `pin_all_from` (no `(graph of …)` comment). `#commit` renames the old directory aside and removes it, which for such a directory is unrecoverable loss of files this gem never wrote. Round 1 guarded the *delete* path and left the *replace* path open; both now go through `mapped?`, and a directory that exists without being mapped as ours raises `VendoredGraph::Occupied`. `pin` writes nothing at all — not even the pin — and says what to do (the message is quoted in the rule below, which is where it is kept current).
+- **Where:** `lib/importmap/vendored_graph.rb#commit`, `Occupied`; `lib/importmap/commands.rb#pin_vendored_package`
 - **Safe direction:** doing nothing and saying so is recoverable; renaming an app's directory away is not.
 - **Proven by:** `test/vendored_graph_test.rb:"commit refuses to replace a directory the import map doesn't map as ours"`; `test/packager_test.rb:"download refuses to replace a directory the import map doesn't map as ours"`
 - **Origin:** gate round 2 (correctness), PR #30
@@ -92,8 +92,8 @@ How `Importmap::Packager` resolves, downloads and rewrites pins — the invarian
 
 ### A partial is removed by the method that created it, because a failure halfway leaves the caller without its name
 - **Holds because:** `save_vendored_package`'s rescue can only clean up partials whose paths it has been handed back, and a minifier raising on the twentieth of forty-seven files, or a full disk during the entry write, raises before the return. Each writer therefore cleans up its own: `VendoredGraph#write` rescues around the whole directory, `Packager#write_entry_partial` around the file. Otherwise a `<dir>.<pid>.download` directory of half-written chunks stays in `vendor/javascript` for the asset pipeline to serve, and no later run removes it — the pid in the name is a different pid by then.
-- **Where:** `lib/importmap/vendored_graph.rb#write`; `lib/importmap/packager.rb#write_entry_partial`, `#save_vendored_package`
-- **Proven by:** `test/vendored_graph_test.rb:"write cleans up its own partial when a file can't be written"`; `test/packager_test.rb:"download leaves the file an app has when the replacement can't be written"`
+- **Where:** `lib/importmap/vendored_graph.rb#write`; `lib/importmap/packager.rb#write_entry_partial`, `#save_vendored_package` — all three, because the entry's partial waits through the whole graph write and the commit that follows it, `#save_vendored_package`
+- **Proven by:** `test/vendored_graph_test.rb:"write cleans up its own partial however the write ends"`; `test/packager_test.rb:"download leaves the file an app has when the replacement can't be written"`
 - **Origin:** gate round 2 (correctness), PR #30
 
 ### A body that is still unreadable after the identity retry is an error with a sentence, not bytes handed on
@@ -102,17 +102,17 @@ How `Importmap::Packager` resolves, downloads and rewrites pins — the invarian
 - **Proven by:** `test/packager_test.rb:"fetch_remote says so when a body stays unreadable after asking for it plain"`
 - **Origin:** gate round 2 (parser), PR #30
 
-### A sibling the CDN gives up on keeps the package remote; it does not end the run
-- **Holds because:** the crawl makes one request per file — 250 of them for date-fns — so a 500 that outlives the retries, or a body in an encoding this gem can't decode, is far likelier than on a single-file download, and `Packager::HTTPError` is rescued by nobody: it escapes `PackageGraph.for_download`, `pin_vendored_package` and Thor, printing a backtrace part-way through a batch with pins already written. The fetcher block treats it as the answer a 404 gives — nil, so the crawl raises `Unownable` and the package is pinned remote — which is also what makes `pristine`'s "reports what it couldn't restore" true for this error class.
-- **Where:** `lib/importmap/package_graph.rb#for_download` (the `rescue Importmap::Packager::Error` in the fetcher block)
-- **Safe direction:** a remote pin works; a backtrace half-way through a run leaves an app half-pinned and no list of what is missing.
-- **Proven by:** `test/packager_test.rb:"download keeps a package remote when the CDN gives up on a sibling"`
-- **Origin:** gate round 3 (parser, correctness), PR #30
+### Only a 404 on a sibling keeps the package remote; a CDN that fails is reported and changes nothing
+- **Holds because:** the crawl makes one request per file — 250 of them for date-fns — so a 503 that outlives the retries is far likelier than on a single-file download, and the two answers mean opposite things. A 404 is a fact about the package: the file the specifier names doesn't exist, the crawl can't own it, and the pin goes remote. A 503 is a fact about the CDN, and treating it the same way is destructive: `pin_remote_package` removes the vendored file *and* the graph directory, so one transient blip converts a working vendored package into a runtime CDN dependency, deletes the 250 files that made it work, blames "relative imports" and exits 0. `fetch_remote(allow_missing: true)` therefore answers nil for a 404 only; anything else raises, and `pin` and `pristine` report it (`Skipping "<pkg>": …` / `Couldn't restore "<pkg>": …`) and leave the pin exactly as it was.
+- **Where:** `lib/importmap/package_graph.rb#for_download`; `lib/importmap/commands.rb#pin_vendored_package`, `#restore_package` (both rescue `Importmap::Packager::Error`)
+- **Safe direction:** the recoverable failure is the one that changes nothing and says so; a silent conversion that deletes files is not recoverable from the message.
+- **Proven by:** `test/packager_test.rb:"download raises rather than keeping a package remote when the CDN fails on a sibling"`
+- **Origin:** gate rounds 3-4 (parser, correctness), PR #30
 
 ### Partials are removed in `ensure`, not `rescue`, because Ctrl-C is not a StandardError
 - **Holds because:** a graph write is 250 files through a minifier — the likeliest way it ends early is the user pressing Ctrl-C, and `Interrupt` is a `SignalException`, which a bare `rescue` doesn't catch. The directory left behind carries the pid of a process that is gone, so no later run removes it, and every file in it sits under an asset path for Propshaft and Sprockets to serve and precompile.
 - **Where:** `lib/importmap/vendored_graph.rb#write`; `lib/importmap/packager.rb#write_entry_partial`
-- **Proven by:** `test/vendored_graph_test.rb:"write cleans up its own partial when a file can't be written"` (the StandardError half; the Interrupt half is the same `ensure`)
+- **Proven by:** `test/vendored_graph_test.rb:"write cleans up its own partial however the write ends"` (both halves: a StandardError and an Interrupt)
 - **Origin:** gate round 3 (correctness), PR #30
 
 ### `Occupied` says what to do about the directory, because the gem can leave one too

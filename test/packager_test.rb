@@ -1067,26 +1067,29 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     assert_match %r{Can't read https://ga\.jspm\.io/npm:md5@2\.2\.0/md5\.js}, error.message
   end
 
-  # A sibling the CDN won't give up is the same answer as one it hasn't got:
-  # the package stays remote rather than the command ending in a backtrace.
-  test "download keeps a package remote when the CDN gives up on a sibling" do
+  # A sibling the CDN hasn't got means the crawl can't own the package. A
+  # sibling the CDN *fails* on says nothing about the package: raising keeps
+  # the pin it has, where an Unvendorable would convert it to a remote pin and
+  # delete the files that work today.
+  test "download raises rather than keeping a package remote when the CDN fails on a sibling" do
     Dir.mktmpdir do |vendor_dir|
       packager = graph_packager(vendor_dir)
       entry = "#{GRAPH_ROOT}dist/index.js"
       responder = ->(uri, _headers = nil) do
-        raise Errno::ECONNRESET, "SSL_connect" unless uri.to_s == entry
+        body = CHUNKED_PACKAGE[uri.to_s]
+        next Struct.new(:code, :body).new("200", body.dup.force_encoding("ASCII-8BIT")) if uri.to_s == entry
 
-        Struct.new(:code, :body).new("200", CHUNKED_PACKAGE[entry].dup.force_encoding("ASCII-8BIT"))
+        Struct.new(:code, :body).new("503", "Service unavailable")
       end
 
-      error = without_retry_wait do
+      without_retry_wait do
         Net::HTTP.stub(:get_response, responder) do
-          assert_raises(Importmap::Packager::Unvendorable) { packager.download("pkg", entry) }
+          assert_raises(Importmap::Packager::HTTPError) { packager.download("pkg", entry) }
         end
       end
 
-      assert_equal [ "relative imports" ], error.reasons
       assert_not File.exist?("#{vendor_dir}/pkg.js")
+      assert_empty Dir.glob("#{vendor_dir}/*.download")
     end
   end
 

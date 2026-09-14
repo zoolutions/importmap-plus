@@ -108,14 +108,14 @@ class Importmap::PackageGraph
 
     build(url, source, package: package, known: known, forbidden: pins - [ package ]) do |file_url|
       # Tagged the way the entry is: Net::HTTP hands back ASCII-8BIT, which
-      # neither the rewrite's regexes nor the write can read as text. A sibling
-      # the CDN won't give up once the retries are spent — a 500, a body in an
-      # encoding this gem can't decode — is the same answer as a 404: the crawl
-      # can't own this package, and a remote pin works where a backtrace
-      # halfway through a batch of pins doesn't.
+      # neither the rewrite's regexes nor the write can read as text.
+      #
+      # Only a 404 answers with nil, and only a 404 means the crawl can't own
+      # the package. A 503 that outlives the retries is a fact about the CDN,
+      # not about the package: swallowing it here would keep a working vendored
+      # package remote and delete the files that made it work. It is raised,
+      # and the CLI reports it and leaves the pin alone.
       packager.fetch_remote(file_url, allow_missing: true)&.force_encoding("UTF-8")
-    rescue Importmap::Packager::Error
-      nil
     end
   rescue Unownable => refusal
     raise Importmap::Packager::Unvendorable.new(refusal.reasons, integrity: Importmap::Integrity.for(body))

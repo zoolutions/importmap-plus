@@ -146,6 +146,13 @@
 
 ### Fixed
 
+- **A CDN that fails mid-crawl leaves the pin alone.** Vendoring a graph makes
+  one request per file — 250 of them for `date-fns` — so a 503 that outlives
+  the retries is far likelier than it was for a single download. `pin` and
+  `pristine` report it (`Skipping "date-fns": Unexpected response code (503)`)
+  and change nothing, rather than taking it for "this package can't be
+  vendored" and converting a working pin to a remote one, which would delete
+  the very files that make it work.
 - **`pristine` reports a package it can't restore and carries on.** It is the
   repair command, and a pin whose graph the CDN no longer serves the way the
   pin describes now raises where nothing used to — unrescued, that ended the

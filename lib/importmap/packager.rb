@@ -687,16 +687,24 @@ class Importmap::Packager
     def save_vendored_package(package, url, source, minified: false, graph: nil)
       vendored      = vendored_graph(package)
       entry_partial = write_entry_partial(package, url, source, minified: minified)
-      graph_partial = graph && vendored.write(graph) do |file_source|
-        remove_sourcemap_comment_from(minified ? self.class.minifier.call(file_source) : file_source)
-      end
+      committed     = false
 
-      vendored.commit(graph_partial)
-      commit_entry(package, entry_partial)
-    rescue
-      FileUtils.rm_f entry_partial if entry_partial
-      FileUtils.rm_rf graph_partial if graph_partial
-      raise
+      begin
+        graph_partial = graph && vendored.write(graph) do |file_source|
+          remove_sourcemap_comment_from(minified ? self.class.minifier.call(file_source) : file_source)
+        end
+
+        vendored.commit(graph_partial)
+        commit_entry(package, entry_partial)
+        committed = true
+      ensure
+        # In ensure: the entry partial waits here through a 250-file minify,
+        # and Ctrl-C through that is not a StandardError.
+        unless committed
+          FileUtils.rm_f entry_partial
+          FileUtils.rm_rf graph_partial if graph_partial
+        end
+      end
     end
 
     # In ensure, not rescue: a write that dies partway dies before the caller

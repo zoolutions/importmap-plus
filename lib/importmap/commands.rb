@@ -219,6 +219,11 @@ class Importmap::Commands < Thor
         # Nothing is written, including the pin: the app is asked to move its
         # own directory rather than told afterwards that this gem took it.
         return puts %(Skipping "#{package}": #{occupied.message})
+      rescue Importmap::Packager::Error => error
+        # The CDN couldn't be read once its retries were spent. The pin is left
+        # exactly as it was: a package that vendors today must not turn into a
+        # remote pin — losing the files that make it work — because of a 503.
+        return puts %(Skipping "#{package}": #{error.message})
       end
 
       graph = packager.last_graph
@@ -268,6 +273,9 @@ class Importmap::Commands < Thor
       true
     rescue Importmap::Packager::Unvendorable, Importmap::Packager::NotAnEsModule => refusal
       puts %(Couldn't restore "#{package}": it #{refusal.message})
+      false
+    rescue Importmap::Packager::Error => error
+      puts %(Couldn't restore "#{package}": #{error.message})
       false
     end
 
