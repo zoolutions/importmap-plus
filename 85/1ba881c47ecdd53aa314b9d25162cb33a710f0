@@ -1,0 +1,62 @@
+lib/importmap/package_graph.rb
+  s_302893bcd9747c::t_dd2e161f4b6209 32-34,86,119-126,129-131,133
+  s_3598d27e5630bd::t_f3afcd3e9a37ee 106-107
+  s_302893bcd9747c::t_de2cb850ef8407 3-4,99-105,108-113
+lib/importmap/commands.rb
+  s_302893bcd9747c::t_dd4a2c148f6e21 218-221,272-273
+test/packager_test.rb
+  s_302893bcd9747c::t_fef76592abbdbc 779,1101,1112-1146
+test/package_graph_test.rb
+  s_302893bcd9747c::t_dd4a2c148f6e21 193-194,196-203,205-206,209-212,214-218,220-223,275
+test/commands_test.rb
+  s_302893bcd9747c::t_956c3b46a90c10 905-944
+CHANGELOG.md
+  s_302893bcd9747c::t_43be27eeeb91c2 144-146,149-152
+  s_302893bcd9747c::t_4ef20463507cf9 123,125-127,129-131
+lib/importmap/vendored_graph.rb
+  s_302893bcd9747c::t_77e0a9f298486e 88-95,129,132-137,146-147,150
+  s_302893bcd9747c::t_3eb9bc286ec07d 185-197
+docs/app/views/docs/pages/updating.rb
+  s_302893bcd9747c::t_4ef20463507cf9 165-167
+lode/review/inspection-and-tools.md
+  s_302893bcd9747c::t_8452b09c33a999 71-82
+lode/review/packager.md
+  s_302893bcd9747c::t_8452b09c33a999 79-102
+test/vendored_graph_test.rb
+  s_302893bcd9747c::t_fef76592abbdbc 86-87,89,100-129
+docs/app/views/docs/pages/pinning.rb
+  s_302893bcd9747c::t_4ef20463507cf9 218-225,227-228
+lode/docs-site/summary.md
+  s_302893bcd9747c::t_43be27eeeb91c2 23
+lib/importmap/packager.rb
+  s_3598d27e5630bd::t_5721fff75bcb75 685-689
+  s_302893bcd9747c::t_3eb9bc286ec07d 222-225,342-346,617,655-660,715-719
+  s_3598d27e5630bd::t_f3afcd3e9a37ee 448-453
+  s_302893bcd9747c::t_e31a858b93ae32 75-80,312-321,335-338
+  s_3598d27e5630bd::t_edd6c646ea21c4 614-615,723
+  s_302893bcd9747c::t_de2cb850ef8407 652
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "851ba881c47ecdd53aa314b9d25162cb33a710f0",
+  "prompts": {},
+  "sessions": {
+    "s_302893bcd9747c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e9daba0-ca6b-4aa5-bbaa-83c35301fc04",
+        "model": "claude-opus-5"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    },
+    "s_3598d27e5630bd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "64306a32-a4ec-4445-b858-a6c3a74557c8",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
