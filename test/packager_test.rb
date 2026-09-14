@@ -1071,6 +1071,23 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
   # sibling the CDN *fails* on says nothing about the package: raising keeps
   # the pin it has, where an Unvendorable would convert it to a remote pin and
   # delete the files that work today.
+  # The entry's partial waits through the whole graph write, so Ctrl-C there is
+  # the case a bare rescue misses.
+  test "download leaves no entry partial behind when the write is interrupted" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir)
+
+      stub_cdn({ "#{GRAPH_ROOT}index.js" => %(export default 1) }) do
+        packager.stub(:remove_sourcemap_comment_from, ->(_source) { raise Interrupt }) do
+          assert_raises(Interrupt) { packager.download("pkg", "#{GRAPH_ROOT}index.js") }
+        end
+      end
+
+      assert_empty Dir.glob("#{vendor_dir}/*.download")
+      assert_not File.exist?("#{vendor_dir}/pkg.js")
+    end
+  end
+
   test "download raises rather than keeping a package remote when the CDN fails on a sibling" do
     Dir.mktmpdir do |vendor_dir|
       packager = graph_packager(vendor_dir)
@@ -1295,6 +1312,10 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
         packager.graph_pin_for("pkg", "https://ga.jspm.io/npm:pkg@2/index.js")
       assert_equal %(pin_all_from "#{vendor_dir}/pkg", under: "pkg" # @1.0.0-beta.1 (graph of pkg)),
         packager.graph_pin_for("pkg", "https://ga.jspm.io/npm:pkg@1.0.0-beta.1/dist/index.js")
+      # The package's own segment, not the first semver-looking thing in the
+      # path: a chunk filename must not supply the version.
+      assert_equal %(pin_all_from "#{vendor_dir}/pkg", under: "pkg" # @2 (graph of pkg)),
+        packager.graph_pin_for("pkg", "https://ga.jspm.io/npm:pkg@2/chunks/dep@9.9.9/index.js")
 
       # Whatever the version looks like, the line has to be findable again.
       line = packager.graph_pin_for("pkg", "https://ga.jspm.io/npm:pkg@latest/index.js")
