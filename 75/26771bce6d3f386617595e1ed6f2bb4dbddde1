@@ -1,0 +1,31 @@
+lode/cli/summary.md
+  s_302893bcd9747c::t_6172c1fb949a7f 25,38-52,150-151,257
+lode/review/cli.md
+  s_302893bcd9747c::t_6172c1fb949a7f 76-78,80-86
+lib/importmap/vendored_graph.rb
+  s_302893bcd9747c::t_6172c1fb949a7f 167-174
+lib/importmap/commands.rb
+  s_302893bcd9747c::t_6172c1fb949a7f 84-86
+lode/packager/summary.md
+  s_302893bcd9747c::t_6172c1fb949a7f 90
+docs/app/views/docs/pages/cli.rb
+  s_302893bcd9747c::t_6172c1fb949a7f 102
+docs/app/views/docs/pages/pinning.rb
+  s_302893bcd9747c::t_6172c1fb949a7f 237-239
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7526771bce6d3f386617595e1ed6f2bb4dbddde1",
+  "prompts": {},
+  "sessions": {
+    "s_302893bcd9747c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e9daba0-ca6b-4aa5-bbaa-83c35301fc04",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
