@@ -1,0 +1,29 @@
+lib/importmap/commands.rb
+  s_302893bcd9747c::t_ac79731ff565a7 222-226,277-278
+lib/importmap/packager.rb
+  s_302893bcd9747c::t_ac79731ff565a7 690,692-707
+test/packager_test.rb
+  ai_agent 1070-1074,1079-1080,1082,1085,1087,1092
+lode/review/packager.md
+  s_302893bcd9747c::t_5600619c123230 81-82,95-96,105-110,115
+lib/importmap/package_graph.rb
+  s_302893bcd9747c::t_ac79731ff565a7 111-117
+CHANGELOG.md
+  ai_agent 149-155
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "979f8b28d2186832d3d0672678d6beb26f8ce44b",
+  "prompts": {},
+  "sessions": {
+    "s_302893bcd9747c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e9daba0-ca6b-4aa5-bbaa-83c35301fc04",
+        "model": "claude-opus-5"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
