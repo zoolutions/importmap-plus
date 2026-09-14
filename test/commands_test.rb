@@ -888,6 +888,24 @@ class CommandsTest < ActiveSupport::TestCase
     assert_equal 1, File.read("#{@tmpdir}/dummy/config/importmap.rb").scan("pin_all_from").size
   end
 
+  # A directory the import map doesn't map as a graph is the app's — or what an
+  # interrupted run left. Either way it is not renamed away, and the pin isn't
+  # written either, so the app can move it and try again.
+  test "pin command skips a package whose directory the import map doesn't map" do
+    importmap_config("")
+    FileUtils.mkdir_p("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core")
+    File.write("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core/theirs.js", "// hand vendored, years ago")
+
+    out, _err = run_importmap_command("pin", "@popperjs/core@2.11.8")
+
+    assert_includes out, 'Skipping "@popperjs/core": vendor/javascript/@popperjs--core exists and no pin_all_from line maps it as a graph'
+
+    assert_equal "// hand vendored, years ago", File.read("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core/theirs.js")
+    assert_not_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), "@popperjs/core"
+    assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core.js")
+    assert_empty Dir.glob("#{@tmpdir}/dummy/vendor/javascript/*.download")
+  end
+
   # A bundling CDN answers with one file, so the graph goes — line and all,
   # or pin_all_from is left mapping a directory that no longer exists.
   test "pristine command with --from esm.run drops the graph a jspm pin had" do

@@ -269,9 +269,6 @@ class Importmap::Commands < Thor
     rescue Importmap::Packager::Unvendorable, Importmap::Packager::NotAnEsModule => refusal
       puts %(Couldn't restore "#{package}": it #{refusal.message})
       false
-    rescue Importmap::VendoredGraph::Occupied => occupied
-      puts %(Couldn't restore "#{package}": #{occupied.message})
-      false
     end
 
     def lock_package(spec)

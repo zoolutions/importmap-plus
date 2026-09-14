@@ -117,5 +117,9 @@ How `Importmap::Packager` resolves, downloads and rewrites pins — the invarian
 
 ### `Occupied` says what to do about the directory, because the gem can leave one too
 - **Holds because:** the directory is committed before the `pin_all_from` line is appended, so an interrupt in that window leaves a directory the import map doesn't map — indistinguishable from an app's own, and from then on every command refuses to touch it. The message therefore names the action rather than the owner: `<dir> exists and no pin_all_from line maps it as a graph; move it aside — or remove it, if an interrupted run left it — and pin again`.
-- **Where:** `lib/importmap/vendored_graph.rb::Occupied`
-- **Origin:** gate round 3 (correctness), PR #30
+- **Where:** `lib/importmap/vendored_graph.rb::Occupied`; rescued in
+  `lib/importmap/commands.rb#pin_vendored_package` only — `pristine` asks for a graph
+  only when the line maps the directory and `commit` refuses only when it doesn't,
+  so the refusal cannot reach it.
+- **Proven by:** `test/commands_test.rb:"pin command skips a package whose directory the import map doesn't map"`
+- **Origin:** gate round 3 (correctness, tests), PR #30

@@ -119,19 +119,24 @@ class Importmap::VendoredGraphTest < ActiveSupport::TestCase
     end
   end
 
-  test "write cleans up its own partial when a file can't be written" do
-    Dir.mktmpdir do |dir|
-      graph = vendored_graph(Pathname.new(dir).join("pkg"))
+  # Ctrl-C during a 250-file minify is the likeliest way this ends early, and
+  # Interrupt is not a StandardError — a bare rescue would leave the directory
+  # behind under a pid no later run will match.
+  test "write cleans up its own partial however the write ends" do
+    [ RuntimeError, Interrupt ].each do |giving_up|
+      Dir.mktmpdir do |dir|
+        graph = vendored_graph(Pathname.new(dir).join("pkg"))
 
-      assert_raises(RuntimeError) do
-        graph.write(Struct.new(:files).new({ "a.js" => "1", "b.js" => "2" })) do |source|
-          raise "the minifier gave up" if source == "2"
+        assert_raises(giving_up) do
+          graph.write(Struct.new(:files).new({ "a.js" => "1", "b.js" => "2" })) do |source|
+            raise giving_up, "the minifier gave up" if source == "2"
 
-          source
+            source
+          end
         end
-      end
 
-      assert_empty Dir.glob("#{dir}/*.download")
+        assert_empty Dir.glob("#{dir}/*.download"), "expected no partial after #{giving_up}"
+      end
     end
   end
 
