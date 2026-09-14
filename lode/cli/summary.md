@@ -22,7 +22,7 @@ states and the `require` graph confirms (`commands.rb` requires
 | `lock [*PACKAGES]` | none | `Use "bin/importmap pin #{spec} --lock" ...`; `Couldn't find a pin for "..."`; `"..." is already locked at ...`; `Can't lock "...": its pin has no version`; `Locked "..." at ...` | adds `(locked)` to the pin's provenance comment | `exit 1 unless packages.map { lock_package }.all?` |
 | `unlock [*PACKAGES]` | none | `Couldn't find a pin for "..."`; `"..." isn't locked`; `Unlocked "..."` | drops `locked` from the provenance comment | `exit 1 unless packages.map { unlock_package }.all?` |
 | `unpin [*PACKAGES]` | `--env/-e` ("production"), `--from/-f` ("jspm") | `Unpinning and removing "#{package}"` | removes pin line + vendored file + graph directory and its line (`Packager#remove`) | none explicit |
-| `pristine` | `--env/-e` ("production"), `--from/-f` (nil → each pin's own CDN), `--minify` (nil → each file's own state) | `Skipping "..." (pinned to remote URL)`; `Skipping "..." (locked at ..., CDN resolved ...)`; `Downloading "#{package}" to #{vendor_path}/#{package}.js from #{url}#{" (minified)" if minify}`; `Couldn't restore "...": it ...` | re-downloads vendored files, re-crawls the graph of a pin that maps one and drops the line of one that no longer does; rewrites provenance comment only if provider/minified changed | `exit 1` if any package couldn't be restored |
+| `pristine` | `--env/-e` ("production"), `--from/-f` (nil → each pin's own CDN), `--minify` (nil → each file's own state) | `Skipping "..." (pinned to remote URL)`; `Skipping "..." (locked at ..., CDN resolved ...)`; `Downloading "#{package}" to #{vendor_path}/#{package}.js from #{url}#{" (minified)" if minify}`; `Couldn't restore "...": it ...` | re-downloads vendored files, re-crawls the graph of a pin that maps one and drops the line of one that no longer does; rewrites provenance comment only if provider/minified changed | `exit 1` if any package couldn't be restored, or an esm.run bundle's dependency was skipped on the way (`unrestored.any? \|\| skipped.any?`) |
 | `json` | none | full importmap as JSON (`Rails.application.importmap.to_json`) | nothing | raises if `config/environment` fails to load |
 | `audit` | none | table `Package/Severity/Vulnerable versions/Vulnerability`; `  #{n} vulnerabilit{y,ies} found: ...`; or `No vulnerable packages found` | nothing | `exit 1` if any vulnerable package found |
 | `outdated` | none | table `Package/Current/Latest/Locked`; `  #{n} outdated package(s) found#{" (#{locked} locked)" if any}`; or `No outdated packages found` | nothing | `exit 1 if locked.size < outdated_packages.size` |
@@ -35,17 +35,21 @@ calls `exit(false)` only when `exit_on_failure?` is true, so a command that ends
 by raising `Thor::Error` finishes with status 0 unless it called `exit` itself
 (`outdated` and `update` do). `Packager::Error` and its `ServiceError` subclass
 are plain `StandardError`s (`packager.rb:66-68`), so one that escapes a command
-propagates past Thor, prints a backtrace and exits 1. Four places catch them
-first: `pin_vendored_package` rescues the `Unvendorable` and `NotAnEsModule`
-subclasses into a remote pin, then `VendoredGraph::Occupied` and any other
-`Packager::Error` from the download into `skip` — a printed `Skipping "<pkg>": …`
-and an entry in `skipped`, which `pin` and `update` turn into `exit 1`
-(`commands.rb:218-226`, `#skip`); `restore_package` rescues the same pairs into
-`Couldn't restore "<pkg>": …` and `false`, which `pristine` turns into `exit 1`
-(`commands.rb:290-295`); `ProviderChain#resolve` rescues per provider and
-re-raises only the last (`provider_chain.rb:64`); and `resolve_url_from_provider`
-(§3) downgrades one to a printed sentence and `nil`. So no `Packager::Error`
-raised by a *download* reaches Thor; only a resolution failure does.
+propagates past Thor, prints a backtrace and exits 1. The places that catch
+them first (`grep -n "rescue Importmap::Packager" lib/importmap/commands.rb` is
+the authoritative list): `pin_vendored_package` rescues the `Unvendorable` and
+`NotAnEsModule` subclasses into a remote pin (`commands.rb:218-219`), then
+`VendoredGraph::Occupied` and any other `Packager::Error` from the download into
+`skip` — a printed `Skipping "<pkg>": …` and an entry in `skipped`, which `pin`,
+`update` and `pristine` turn into `exit 1` (`commands.rb:220-228`, `#skip`);
+`restore_package` rescues the same pairs into `Couldn't restore "<pkg>": …` and
+`false`, which `pristine` turns into `exit 1` (`commands.rb:290-295`);
+`remote_integrity_for` rescues the fetch that hashes a remote pin into
+`Couldn't hash <url> …; pinning it without an integrity hash` and `nil`;
+`ProviderChain#resolve` rescues per provider and re-raises only the last
+(`provider_chain.rb:64`); and `resolve_url_from_provider` (§3) downgrades one to
+a printed sentence and `nil`. So no `Packager::Error` raised by a *download*
+reaches Thor; only a resolution failure does.
 
 ## 3. `pin` in detail
 
@@ -143,8 +147,8 @@ new bare `photoswipe` pin.
 Those keys run through `for_each_import_grouped_by_provider(fallback: true)`
 and `pin_package(package, url)` (no explicit `lock:`, so it reads the pin's
 own `locked?`), skipping locked dependencies via `keep_locked_dependency`.
-`exit 1 if unchecked_packages.any?` (`commands.rb:165`) even when the rest
-updated successfully.
+`exit 1 if unchecked_packages.any? || skipped.any?` (`commands.rb:166`) even
+when the rest updated successfully.
 
 ## 5. `pristine` and `unpin`
 
@@ -250,7 +254,7 @@ flowchart TD
     J -- no --> K["pin_package: repin_remote_package / pin_remote_package / pin_vendored_package"]
     K --> L["update_importmap_with_pin: gsub_file or append_to_file"]
     L --> M["packager.reload!"]
-    M --> N{"any unchecked packages?"}
+    M --> N{"any unchecked or skipped packages?"}
     N -- yes --> N1["exit 1"]
     N -- no --> O["exit 0"]
 ```

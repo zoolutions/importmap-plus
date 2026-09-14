@@ -81,7 +81,9 @@ class Importmap::Commands < Thor
       end
     end
 
-    exit 1 if unrestored.any?
+    # skipped: an esm.run bundle's dependency is pinned on the way, and one the
+    # CDN failed on is skipped the same way pin skips it.
+    exit 1 if unrestored.any? || skipped.any?
   end
 
   desc "json", "Show the full importmap in json"

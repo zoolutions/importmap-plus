@@ -234,7 +234,9 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
         the `(graph of …)` comment is what says so — and is replaced whole on every
         `pin`, `update` and `pristine`, so a file the package dropped between versions
         goes with it. A directory of that name the import map doesn't map that way is
-        yours: `pin` skips the package and says so rather than renaming it away. `unpin` takes the directory and its line along with the pin, and
+        yours: `pin` skips the package, says so, writes nothing and exits non-zero rather
+        than renaming it away — the same as when a CDN fails partway through a crawl,
+        where the pin and whatever files it had are left exactly as they were. `unpin` takes the directory and its line along with the pin, and
         `pin --vendor` drops both — it downloads the entry on its own, which is what
         overriding the check means.
 
