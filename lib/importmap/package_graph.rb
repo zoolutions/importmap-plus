@@ -103,8 +103,10 @@ class Importmap::PackageGraph
   # the graph resolves to that pin's key rather than copies, and every key
   # another pin owns as one it may not define.
   def self.for_download(packager, package, url, source, body)
-    build(url, source, package: package, known: packager.vendored_entry_urls,
-                       forbidden: packager.pinned_packages - [ package ]) do |file_url|
+    pins  = packager.pinned_packages
+    known = Importmap::VendoredGraph.entry_urls(pins.to_h { |key| [ key, packager.vendored_package_path(key) ] })
+
+    build(url, source, package: package, known: known, forbidden: pins - [ package ]) do |file_url|
       # Tagged the way the entry is: Net::HTTP hands back ASCII-8BIT, which
       # neither the rewrite's regexes nor the write can read as text.
       packager.fetch_remote(file_url, allow_missing: true)&.force_encoding("UTF-8")

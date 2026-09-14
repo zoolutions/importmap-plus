@@ -75,9 +75,9 @@ class Importmap::Packager
   # A download that can't be served as the files an import map entry points at.
   # Raised before anything is written, so the vendored file an app already has
   # survives; #reasons lists what Importmap::ModuleInspector found, less the
-  # relative imports a file graph answers for. The pin is kept remote instead,
-  # and #integrity is the hash of the bytes the CDN served — as served, before
-  # any rewriting — so the remote pin carries it without a second fetch.
+  # relative imports a file graph answers for. The pin is kept remote, and
+  # #integrity is the hash of the bytes as the CDN served them — before any
+  # rewriting — so that pin carries it without a second fetch.
   class Unvendorable < Error
     attr_reader :reasons, :integrity
 
@@ -216,14 +216,13 @@ class Importmap::Packager
   end
 
   # The pin_all_from line for +package+'s graph, carrying the entry's own
-  # preload. Its keys go under the package the CDN *URL* names, which jspm
-  # makes different from the pin's key: "buffer" is a file in @jspm/core.
+  # preload. Its keys go under the package the CDN *URL* names — jspm resolves
+  # Node's "buffer" to a file in @jspm/core.
   def graph_pin_for(package, url, preloads = nil)
-    package_name, version = Importmap::PackageGraph.package_and_version_for(url)
+    name, version = Importmap::PackageGraph.package_and_version_for(url)
 
-    vendored_graph(package).line_for(under: package_name,
-                                     version: extract_package_version_from(url) || version,
-                                     options: preload(preloads))
+    vendored_graph(package).line_for(under: name, options: preload(preloads),
+                                     version: extract_package_version_from(url) || version)
   end
 
   def remove_graph(package)
@@ -333,15 +332,13 @@ class Importmap::Packager
   def fetch_remote(url, allow_missing: false)
     response = get_response(url)
     # jspm answers some files brotli whatever the request advertises, and
-    # Net::HTTP decodes gzip and deflate only. Asking for identity up front is
-    # not the fix: supplying an Accept-Encoding at all stops Net::HTTP decoding
-    # the gzip it does understand, on every CDN that compresses the usual way.
+    # Net::HTTP decodes gzip and deflate only. Not asked up front: supplying an
+    # Accept-Encoding at all stops it decoding the gzip it does understand.
     response = get_response(url, IDENTITY_ENCODING) if response.code == "200" && encoded?(response.body)
 
     if response.code == "200"
-      # Still unreadable after asking for it plain: an encoding this gem can't
-      # undo without a dependency. Saying so beats handing the bytes on for
-      # ModuleInspector to fail an ArgumentError over.
+      # Still unreadable after asking for it plain: saying so beats handing the
+      # bytes on for ModuleInspector to fail an ArgumentError over.
       raise HTTPError, "Can't read #{url}: the CDN sent an encoding this gem can't decode" if encoded?(response.body)
 
       response.body
@@ -445,10 +442,10 @@ class Importmap::Packager
     name ? "#{name}#{version}#{subpath}" : "#{key}#{version}"
   end
 
-  # The CDN URL every vendored file was downloaded from, by the pin key that
-  # names it — what a crawl needs to tell another pin's file from a new one.
-  def vendored_entry_urls
-    Importmap::VendoredGraph.entry_urls(pinned_packages.to_h { |key| [ key, vendored_package_path(key) ] })
+  # Where +package+'s download is vendored: with #graph_path, the only place a
+  # path under vendor/javascript is built from a package name.
+  def vendored_package_path(package)
+    @vendor_path.join(package_filename(package))
   end
 
   def remove_existing_package_file(package)
@@ -653,10 +650,9 @@ class Importmap::Packager
       source = @last_graph.entry_source if @last_graph
 
       # force is the app overriding the check — except when the pin says it has
-      # a graph and the CDN didn't give one. An entry that still imports
-      # siblings is not servable because pristine asked for it: --from skypack
-      # on a graphed pin would otherwise write the entry unrewritten and then
-      # remove the very directory its imports resolve through.
+      # a graph and the CDN didn't give one: --from skypack on a graphed pin
+      # would write the entry unrewritten and remove the directory its imports
+      # resolve through.
       ensure_servable(source, body) unless force && (@last_graph || !graph)
 
       source = self.class.minifier.call(source) if minify
@@ -686,7 +682,7 @@ class Importmap::Packager
     # fails partway leaves the files the app had rather than half the new ones;
     # the partials carry the pid so two shells pinning one package can't write
     # each other's. Entry and directory are one unit — each is broken beside
-    # the other's old version — so both partials precede either commit.
+    # the other's old version — so both are prepared before either is moved.
     def save_vendored_package(package, url, source, minified: false, graph: nil)
       vendored      = vendored_graph(package)
       entry_partial = write_entry_partial(package, url, source, minified: minified)
@@ -713,8 +709,8 @@ class Importmap::Packager
 
       partial
     rescue
-      # Removed here, not by the caller: a write that dies partway dies before
-      # the partial's name has been handed back.
+      # Removed here: a write that dies partway dies before the caller has the
+      # partial's name.
       FileUtils.rm_f partial
       raise
     end
@@ -787,10 +783,6 @@ class Importmap::Packager
 
     def remove_sourcemap_comment_from(source)
       source.gsub(/^\/\/# sourceMappingURL=.*/, "")
-    end
-
-    def vendored_package_path(package)
-      @vendor_path.join(package_filename(package))
     end
 
     def package_filename(package)
