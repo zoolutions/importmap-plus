@@ -67,8 +67,8 @@ An esm.run bundle is jsDelivr's single minified ES file per package with its own
 ## Vendoring a file graph
 
 A download whose only obstacle is relative imports brings its siblings with it.
-`download_package_file` calls `#graph_for` (→ `Importmap::PackageGraph.build`,
-see `../inspection-and-tools/summary.md`) before `ensure_servable`, so the check
+`download_package_file` calls `Importmap::PackageGraph.for_download` (see
+`../inspection-and-tools/summary.md`) before `ensure_servable`, so the check
 runs on the entry as it will be written — every relative specifier already a bare
 key — and passes. `Packager#last_graph` is how the CLI learns the sibling count
 and whether a line is due, a second channel rather than a second return value,
@@ -85,7 +85,7 @@ pin already maps one (restore, never re-decide).
 
 ## Vendoring
 
-`download(package, url, minify:, force:)` (packager.rb:268-271) ensures `vendor_path` exists then calls `download_package_file` (packager.rb:541-558): fetch via `with_retries` → rewrite esm.run imports if applicable → `ensure_servable(source) unless force` → minify if asked → `save_vendored_package`. `ensure_servable` (packager.rb:563-568) runs `Importmap::ModuleInspector` and raises `Unvendorable` (needs sibling files: relative imports, workers, etc. — reasons listed, packager.rb:70-80) or `NotAnEsModule` (a CommonJS/UMD bundle, packager.rb:82-88) *before anything is written*, so a vendored file an app already has survives a refused re-download (test/packager_test.rb:718-761). `force: true` (from `--vendor`, or `pristine` restoring what a pin already records) skips `ensure_servable` entirely (packager.rb:548, commands.rb:79).
+`download(package, url, minify:, force:)` (packager.rb:268-271) ensures `vendor_path` exists then calls `download_package_file` (packager.rb:541-558): fetch via `with_retries` → rewrite esm.run imports if applicable → `ensure_servable(source) unless force` → minify if asked → `save_vendored_package`. `ensure_servable` (packager.rb:563-568) runs `Importmap::ModuleInspector` and raises `Unvendorable` (needs sibling files: relative imports, workers, etc. — reasons listed, packager.rb:70-80) or `NotAnEsModule` (a CommonJS/UMD bundle, packager.rb:82-88) *before anything is written*, so a vendored file an app already has survives a refused re-download (test/packager_test.rb:718-761). `force: true` skips `ensure_servable` — but not when the pin maps a graph the CDN didn't give one for (`unless force && (@last_graph || !graph)`): `--vendor` passes `graph: false` and skips the check outright, while `pristine --from skypack` on a graphed pin is checked, refused and reported rather than writing an entry whose relative imports resolve nowhere.
 
 `vendored_package_path(package)` (packager.rb:658-660) joins `vendor_path` with `package_filename(package)` (packager.rb:662-664, `package.gsub("/", "--") + ".js"`) — the only place that builds a vendored path from user input, per coding-style.md. `save_vendored_package` (packager.rb:578-593) writes to a pid-suffixed partial (`<target>.<pid>.download`) inside the vendor directory, writes the `// <package>@<version> downloaded from <url>[ (minified)]` header plus the source with any `//# sourceMappingURL=` comment stripped (`remove_sourcemap_comment_from`, packager.rb:654-656), removes an existing directory in the target's way, then `File.rename`s the partial over the target — an atomic replace. On any failure (including a `File.rename` raising `Errno::ENOSPC`) the `rescue` clears the partial and re-raises, leaving the file an app already had in place (packager.rb:590-592, test/packager_test.rb:796-816 "download leaves the file an app has when the replacement can't be written").
 

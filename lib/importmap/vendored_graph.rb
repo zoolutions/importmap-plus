@@ -89,7 +89,8 @@ class Importmap::VendoredGraph
   # an app's own files; the download stops instead and says so.
   class Occupied < StandardError
     def initialize(directory)
-      super("#{directory} already exists and isn't a graph directory this gem wrote")
+      super("#{directory} exists and no pin_all_from line maps it as a graph; " \
+            "move it aside — or remove it, if an interrupted run left it — and pin again")
     end
   end
 
@@ -125,16 +126,22 @@ class Importmap::VendoredGraph
     partial = Pathname.new("#{directory}.#{Process.pid}.download")
     FileUtils.rm_rf partial
     FileUtils.mkdir_p partial
+    written = false
 
-    write_files(graph, partial, &transform)
+    begin
+      write_files(graph, partial, &transform)
+      written = true
+    ensure
+      # Cleaned up here rather than by the caller: a minifier that gives up on
+      # the twentieth of forty-seven files raises before the partial's path has
+      # been handed back, and nothing else knows the name to remove. In ensure
+      # rather than rescue because Ctrl-C during a 250-file write is the likely
+      # way this ends, and Interrupt is not a StandardError — the directory it
+      # would leave carries a pid that is gone, so no later run cleans it.
+      FileUtils.rm_rf partial unless written
+    end
 
     partial
-  rescue
-    # Cleaned up here rather than by the caller: a minifier that raises on the
-    # twentieth of forty-seven files raises before the partial's path has been
-    # handed back, and nothing else knows the name to remove.
-    FileUtils.rm_rf partial
-    raise
   end
 
   # Swaps a prepared directory over the one the app has: the old one is renamed

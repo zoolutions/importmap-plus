@@ -60,8 +60,8 @@ class Views::Docs::Pages::Minifying < DocsUI::Page
   def everything
     DocsUI::Section("Everything already vendored") do
       md <<~'MD'
-        `pristine` redownloads every vendored package; with `--minify` it minifies
-        them all in one go and records it on each pin:
+        `pristine` redownloads every vendored package it still can; with `--minify`
+        it minifies them all in one go and records it on each pin:
       MD
       DocsUI::Code(<<~SHELL, lexer: :shell)
         ./bin/importmap pristine --minify

@@ -139,8 +139,20 @@
   importmap-plus had kept remote for its relative imports is converted back to
   a download by the next `pin` or `update`, on the CDN its URL names.
 
+  Two things `pin` says out loud rather than doing quietly: a key some other
+  package's graph already maps (a directory wins over a pin, so the pin would
+  do nothing), and a second directory mapping a package one already maps at
+  another version (a file they share resolves to one of them).
+
 ### Fixed
 
+- **`pristine` reports a package it can't restore and carries on.** It is the
+  repair command, and a pin whose graph the CDN no longer serves the way the
+  pin describes now raises where nothing used to — unrescued, that ended the
+  whole run with a backtrace and left every package after it unrestored. Each
+  one that fails is reported (`Couldn't restore "pdfjs-dist": it can't be
+  vendored as a single file (workers)`), the rest are restored, and the command
+  exits non-zero to say it didn't do all of it.
 - **A download the CDN encoded in a way Net::HTTP can't undo is fetched
   again.** jspm answers some files with `content-encoding: br` whatever the
   request advertises, and Net::HTTP decompresses gzip and deflate only:

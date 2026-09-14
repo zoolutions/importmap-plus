@@ -151,9 +151,12 @@ Tests zero the wait: `packager_test.rb:928-934`'s `without_retry_wait` sets `Imp
 `lib/importmap/package_graph.rb`. Given an entry URL, its source and the pin key,
 `PackageGraph.build` returns the sibling files the entry needs, each rewritten so
 the import map can serve it — or nil when this download is one file, and
-`Unownable` when the graph can't be taken over whole. It is called from
-`Packager#graph_for`, which turns `Unownable` into `Unvendorable` carrying the
-hash of the bytes the CDN served.
+`Unownable` when the graph can't be taken over whole. It is built through
+`PackageGraph.for_download(packager, …)`, which assembles the crawl's inputs
+from the packager, turns `Unownable` into `Unvendorable` carrying the hash of
+the bytes the CDN served, and treats a sibling the CDN gives up on — a 500
+after the retries, a body in an encoding this gem can't decode — as the same
+answer as a 404.
 
 - **When it engages** — the entry's `ModuleInspector` reasons are exactly
   `["relative imports"]`, it is an ES module, and the URL matches one of

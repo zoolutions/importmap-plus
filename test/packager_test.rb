@@ -1057,6 +1057,39 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     assert_equal [ nil ], sent
   end
 
+  test "fetch_remote says so when a body stays unreadable after asking for it plain" do
+    encoded = Struct.new(:code, :body).new("200", "\x1b!\x06\x00\x8c\xd3".dup.force_encoding("ASCII-8BIT"))
+
+    error = Net::HTTP.stub(:get_response, ->(_uri, _headers = nil) { encoded }) do
+      assert_raises(Importmap::Packager::HTTPError) { @packager.fetch_remote("https://ga.jspm.io/npm:md5@2.2.0/md5.js") }
+    end
+
+    assert_match %r{Can't read https://ga\.jspm\.io/npm:md5@2\.2\.0/md5\.js}, error.message
+  end
+
+  # A sibling the CDN won't give up is the same answer as one it hasn't got:
+  # the package stays remote rather than the command ending in a backtrace.
+  test "download keeps a package remote when the CDN gives up on a sibling" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir)
+      entry = "#{GRAPH_ROOT}dist/index.js"
+      responder = ->(uri, _headers = nil) do
+        raise Errno::ECONNRESET, "SSL_connect" unless uri.to_s == entry
+
+        Struct.new(:code, :body).new("200", CHUNKED_PACKAGE[entry].dup.force_encoding("ASCII-8BIT"))
+      end
+
+      error = without_retry_wait do
+        Net::HTTP.stub(:get_response, responder) do
+          assert_raises(Importmap::Packager::Unvendorable) { packager.download("pkg", entry) }
+        end
+      end
+
+      assert_equal [ "relative imports" ], error.reasons
+      assert_not File.exist?("#{vendor_dir}/pkg.js")
+    end
+  end
+
   test "fetch_remote wraps a failure the retry doesn't know as its own HTTPError" do
     error = Net::HTTP.stub(:get_response, ->(_uri, *) { raise Zlib::GzipFile::Error, "not in gzip format" }) do
       assert_raises(Importmap::Packager::HTTPError) { @packager.fetch_remote("https://ga.jspm.io/npm:md5@2.2.0/md5.js") }
@@ -1244,6 +1277,26 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       assert_includes File.read("#{vendor_dir}/pkg/dist/util.js"), "//min"
       assert_includes File.read("#{vendor_dir}/pkg.js"), "downloaded from #{GRAPH_ROOT}dist/index.js (minified)"
       assert_not_includes File.read("#{vendor_dir}/pkg/dist/util.js"), "downloaded from"
+    end
+  end
+
+  # The CDN's own version segment, not a semver-looking string elsewhere in the
+  # URL: a line rendered with a blank version is one no command can find again.
+  test "graph_pin_for takes the version from the package the URL names" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir)
+
+      assert_equal %(pin_all_from "#{vendor_dir}/pkg", under: "pkg" # @latest (graph of pkg)),
+        packager.graph_pin_for("pkg", "https://ga.jspm.io/npm:pkg@latest/index.js")
+      assert_equal %(pin_all_from "#{vendor_dir}/pkg", under: "pkg" # @2 (graph of pkg)),
+        packager.graph_pin_for("pkg", "https://ga.jspm.io/npm:pkg@2/index.js")
+      assert_equal %(pin_all_from "#{vendor_dir}/pkg", under: "pkg" # @1.0.0-beta.1 (graph of pkg)),
+        packager.graph_pin_for("pkg", "https://ga.jspm.io/npm:pkg@1.0.0-beta.1/dist/index.js")
+
+      # Whatever the version looks like, the line has to be findable again.
+      line = packager.graph_pin_for("pkg", "https://ga.jspm.io/npm:pkg@latest/index.js")
+      assert_match packager.vendored_graph("pkg").line_regexp, line
+      assert_equal [ [ "#{vendor_dir}/pkg", "pkg", "latest" ] ], Importmap::VendoredGraph.mappings_in(line)
     end
   end
 

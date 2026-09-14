@@ -222,7 +222,7 @@ class Importmap::Packager
     name, version = Importmap::PackageGraph.package_and_version_for(url)
 
     vendored_graph(package).line_for(under: name, options: preload(preloads),
-                                     version: extract_package_version_from(url) || version)
+                                     version: version || extract_package_version_from(url))
   end
 
   def remove_graph(package)
@@ -260,7 +260,7 @@ class Importmap::Packager
 
   # Whether the pin carries a computed hash. #extract_existing_pin_options
   # leaves a hash string out on purpose — it belongs to one file — so this is
-  # how a caller about to drop one can say so.
+  # how a caller about to drop one says so.
   def integrity_hash?(package)
     pin_line_for(package).to_s.match?(INTEGRITY_HASH_REGEXP)
   end
@@ -618,6 +618,7 @@ class Importmap::Packager
       @importmap ||= File.read(@importmap_path)
     end
 
+
     def ensure_vendor_directory_exists
       FileUtils.mkdir_p @vendor_path
     end
@@ -698,21 +699,23 @@ class Importmap::Packager
       raise
     end
 
+    # In ensure, not rescue: a write that dies partway dies before the caller
+    # has the partial's name, and Ctrl-C is not a StandardError.
     def write_entry_partial(package, url, source, minified: false)
       partial = Pathname.new("#{vendored_package_path(package)}.#{Process.pid}.download")
+      written = false
 
-      File.open(partial, "w+") do |vendored_package|
-        vendored_package.write "// #{package}#{extract_package_version_from(url)} downloaded from #{url}#{" (minified)" if minified}\n\n"
-
-        vendored_package.write remove_sourcemap_comment_from(source).force_encoding("UTF-8")
+      begin
+        File.open(partial, "w+") do |vendored_package|
+          vendored_package.write "// #{package}#{extract_package_version_from(url)} downloaded from #{url}#{" (minified)" if minified}\n\n"
+          vendored_package.write remove_sourcemap_comment_from(source).force_encoding("UTF-8")
+        end
+        written = true
+      ensure
+        FileUtils.rm_f partial unless written
       end
 
       partial
-    rescue
-      # Removed here: a write that dies partway dies before the caller has the
-      # partial's name.
-      FileUtils.rm_f partial
-      raise
     end
 
     # Rename replaces a file atomically; a directory in the way is the one case
@@ -789,11 +792,9 @@ class Importmap::Packager
       package.gsub("/", "--") + ".js"
     end
 
+    # The vendored file's own name without its extension, so the pin that wrote
+    # the directory is the pin that owns it.
     def graph_path(package)
-      @vendor_path.join(graph_dirname(package))
-    end
-
-    def graph_dirname(package)
-      package_filename(package).delete_suffix(".js")
+      @vendor_path.join(package_filename(package).delete_suffix(".js"))
     end
 end

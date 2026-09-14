@@ -99,4 +99,23 @@ How `Importmap::Packager` resolves, downloads and rewrites pins — the invarian
 ### A body that is still unreadable after the identity retry is an error with a sentence, not bytes handed on
 - **Holds because:** `fetch_remote` returning an undecodable body only moves the failure to `ModuleInspector`, which raises `ArgumentError: invalid byte sequence in UTF-8` with no mention of the file — and on a 48-file crawl, once per file. After the retry the method raises `HTTPError, "Can't read <url>: the CDN sent an encoding this gem can't decode"`, which `pin` reports and `pristine` counts as a package it couldn't restore.
 - **Where:** `lib/importmap/packager.rb#fetch_remote`, `#encoded?`
+- **Proven by:** `test/packager_test.rb:"fetch_remote says so when a body stays unreadable after asking for it plain"`
 - **Origin:** gate round 2 (parser), PR #30
+
+### A sibling the CDN gives up on keeps the package remote; it does not end the run
+- **Holds because:** the crawl makes one request per file — 250 of them for date-fns — so a 500 that outlives the retries, or a body in an encoding this gem can't decode, is far likelier than on a single-file download, and `Packager::HTTPError` is rescued by nobody: it escapes `PackageGraph.for_download`, `pin_vendored_package` and Thor, printing a backtrace part-way through a batch with pins already written. The fetcher block treats it as the answer a 404 gives — nil, so the crawl raises `Unownable` and the package is pinned remote — which is also what makes `pristine`'s "reports what it couldn't restore" true for this error class.
+- **Where:** `lib/importmap/package_graph.rb#for_download` (the `rescue Importmap::Packager::Error` in the fetcher block)
+- **Safe direction:** a remote pin works; a backtrace half-way through a run leaves an app half-pinned and no list of what is missing.
+- **Proven by:** `test/packager_test.rb:"download keeps a package remote when the CDN gives up on a sibling"`
+- **Origin:** gate round 3 (parser, correctness), PR #30
+
+### Partials are removed in `ensure`, not `rescue`, because Ctrl-C is not a StandardError
+- **Holds because:** a graph write is 250 files through a minifier — the likeliest way it ends early is the user pressing Ctrl-C, and `Interrupt` is a `SignalException`, which a bare `rescue` doesn't catch. The directory left behind carries the pid of a process that is gone, so no later run removes it, and every file in it sits under an asset path for Propshaft and Sprockets to serve and precompile.
+- **Where:** `lib/importmap/vendored_graph.rb#write`; `lib/importmap/packager.rb#write_entry_partial`
+- **Proven by:** `test/vendored_graph_test.rb:"write cleans up its own partial when a file can't be written"` (the StandardError half; the Interrupt half is the same `ensure`)
+- **Origin:** gate round 3 (correctness), PR #30
+
+### `Occupied` says what to do about the directory, because the gem can leave one too
+- **Holds because:** the directory is committed before the `pin_all_from` line is appended, so an interrupt in that window leaves a directory the import map doesn't map — indistinguishable from an app's own, and from then on every command refuses to touch it. The message therefore names the action rather than the owner: `<dir> exists and no pin_all_from line maps it as a graph; move it aside — or remove it, if an interrupted run left it — and pin again`.
+- **Where:** `lib/importmap/vendored_graph.rb::Occupied`
+- **Origin:** gate round 3 (correctness), PR #30

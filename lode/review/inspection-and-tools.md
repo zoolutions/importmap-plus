@@ -72,11 +72,12 @@ How `Importmap::ModuleInspector` reads a download without parsing JavaScript, an
 ### Not a bug: `VendoredGraph.line_regexp_for`'s trailing `.*$` takes a second statement on the line with it
 - **Holds because:** `pin_all_from "…", under: "pkg"; pin "evil" # @1.0.0 (graph of pkg)` is matched whole, so `remove` drops both statements. This is the shape `Importmap::Map.pin_line_regexp_for` has had since upstream wrote it, the line has to carry this gem's own comment to be matched at all, and nothing writes two statements on one line. The mirror case — a graph line *after* another statement — is tested and correctly ignored, because the pattern is anchored on `pin_all_from` at the start of the line.
 - **Where:** `lib/importmap/vendored_graph.rb#line_regexp_for`
-- **Proven by:** `test/vendored_graph_test.rb:"a line is found by its own directory and by no other"`
+- **Proven by:** `test/vendored_graph_test.rb:"a line is found by its own directory and by no other"` pins the direction that matters — a statement *before* the line leaves it unmatched — and the accepted limit itself (a statement after it, swallowed) is asserted in the same test so a future change to the anchor is noticed.
 - **Origin:** gate round 2 (parser), PR #30
 
 ### The version on a graph line comes from the CDN URL's own version segment when it isn't semver
 - **Holds because:** `ROOT_REGEXPS` accepts any version directory (`pkg@2/`, `pkg@latest/`) while `Packager#extract_package_version_from` looks for `@x.y.z`; a line rendered with a blank version — `# @ (graph of pkg)` — matches neither `MAPPING_REGEXP` nor `line_regexp_for`, so `mapped?` is false forever: `unpin` leaves both the line and the directory, `pristine` re-downloads the entry alone beside a stale directory, and a re-pin appends a second line. The regexps capture the version too, and `graph_pin_for` falls back to it.
 - **Where:** `lib/importmap/package_graph.rb#ROOT_REGEXPS`, `.package_and_version_for`; `lib/importmap/packager.rb#graph_pin_for`
-- **Safe direction:** a line that can always be found again is the recoverable one; an orphan line is invisible to every command that would clean it up.
+- **Safe direction:** a line that can always be found again is the recoverable one; an orphan line is invisible to every command that would clean it up. The captured segment is preferred over the whole-URL scan, which can match a semver-looking chunk filename further along the path.
+- **Proven by:** `test/packager_test.rb:"graph_pin_for takes the version from the package the URL names"`
 - **Origin:** gate round 2 (parser), PR #30

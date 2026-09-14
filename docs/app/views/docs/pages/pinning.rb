@@ -209,10 +209,19 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
       TEXT
       md <<~'MD'
         Every file in that directory is an entry in the import map, which is inlined
-        in every page: 48 of them for `@popperjs/core`, 250 for `date-fns`. A
+        in every page: `@popperjs/core` contributes 48 entries — the 47 files plus
+        its own — and `date-fns` about 250. A
         directory also wins over a `pin` of the same key, so pinning a subpath of a
         package you have vendored this way has no effect — `pin` says so when it
         happens. `pin <package> --remote` is the way back to a single CDN URL.
+
+        The keys are written under the package the CDN *URL* names, which is not
+        always the package your pin names: jspm resolves Node's `buffer` and
+        `crypto` into files in `@jspm/core`, so two such pins each keep their own
+        directory and map the files they share to the same key — the browser
+        evaluates each module once. If those two pins ever sat at different
+        versions of that package, one of them would win for every file they share,
+        and `pin` says so when it writes the second line.
 
         Bare specifiers are left alone: a chunk that imports `"react"` still resolves
         through your import map to your pin of react. A file that is another pin's

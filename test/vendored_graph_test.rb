@@ -25,6 +25,11 @@ class Importmap::VendoredGraphTest < ActiveSupport::TestCase
     # rewritten nor taken for a directory this gem may delete.
     assert_no_match Importmap::VendoredGraph.line_regexp_for("vendor/javascript/pkg"),
       %(pin_all_from "vendor/javascript/pkg", under: "pkg")
+    # The accepted limit, asserted so a change to the anchor is noticed: a
+    # second statement after the line is swallowed with it, exactly as it is by
+    # upstream's own Map.pin_line_regexp_for.
+    assert_match Importmap::VendoredGraph.line_regexp_for("vendor/javascript/pkg"),
+      %(pin_all_from "vendor/javascript/pkg", under: "pkg"; pin "evil" # @1.0.0 (graph of pkg))
   end
 
   # A pin_all_from line must be invisible to every regex that reads pins, or
