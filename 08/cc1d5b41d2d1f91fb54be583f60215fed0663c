@@ -1,0 +1,39 @@
+lib/importmap/package_graph.rb
+  s_302893bcd9747c::t_f86bc2f3adf29d 111-115,117-118
+lib/importmap/packager.rb
+  s_302893bcd9747c::t_b7443706ff06af 795-796,798
+  s_302893bcd9747c::t_ad5825bbd4145c 263
+  s_302893bcd9747c::t_b0c3066212f4a6 621
+  s_302893bcd9747c::t_f86bc2f3adf29d 225
+CHANGELOG.md
+  s_302893bcd9747c::t_f28121deafc061 142-146,149-155
+lode/packager/summary.md
+  s_302893bcd9747c::t_0f21c048bf89d5 70-71,88
+docs/app/views/docs/pages/pinning.rb
+  s_302893bcd9747c::t_f28121deafc061 218-225
+lode/inspection-and-tools/summary.md
+  s_302893bcd9747c::t_0f21c048bf89d5 154-159
+lode/review/inspection-and-tools.md
+  s_302893bcd9747c::t_0f21c048bf89d5 75,81-82
+lode/review/packager.md
+  s_302893bcd9747c::t_f0e200f1a25e48 104-121
+  s_302893bcd9747c::t_0f21c048bf89d5 102
+lode/terminology.md
+  s_302893bcd9747c::t_0f21c048bf89d5 17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "08cc1d5b41d2d1f91fb54be583f60215fed0663c",
+  "prompts": {},
+  "sessions": {
+    "s_302893bcd9747c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e9daba0-ca6b-4aa5-bbaa-83c35301fc04",
+        "model": "claude-opus-5"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
