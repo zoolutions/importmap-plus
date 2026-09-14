@@ -170,7 +170,8 @@ class Views::Docs::Pages::Updating < DocsUI::Page
         A package the CDN can no longer serve the way its pin describes is reported
         and skipped — `Couldn't restore "pdfjs-dist": it can't be vendored as a
         single file (workers)` — and the rest of the packages are still restored;
-        the command exits non-zero to say it didn't do all of it.
+        the command exits non-zero to say it didn't do all of it, as it does when a
+        dependency of an esm.run bundle, pinned on the way, had to be skipped.
       MD
     end
   end

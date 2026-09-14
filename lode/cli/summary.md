@@ -38,12 +38,12 @@ are plain `StandardError`s (`packager.rb:66-68`), so one that escapes a command
 propagates past Thor, prints a backtrace and exits 1. The places that catch
 them first (`grep -n "rescue Importmap::Packager" lib/importmap/commands.rb` is
 the authoritative list): `pin_vendored_package` rescues the `Unvendorable` and
-`NotAnEsModule` subclasses into a remote pin (`commands.rb:218-219`), then
+`NotAnEsModule` subclasses into a remote pin (`commands.rb:220-221`), then
 `VendoredGraph::Occupied` and any other `Packager::Error` from the download into
 `skip` — a printed `Skipping "<pkg>": …` and an entry in `skipped`, which `pin`,
-`update` and `pristine` turn into `exit 1` (`commands.rb:220-228`, `#skip`);
+`update` and `pristine` turn into `exit 1` (`commands.rb:222-231`, `#skip`; a package skipped once and pinned later in the same run is dropped from the record by `update_importmap_with_pin`);
 `restore_package` rescues the same pairs into `Couldn't restore "<pkg>": …` and
-`false`, which `pristine` turns into `exit 1` (`commands.rb:290-295`);
+`false`, which `pristine` turns into `exit 1` (`commands.rb:292-297`);
 `remote_integrity_for` rescues the fetch that hashes a remote pin into
 `Couldn't hash <url> …; pinning it without an integrity hash` and `nil`;
 `ProviderChain#resolve` rescues per provider and re-raises only the last
@@ -129,25 +129,25 @@ each lock at the new version.
 `outdated_packages` (has `latest_version`) and `unchecked_packages` (registry
 error) — unchecked ones print `Couldn't check "...": ...` but don't stop the
 rest ("each pin is independent", `commands.rb:141-146`). `every_package_known?`
-(`commands.rb:295-317`) validates named packages, printing `Couldn't find a
+(`commands.rb:371`) validates named packages, printing `Couldn't find a
 pin for "..."` (fails the command), `"..." is already up to date (...)`, or
 `Can't tell whether "..." is outdated: its pin has no version` (neither fails
 it).
 
-`without_locked_updates` (`commands.rb:279-285`) drops locked names unless
+`without_locked_updates` (`commands.rb:355`) drops locked names unless
 `--force`. Remaining names resolve to import-map **keys** — only versioned
 pins count, since an unversioned subpath pin "404s the whole batch"
 (`commands.rb:339-342`): named packages use `requested_keys_for`
-(`commands.rb:324-327`, every pinned key sharing that package name via
+(`commands.rb:400`, every pinned key sharing that package name via
 `keys_for`/`versioned_keys_by_package`, filtered to outdated); bare/`--all`
-use `outdated_keys_for` (`commands.rb:347-349`, same grouping) — so a
+use `outdated_keys_for` (`commands.rb:423`, same grouping) — so a
 subpath pin like `photoswipe/lightbox` moves in place rather than gaining a
 new bare `photoswipe` pin.
 
 Those keys run through `for_each_import_grouped_by_provider(fallback: true)`
 and `pin_package(package, url)` (no explicit `lock:`, so it reads the pin's
 own `locked?`), skipping locked dependencies via `keep_locked_dependency`.
-`exit 1 if unchecked_packages.any? || skipped.any?` (`commands.rb:166`) even
+`exit 1 if unchecked_packages.any? || skipped.any?` (`commands.rb:168`) even
 when the rest updated successfully.
 
 ## 5. `pristine` and `unpin`

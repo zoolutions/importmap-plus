@@ -161,7 +161,8 @@
   whole run with a backtrace and left every package after it unrestored. Each
   one that fails is reported (`Couldn't restore "pdfjs-dist": it can't be
   vendored as a single file (workers)`), the rest are restored, and the command
-  exits non-zero to say it didn't do all of it.
+  exits non-zero to say it didn't do all of it — as it does when a dependency
+  of an esm.run bundle, pinned on the way, had to be skipped.
 - **A download the CDN encoded in a way Net::HTTP can't undo is fetched
   again.** jspm answers some files with `content-encoding: br` whatever the
   request advertises, and Net::HTTP decompresses gzip and deflate only:

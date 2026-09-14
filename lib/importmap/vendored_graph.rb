@@ -158,15 +158,16 @@ class Importmap::VendoredGraph
 
     previous = Pathname.new("#{directory}.#{Process.pid}.previous")
     FileUtils.rm_rf previous
-    File.rename(directory, previous) if directory.exist?
 
     begin
+      File.rename(directory, previous) if directory.exist?
       File.rename(partial, directory)
     ensure
       # In ensure, not rescue: between the two renames the app has neither
-      # directory, and Ctrl-C there is not a StandardError. Whether the swap
-      # happened is read off the disk — rename either put the directory in
-      # place or it didn't — rather than off a flag set after it returned.
+      # directory, and Ctrl-C there is not a StandardError — including one
+      # that lands as the first rename returns. Whether the swap happened is
+      # read off the disk — rename either put the directory in place or it
+      # didn't — rather than off a flag set after it returned.
       if directory.exist?
         FileUtils.rm_rf previous
       elsif previous.exist?

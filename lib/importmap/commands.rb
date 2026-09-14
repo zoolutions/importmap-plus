@@ -703,6 +703,9 @@ class Importmap::Commands < Thor
 
     def update_importmap_with_pin(package, pin)
       new_pin = "#{pin}\n"
+      # Two esm.run bundles can need one dependency: skipped on the first
+      # bundle's turn and pinned on the second's, it is in the tree after all.
+      skipped.delete(package)
 
       if packager.packaged?(package)
         gsub_file("config/importmap.rb", Importmap::Map.pin_line_regexp_for(package), pin, verbose: false)
