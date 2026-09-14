@@ -159,12 +159,15 @@ class Importmap::VendoredGraph
     previous = Pathname.new("#{directory}.#{Process.pid}.previous")
     FileUtils.rm_rf previous
     File.rename(directory, previous) if directory.exist?
+    swapped = false
 
     begin
       File.rename(partial, directory)
-    rescue
-      File.rename(previous, directory) if previous.exist?
-      raise
+      swapped = true
+    ensure
+      # In ensure, not rescue: between the two renames the app has neither
+      # directory, and Ctrl-C there is not a StandardError.
+      File.rename(previous, directory) if !swapped && previous.exist?
     end
 
     FileUtils.rm_rf previous

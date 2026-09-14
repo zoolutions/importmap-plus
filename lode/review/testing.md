@@ -21,3 +21,9 @@ How the suites assert, where a loose assertion has already let a regression thro
 - **Holds because:** `Enumerable#one?` without a block counts *truthy* elements, so a lambda recording headers as `sent << headers; sent.one? ? first : second` hands back the second response on the first call when the first call's headers are nil — and the test then asserts against a request sequence that never happened. Count with `sent.size == 1`.
 - **Where:** `test/packager_test.rb:"fetch_remote asks again for an unencoded body when the CDN encoded one Net::HTTP can't read"`
 - **Origin:** PR #30
+
+### A stub that raises to reach a cleanup must raise from the call that is *inside* the block under test, not the first call the code makes
+- **Holds because:** `save_vendored_package` calls `remove_sourcemap_comment_from` once for the entry (inside `write_entry_partial`, which has its own `ensure`) and then once per sibling inside the `begin`/`ensure` under test. A stub that raised on every call raised on the entry, was absorbed one layer down, and the `ensure` the test named in its comment never ran — swapping it for a `rescue` left the suite green. Count the calls and raise on the one that lands in the block being tested; assert the count, so a refactor that reorders the calls fails the test rather than silently moving the raise.
+- **Where:** `test/packager_test.rb:"download leaves no entry partial behind when the write is interrupted"`
+- **Proven by:** mutation — with `ensure` replaced by `rescue => e`, the test fails on a leaked `pkg.js.<pid>.download`
+- **Origin:** gate round 5 (correctness), PR #30

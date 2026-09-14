@@ -1072,17 +1072,21 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
   # the pin it has, where an Unvendorable would convert it to a remote pin and
   # delete the files that work today.
   # The entry's partial waits through the whole graph write, so Ctrl-C there is
-  # the case a bare rescue misses.
+  # the case a bare rescue misses. The entry is written first and cleans up
+  # its own partial, so the interrupt has to land on a *sibling* — the second
+  # file through the stub — to reach the cleanup under test.
   test "download leaves no entry partial behind when the write is interrupted" do
     Dir.mktmpdir do |vendor_dir|
       packager = graph_packager(vendor_dir)
+      files = 0
 
-      stub_cdn({ "#{GRAPH_ROOT}index.js" => %(export default 1) }) do
-        packager.stub(:remove_sourcemap_comment_from, ->(_source) { raise Interrupt }) do
-          assert_raises(Interrupt) { packager.download("pkg", "#{GRAPH_ROOT}index.js") }
+      stub_cdn(CHUNKED_PACKAGE) do
+        packager.stub(:remove_sourcemap_comment_from, ->(source) { (files += 1) == 1 ? source : raise(Interrupt) }) do
+          assert_raises(Interrupt) { packager.download("pkg", "#{GRAPH_ROOT}dist/index.js") }
         end
       end
 
+      assert_equal 2, files, "expected the interrupt to land on the first sibling"
       assert_empty Dir.glob("#{vendor_dir}/*.download")
       assert_not File.exist?("#{vendor_dir}/pkg.js")
     end

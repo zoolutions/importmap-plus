@@ -128,7 +128,9 @@
   `pristine` rebuilds the directory, `pin --minify` minifies every file in it,
   and `pin --vendor` downloads the entry on its own and drops the directory and
   line it had. A directory the import map doesn't map as one of ours is the
-  app's: `pin` says so and writes nothing rather than renaming it away.
+  app's: `pin` says so, writes nothing rather than renaming it away, and exits
+  non-zero — as it does when a CDN fails partway through a crawl, where the pin
+  and the files it had are left exactly as they were.
 
   Only jspm, jsDelivr and unpkg are crawled — their URLs say where a package's
   directory ends. A graph that can't be taken over whole (a relative path that

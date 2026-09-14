@@ -18,7 +18,7 @@ states and the `require` graph confirms (`commands.rb` requires
 
 | Command | Options (default) | Prints (verbatim; `pluralize`d nouns shown as singular/plural) | Writes | Exit on failure |
 |---|---|---|---|---|
-| `pin [*PACKAGES]` | `--env/-e` ("production"), `--from/-f` (nil), `--preload` (repeatable), `--remote` (false), `--minify` (nil), `--lock` (nil), `--force` (false), `--vendor` (false) | `Resolved "#{name}" to #{latest} from the npm registry`; `Pinning "#{package}" to #{vendor_path}/#{package}.js via download from #{url}#{" (minified)" if minify}#{" (with N sibling files)" if a graph}`; `Note: the graph of "..." already maps "..."`; `Pinning "#{package}" to #{url}#{" (kept remote: ...)" if kept_remote}`; `Locked "#{package}" at #{version}`; `Skipping "..." (locked at ...)`; `Couldn't find any packages in ... on ...` | pin line(s) in `config/importmap.rb`; `vendor/javascript/<file>.js` unless `--remote`/kept remote | no explicit `exit`; an escaping `Packager::Error`/`ServiceError` is a `StandardError`, so Ruby prints a backtrace and exits 1 |
+| `pin [*PACKAGES]` | `--env/-e` ("production"), `--from/-f` (nil), `--preload` (repeatable), `--remote` (false), `--minify` (nil), `--lock` (nil), `--force` (false), `--vendor` (false) | `Resolved "#{name}" to #{latest} from the npm registry`; `Pinning "#{package}" to #{vendor_path}/#{package}.js via download from #{url}#{" (minified)" if minify}#{" (with N sibling files)" if a graph}`; `Note: the graph of "..." already maps "..."`; `Pinning "#{package}" to #{url}#{" (kept remote: ...)" if kept_remote}`; `Locked "#{package}" at #{version}`; `Skipping "..." (locked at ...)`; `Skipping "<pkg>": <dir> exists and no pin_all_from line maps it as a graph; …` / `Skipping "<pkg>": <HTTPError message>`; `Couldn't find any packages in ... on ...` | pin line(s) in `config/importmap.rb`; `vendor/javascript/<file>.js` (plus `vendor/javascript/<file>/` and its `pin_all_from` line for a graph) unless `--remote`/kept remote | `exit 1 if skipped.any?` — a package skipped because its directory is in the way or its CDN failed (`Skipping "<pkg>": …`) leaves the pin untouched and fails the command; a resolution `Packager::Error` still escapes as a backtrace and exits 1 |
 | `lock [*PACKAGES]` | none | `Use "bin/importmap pin #{spec} --lock" ...`; `Couldn't find a pin for "..."`; `"..." is already locked at ...`; `Can't lock "...": its pin has no version`; `Locked "..." at ...` | adds `(locked)` to the pin's provenance comment | `exit 1 unless packages.map { lock_package }.all?` |
 | `unlock [*PACKAGES]` | none | `Couldn't find a pin for "..."`; `"..." isn't locked`; `Unlocked "..."` | drops `locked` from the provenance comment | `exit 1 unless packages.map { unlock_package }.all?` |
 | `unpin [*PACKAGES]` | `--env/-e` ("production"), `--from/-f` ("jspm") | `Unpinning and removing "#{package}"` | removes pin line + vendored file + graph directory and its line (`Packager#remove`) | none explicit |
@@ -26,7 +26,7 @@ states and the `require` graph confirms (`commands.rb` requires
 | `json` | none | full importmap as JSON (`Rails.application.importmap.to_json`) | nothing | raises if `config/environment` fails to load |
 | `audit` | none | table `Package/Severity/Vulnerable versions/Vulnerability`; `  #{n} vulnerabilit{y,ies} found: ...`; or `No vulnerable packages found` | nothing | `exit 1` if any vulnerable package found |
 | `outdated` | none | table `Package/Current/Latest/Locked`; `  #{n} outdated package(s) found#{" (#{locked} locked)" if any}`; or `No outdated packages found` | nothing | `exit 1 if locked.size < outdated_packages.size` |
-| `update [*PACKAGES]` | `--all` (false), `--force` (false) | `Pass package names or --all, not both`; `Couldn't check "#{p.name}": #{p.error}`; `No outdated packages found`; `Nothing to update (every outdated package is locked; pass --force)`; plus `pin_package`'s sentences | rewrites pins for eligible keys | `exit 1` if `--all`+names both given, a named package unknown, or any package unchecked |
+| `update [*PACKAGES]` | `--all` (false), `--force` (false) | `Pass package names or --all, not both`; `Couldn't check "#{p.name}": #{p.error}`; `No outdated packages found`; `Nothing to update (every outdated package is locked; pass --force)`; plus `pin_package`'s sentences | rewrites pins for eligible keys | `exit 1` if `--all`+names both given, a named package unknown, any package unchecked, or any package skipped (`skipped.any?`, as in `pin`) |
 | `packages` | none | one line per `"#{name} #{version}"` | nothing | none |
 
 `Commands.exit_on_failure? = false` (`commands.rb:9-11`) governs `Thor::Error`
@@ -35,11 +35,17 @@ calls `exit(false)` only when `exit_on_failure?` is true, so a command that ends
 by raising `Thor::Error` finishes with status 0 unless it called `exit` itself
 (`outdated` and `update` do). `Packager::Error` and its `ServiceError` subclass
 are plain `StandardError`s (`packager.rb:66-68`), so one that escapes a command
-propagates past Thor, prints a backtrace and exits 1. Three places catch them
+propagates past Thor, prints a backtrace and exits 1. Four places catch them
 first: `pin_vendored_package` rescues the `Unvendorable` and `NotAnEsModule`
-subclasses into a remote pin (`commands.rb:210-212`), `ProviderChain#resolve`
-rescues per provider and re-raises only the last (`provider_chain.rb:64`), and
-`resolve_url_from_provider` (§3) downgrades one to a printed sentence and `nil`.
+subclasses into a remote pin, then `VendoredGraph::Occupied` and any other
+`Packager::Error` from the download into `skip` — a printed `Skipping "<pkg>": …`
+and an entry in `skipped`, which `pin` and `update` turn into `exit 1`
+(`commands.rb:218-226`, `#skip`); `restore_package` rescues the same pairs into
+`Couldn't restore "<pkg>": …` and `false`, which `pristine` turns into `exit 1`
+(`commands.rb:290-295`); `ProviderChain#resolve` rescues per provider and
+re-raises only the last (`provider_chain.rb:64`); and `resolve_url_from_provider`
+(§3) downgrades one to a printed sentence and `nil`. So no `Packager::Error`
+raised by a *download* reaches Thor; only a resolution failure does.
 
 ## 3. `pin` in detail
 

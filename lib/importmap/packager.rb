@@ -312,12 +312,11 @@ class Importmap::Packager
   # when it has any. With +minify: true+ the source is run through .minifier
   # first and the file header records it, so later updates keep minifying.
   # Returns the dependencies an esm.run bundle imports as [package, url] pairs
-  # (empty for every other provider), with the bundle's absolute /npm/...
-  # imports rewritten to bare specifiers on the way in. Raises Unvendorable
-  # unless +force+, when the download needs more than a file graph can give it.
-  # With +graph: false+ the entry comes down alone and the graph directory it
-  # had goes, which is what --vendor asks for; the caller decides, because only
-  # it knows whether the pin already maps one.
+  # (empty for every other provider), its absolute /npm/... imports rewritten
+  # to bare specifiers on the way in. Raises Unvendorable unless +force+ when
+  # the download needs more than a file graph can give it. +graph: false+
+  # brings the entry down alone and drops the directory it had (--vendor); the
+  # caller decides, because only it knows whether the pin already maps one.
   def download(package, url, minify: false, force: false, graph: true)
     @last_graph = nil
 
@@ -337,8 +336,7 @@ class Importmap::Packager
     response = get_response(url, IDENTITY_ENCODING) if response.code == "200" && encoded?(response.body)
 
     if response.code == "200"
-      # Still unreadable after asking for it plain: saying so beats handing the
-      # bytes on for ModuleInspector to fail an ArgumentError over.
+      # Still unreadable asked plain: say so, rather than let ModuleInspector raise.
       raise HTTPError, "Can't read #{url}: the CDN sent an encoding this gem can't decode" if encoded?(response.body)
 
       response.body
@@ -652,8 +650,7 @@ class Importmap::Packager
 
       # force is the app overriding the check — except when the pin says it has
       # a graph and the CDN didn't give one: --from skypack on a graphed pin
-      # would write the entry unrewritten and remove the directory its imports
-      # resolve through.
+      # would write the entry unrewritten and drop the directory it resolves through.
       ensure_servable(source, body) unless force && (@last_graph || !graph)
 
       source = self.class.minifier.call(source) if minify
@@ -663,12 +660,10 @@ class Importmap::Packager
       dependencies || []
     end
 
-    # Both questions are asked of one inspection of one download. Standing alone
-    # is asked first, so a file that fails both is reported as that: it is the
-    # answer an app can act on by keeping the pin remote. A refusal carries the
-    # hash of +body+ — the bytes as the CDN served them, not +source+, which an
-    # esm.run bundle has already had rewritten — so the pin kept remote doesn't
-    # fetch the file a second time to get it.
+    # One inspection answers both questions; standing alone is asked first, as
+    # the answer an app can act on by keeping the pin remote. A refusal carries
+    # the hash of +body+ — the bytes as the CDN served them, not the rewritten
+    # +source+ — so the pin kept remote doesn't fetch the file again for it.
     def ensure_servable(source, body)
       inspection = Importmap::ModuleInspector.new(source)
       return if inspection.vendorable? && inspection.es_module?
@@ -683,7 +678,9 @@ class Importmap::Packager
     # fails partway leaves the files the app had rather than half the new ones;
     # the partials carry the pid so two shells pinning one package can't write
     # each other's. Entry and directory are one unit — each is broken beside
-    # the other's old version — so both are prepared before either is moved.
+    # the other's old version — so both are prepared before either is moved,
+    # and the entry's partial waits in an ensure (Ctrl-C through a 250-file
+    # minify is not a StandardError) for the directory to be written.
     def save_vendored_package(package, url, source, minified: false, graph: nil)
       vendored      = vendored_graph(package)
       entry_partial = write_entry_partial(package, url, source, minified: minified)
@@ -698,17 +695,13 @@ class Importmap::Packager
         commit_entry(package, entry_partial)
         committed = true
       ensure
-        # In ensure: the entry partial waits here through a 250-file minify,
-        # and Ctrl-C through that is not a StandardError.
-        unless committed
-          FileUtils.rm_f entry_partial
-          FileUtils.rm_rf graph_partial if graph_partial
-        end
+        FileUtils.rm_f entry_partial unless committed
+        FileUtils.rm_rf graph_partial if graph_partial && !committed
       end
     end
 
-    # In ensure, not rescue: a write that dies partway dies before the caller
-    # has the partial's name, and Ctrl-C is not a StandardError.
+    # Cleans up its own partial: a write that dies partway dies before the
+    # caller has the partial's name.
     def write_entry_partial(package, url, source, minified: false)
       partial = Pathname.new("#{vendored_package_path(package)}.#{Process.pid}.download")
       written = false
@@ -726,8 +719,7 @@ class Importmap::Packager
       partial
     end
 
-    # Rename replaces a file atomically; a directory in the way is the one case
-    # it can't, and is cleared first the way it always was.
+    # Rename is atomic over a file; a directory in the way is cleared first.
     def commit_entry(package, partial)
       remove_existing_package_file(package) if vendored_package_path(package).directory?
       File.rename(partial, vendored_package_path(package))

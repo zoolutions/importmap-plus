@@ -102,6 +102,30 @@ class Importmap::VendoredGraphTest < ActiveSupport::TestCase
     end
   end
 
+  # Between renaming the app's directory aside and renaming the new one in,
+  # the app has neither. Ctrl-C there is not a StandardError, and a rescue
+  # that put the old one back would not run for it.
+  test "commit puts the directory the app has back when the swap is interrupted" do
+    Dir.mktmpdir do |dir|
+      target = Pathname.new(dir).join("pkg")
+      FileUtils.mkdir_p target
+      File.write(target.join("works.js"), "// the files that work today")
+      importmap = File.join(dir, "importmap.rb")
+      File.write(importmap, %(pin_all_from "#{target}", under: "pkg" # @1.0.0 (graph of pkg)\n))
+
+      graph = vendored_graph(target, importmap)
+      partial = graph.write(Struct.new(:files).new({ "new.js" => "export default 1" }))
+      rename = File.method(:rename)
+
+      File.stub(:rename, ->(from, to) { from.to_s == partial.to_s ? raise(Interrupt) : rename.call(from, to) }) do
+        assert_raises(Interrupt) { graph.commit(partial) }
+      end
+
+      assert_equal "// the files that work today", File.read(target.join("works.js"))
+      assert_empty Dir.glob("#{dir}/*.previous")
+    end
+  end
+
   test "commit refuses to replace a directory the import map doesn't map as ours" do
     Dir.mktmpdir do |dir|
       target = Pathname.new(dir).join("pkg")

@@ -37,6 +37,8 @@ class Importmap::Commands < Thor
                                 lock: requested.include?(package) ? options[:lock] : nil,
                                 vendor: requested.include?(package) && options[:vendor])
     end
+
+    exit 1 if skipped.any?
   end
 
   desc "lock [*PACKAGES]", "Lock packages at their pinned version"
@@ -161,7 +163,7 @@ class Importmap::Commands < Thor
       end
     end
 
-    exit 1 if unchecked_packages.any?
+    exit 1 if unchecked_packages.any? || skipped.any?
   end
 
   desc "packages", "Print out packages with version numbers"
@@ -218,12 +220,12 @@ class Importmap::Commands < Thor
       rescue Importmap::VendoredGraph::Occupied => occupied
         # Nothing is written, including the pin: the app is asked to move its
         # own directory rather than told afterwards that this gem took it.
-        return puts %(Skipping "#{package}": #{occupied.message})
+        return skip(package, occupied.message)
       rescue Importmap::Packager::Error => error
         # The CDN couldn't be read once its retries were spent. The pin is left
         # exactly as it was: a package that vendors today must not turn into a
         # remote pin — losing the files that make it work — because of a 503.
-        return puts %(Skipping "#{package}": #{error.message})
+        return skip(package, error.message)
       end
 
       graph = packager.last_graph
@@ -244,6 +246,20 @@ class Importmap::Commands < Thor
       report_lock(package) if locked
 
       pin_esm_run_dependencies(dependencies, preload: preload, minify: minify)
+    end
+
+    # A package that couldn't be pinned has said why on stdout; this is what
+    # makes the exit code say so too, or `pin x && git commit` commits a tree
+    # with no pin in it. Kept on the command rather than returned up through
+    # pin_package, because an esm.run bundle's dependencies are pinned two
+    # calls down and are skipped the same way.
+    def skip(package, reason)
+      puts %(Skipping "#{package}": #{reason})
+      skipped << package
+    end
+
+    def skipped
+      @skipped ||= []
     end
 
     # pristine restores what each pin already says, so a package vendored

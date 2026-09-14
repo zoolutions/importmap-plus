@@ -890,13 +890,14 @@ class CommandsTest < ActiveSupport::TestCase
 
   # A directory the import map doesn't map as a graph is the app's — or what an
   # interrupted run left. Either way it is not renamed away, and the pin isn't
-  # written either, so the app can move it and try again.
+  # written either, so the app can move it and try again. The exit code says
+  # so as well: `pin x && git commit` must not commit a tree with no pin in it.
   test "pin command skips a package whose directory the import map doesn't map" do
     importmap_config("")
     FileUtils.mkdir_p("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core")
     File.write("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core/theirs.js", "// hand vendored, years ago")
 
-    out, _err = run_importmap_command("pin", "@popperjs/core@2.11.8")
+    out, _err = run_importmap_command_expecting_failure("pin", "@popperjs/core@2.11.8")
 
     assert_includes out, 'Skipping "@popperjs/core": vendor/javascript/@popperjs--core exists and no pin_all_from line maps it as a graph'
 

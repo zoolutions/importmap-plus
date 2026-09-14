@@ -72,3 +72,10 @@ How `bin/importmap` decides what to pin, where to resolve it from, and what to l
 - **Where:** `lib/importmap/commands.rb#report_graph_shadowing`; `lib/importmap/vendored_graph.rb#mapping_for`; `lib/importmap/map.rb#expanded_packages_and_directories`
 - **Proven by:** `test/vendored_graph_test.rb:"mapping_for names the package whose directory already maps a key"` (the note itself is not asserted)
 - **Origin:** gate round 1 (correctness), PR #30
+
+### `pin` and `update` exit non-zero when any package was skipped, even though the others were pinned
+- **Holds because:** a package whose directory is in the way (`VendoredGraph::Occupied`) or whose CDN failed mid-crawl (`Packager::Error`) is deliberately left exactly as it was — but `return puts …` from that rescue made the command exit 0, so `bin/importmap pin x && git commit -am "pin x"` committed a tree with no pin in it. Every other command in the file that can't do all it was asked exits 1 (`lock`, `unlock`, `update`, `pristine`), and coding-style.md says a CLI command that cannot do what was asked says so *and* exits non-zero. The two rescues call `skip`, which prints `Skipping "<pkg>": …` and records the package on the command; `pin` and `update` end with `exit 1 if skipped.any?`. The record lives on the command rather than in `pin_package`'s return value because an esm.run bundle's dependencies are pinned two calls down and skipped the same way.
+- **Where:** `lib/importmap/commands.rb#skip`, `#skipped`, `#pin`, `#update`, `#pin_vendored_package`
+- **Safe direction:** a non-zero exit after a printed sentence — a script stops; the alternative is a green build with a package missing.
+- **Proven by:** `test/commands_test.rb:"pin command skips a package whose directory the import map doesn't map"` (`run_importmap_command_expecting_failure`)
+- **Origin:** gate round 5 (correctness), PR #30

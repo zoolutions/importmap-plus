@@ -97,7 +97,9 @@ class Views::Docs::Pages::Cli < DocsUI::Page
         [
           [ [ :code, "outdated" ], "an unlocked package is outdated" ],
           [ [ :code, "audit" ], "a vulnerability is known for a pinned version" ],
+          [ [ :code, "pin / update" ], "a package was skipped — its directory is in the way, or its CDN failed partway through a crawl — while the rest were pinned; the skipped pin is left exactly as it was" ],
           [ [ :code, "update" ], "a named package has no pin, or names are combined with --all; nothing is updated in either case" ],
+          [ [ :code, "pristine" ], "a package couldn't be restored the way its pin describes; the rest are restored" ],
           [ [ :code, "lock / unlock" ], "a named package has no pin, has no version to lock at, or was given with a version" ],
           [ "any", "a CDN or registry request fails after three attempts; the message names the URL" ]
         ]
