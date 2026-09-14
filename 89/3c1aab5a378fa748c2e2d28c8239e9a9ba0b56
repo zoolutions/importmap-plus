@@ -1,0 +1,41 @@
+lib/importmap/vendored_graph.rb
+  s_302893bcd9747c::t_fe5be63e440520 162,166-170
+test/packager_test.rb
+  s_302893bcd9747c::t_490841bca28e35 1075-1077,1081,1083-1085,1089
+lode/review/testing.md
+  s_302893bcd9747c::t_080b1fbc7af6ae 24-29
+lode/review/cli.md
+  s_302893bcd9747c::t_080b1fbc7af6ae 75-81
+CHANGELOG.md
+  ai_agent 131-133
+test/vendored_graph_test.rb
+  s_302893bcd9747c::t_4e543ae0dfd464 105-128
+lib/importmap/packager.rb
+  s_302893bcd9747c::t_0640d139f56302 339
+  s_302893bcd9747c::t_68e8ac1fbbb58f 653,663-666,681-683,698-699,703-704,722
+  s_302893bcd9747c::t_2c30a14c05cd1b 315-319
+docs/app/views/docs/pages/cli.rb
+  ai_agent 100,102
+lode/packager/summary.md
+  s_302893bcd9747c::t_080b1fbc7af6ae 51,90
+test/commands_test.rb
+  s_302893bcd9747c::t_e17b224c4f135c 893-894,900
+lode/cli/summary.md
+  s_302893bcd9747c::t_080b1fbc7af6ae 21,29,38,40-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "893c1aab5a378fa748c2e2d28c8239e9a9ba0b56",
+  "prompts": {},
+  "sessions": {
+    "s_302893bcd9747c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e9daba0-ca6b-4aa5-bbaa-83c35301fc04",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
