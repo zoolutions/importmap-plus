@@ -1,0 +1,21 @@
+test/vendored_graph_test.rb
+  s_302893bcd9747c::t_34eac8b729941c 122-135,138-139
+test/commands_test.rb
+  s_302893bcd9747c::t_4450f4a338f70c 891-908
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ecc4e6ce3a4a99b7b64e0b6c2a2c922b00a14f4d",
+  "prompts": {},
+  "sessions": {
+    "s_302893bcd9747c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e9daba0-ca6b-4aa5-bbaa-83c35301fc04",
+        "model": "claude-opus-5"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
