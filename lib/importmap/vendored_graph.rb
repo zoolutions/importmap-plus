@@ -85,6 +85,14 @@ class Importmap::VendoredGraph
     end
   end
 
+  # A directory in the way that this gem didn't write. Nothing is renamed over
+  # an app's own files; the download stops instead and says so.
+  class Occupied < StandardError
+    def initialize(directory)
+      super("#{directory} already exists and isn't a graph directory this gem wrote")
+    end
+  end
+
   attr_reader :directory
 
   def initialize(directory, importmap_path:)
@@ -118,18 +126,15 @@ class Importmap::VendoredGraph
     FileUtils.rm_rf partial
     FileUtils.mkdir_p partial
 
-    graph.files.each do |path, source|
-      file = partial.join(path)
-      # PackageGraph::PATH_REGEXP has already refused anything that could leave
-      # the directory; this is the assertion of it, because the paths come from
-      # a CDN and this is where they become a write.
-      raise Importmap::PackageGraph::Unownable.new(Importmap::PackageGraph::REASON) unless file.to_s.start_with?("#{partial}/")
-
-      FileUtils.mkdir_p file.dirname
-      File.write(file, transform ? transform.call(source) : source)
-    end
+    write_files(graph, partial, &transform)
 
     partial
+  rescue
+    # Cleaned up here rather than by the caller: a minifier that raises on the
+    # twentieth of forty-seven files raises before the partial's path has been
+    # handed back, and nothing else knows the name to remove.
+    FileUtils.rm_rf partial
+    raise
   end
 
   # Swaps a prepared directory over the one the app has: the old one is renamed
@@ -138,11 +143,11 @@ class Importmap::VendoredGraph
   # failure halfway puts the old one back.
   #
   # Nothing prepared means the download came back as one file, and the
-  # directory a previous one left goes with it — but only if the import map
-  # says this gem wrote it, so `pin lodash --vendor` can't delete an app's own
-  # vendor/javascript/lodash.
+  # directory a previous one left goes with it. Either way a directory the
+  # import map doesn't map as ours is the app's, and is never touched.
   def commit(partial)
     return mapped? ? remove_directory : nil unless partial
+    raise Occupied.new(directory) if directory.exist? && !mapped?
 
     previous = Pathname.new("#{directory}.#{Process.pid}.previous")
     FileUtils.rm_rf previous
@@ -177,6 +182,19 @@ class Importmap::VendoredGraph
   end
 
   private
+    def write_files(graph, partial, &transform)
+      graph.files.each do |path, source|
+        file = partial.join(path)
+        # PackageGraph::PATH_REGEXP has already refused anything that could
+        # leave the directory; this is the assertion of it, because the paths
+        # come from a CDN and this is where they become a write.
+        raise Importmap::PackageGraph::Unownable.new(Importmap::PackageGraph::REASON) unless file.to_s.start_with?("#{partial}/")
+
+        FileUtils.mkdir_p file.dirname
+        File.write(file, transform ? transform.call(source) : source)
+      end
+    end
+
     def importmap
       File.read(@importmap_path)
     end

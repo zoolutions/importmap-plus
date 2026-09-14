@@ -190,21 +190,37 @@ class Importmap::PackageGraphTest < ActiveSupport::TestCase
     assert_equal [ "util.js" ], graph.files.keys
   end
 
+  # The entry's own copy of this is caught by Packager#ensure_servable; a
+  # sibling's is caught only here, which is the whole reason the pass exists.
   test "keeps the whole package remote when a specifier it crawled comes back unrewritten" do
-    error = assert_raises Importmap::PackageGraph::Unownable do
-      build_graph("mid.js", {
-        "mid.js"  => %(export default await import(/* webpackChunkName: "leaf" */ "./leaf.js")),
-        "leaf.js" => %(export default 1)
-      })
-    end
+    [ { "mid.js"  => %(export default await import(/* webpackChunkName: "leaf" */ "./leaf.js")),
+        "leaf.js" => %(export default 1) },
+      { "mid.js"  => %(export{default}from"./sibling.js"),
+        "sibling.js" => %(export{default}from/* moved */"./leaf.js"),
+        "leaf.js" => %(export default 1) } ].each do |files|
+      error = assert_raises Importmap::PackageGraph::Unownable do
+        build_graph("mid.js", files)
+      end
 
-    assert_equal [ "relative imports" ], error.reasons
+      assert_equal [ "relative imports" ], error.reasons
+    end
   end
 
+  # The escaped file is served, so a crawl that didn't check the path would
+  # take it: `..//tmp/evil.js` stays under the package root as a URL and lands
+  # outside vendor/javascript as a path, and `.//a.js` gives a key
+  # Importmap::Map never gives the file it writes.
   test "keeps the whole package remote when a relative path leaves the package root sideways" do
-    [ "..//tmp/evil.js", ".//a.js", "./sub//a.js" ].each do |specifier|
+    {
+      "..//tmp/evil.js" => "/tmp/evil.js",
+      ".//a.js"         => "dist//a.js",
+      "./sub//a.js"     => "dist/sub//a.js"
+    }.each do |specifier, escaped|
       error = assert_raises Importmap::PackageGraph::Unownable, "expected #{specifier} to be refused" do
-        build_graph("dist/index.js", { "dist/index.js" => %(export{default}from"#{specifier}") })
+        build_graph("dist/index.js", {
+          "dist/index.js" => %(export{default}from"#{specifier}"),
+          escaped         => %(export default 1)
+        })
       end
 
       assert_equal [ "relative imports" ], error.reasons
@@ -256,7 +272,7 @@ class Importmap::PackageGraphTest < ActiveSupport::TestCase
   end
 
   test "keeps the whole package remote when a specifier carries a query or no extension" do
-    [ "./h.js?v=1", "./h.js#frag", "./sub/i", "./j.jsm" ].each do |specifier|
+    [ "./h.js?v=1", "./h.js#frag", "./sub/i", "./j.jsm", "./a%20b.js", "./Leaf.JS", "./..js" ].each do |specifier|
       assert_raises Importmap::PackageGraph::Unownable, "expected #{specifier} to be refused" do
         build_graph("index.js", { "index.js" => %(export{default}from"#{specifier}") })
       end

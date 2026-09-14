@@ -76,3 +76,27 @@ How `Importmap::Packager` resolves, downloads and rewrites pins — the invarian
 - **Where:** `lib/importmap/packager.rb#remove_package_from_importmap`
 - **Proven by:** `test/packager_test.rb:"remove takes the graph directory and its line with the pin"` (asserts `packaged?` on the same instance afterwards); `test/packager_single_quotes_test.rb:"remove package with single quotes"`
 - **Origin:** PR #30
+
+### A graph directory is replaced only when the import map maps it as ours, never merely because it is in the way
+- **Holds because:** the directory is named for the pin, so it can collide with one an app vendored by hand and mapped with its own `pin_all_from` (no `(graph of …)` comment). `#commit` renames the old directory aside and removes it, which for such a directory is unrecoverable loss of files this gem never wrote. Round 1 guarded the *delete* path and left the *replace* path open; both now go through `mapped?`, and a directory that exists without being mapped as ours raises `VendoredGraph::Occupied`. `pin` prints `Skipping "<pkg>": <dir> already exists and isn't a graph directory this gem wrote` and writes nothing at all — not even the pin — so the app can move its directory and try again.
+- **Where:** `lib/importmap/vendored_graph.rb#commit`, `Occupied`; `lib/importmap/commands.rb#pin_vendored_package`, `#restore_package`
+- **Safe direction:** doing nothing and saying so is recoverable; renaming an app's directory away is not.
+- **Proven by:** `test/vendored_graph_test.rb:"commit refuses to replace a directory the import map doesn't map as ours"`; `test/packager_test.rb:"download refuses to replace a directory the import map doesn't map as ours"`
+- **Origin:** gate round 2 (correctness), PR #30
+
+### `force` skips the single-file check only when the download is the shape the pin says it is
+- **Holds because:** `pristine` passes `force: true` with `graph: true` for a pin that maps a graph. If the CDN it restores from can't be crawled — `--from skypack`, `--from esm.sh`, a custom URL — the crawl returns nil, and skipping the check as well would write the entry with its relative imports intact and then delete the directory those imports resolve through: a broken page, from the repair command, silently. The check therefore runs whenever a graph was asked for and none came back, so `pristine` reports the package and skips it. `--vendor` (`graph: false`) still skips the check entirely, which is what the flag means.
+- **Where:** `lib/importmap/packager.rb#download_package_file` (`unless force && (@last_graph || !graph)`)
+- **Proven by:** `test/packager_test.rb:"download checks a forced entry whose pin maps a graph the CDN didn't give"`, `:"download vendors a source that isn't an ES module when forced"`; `test/commands_test.rb:"pristine command with --from esm.run drops the graph a jspm pin had"` (the bundling case that must still pass)
+- **Origin:** gate round 2 (correctness), PR #30
+
+### A partial is removed by the method that created it, because a failure halfway leaves the caller without its name
+- **Holds because:** `save_vendored_package`'s rescue can only clean up partials whose paths it has been handed back, and a minifier raising on the twentieth of forty-seven files, or a full disk during the entry write, raises before the return. Each writer therefore cleans up its own: `VendoredGraph#write` rescues around the whole directory, `Packager#write_entry_partial` around the file. Otherwise a `<dir>.<pid>.download` directory of half-written chunks stays in `vendor/javascript` for the asset pipeline to serve, and no later run removes it — the pid in the name is a different pid by then.
+- **Where:** `lib/importmap/vendored_graph.rb#write`; `lib/importmap/packager.rb#write_entry_partial`, `#save_vendored_package`
+- **Proven by:** `test/vendored_graph_test.rb:"write cleans up its own partial when a file can't be written"`; `test/packager_test.rb:"download leaves the file an app has when the replacement can't be written"`
+- **Origin:** gate round 2 (correctness), PR #30
+
+### A body that is still unreadable after the identity retry is an error with a sentence, not bytes handed on
+- **Holds because:** `fetch_remote` returning an undecodable body only moves the failure to `ModuleInspector`, which raises `ArgumentError: invalid byte sequence in UTF-8` with no mention of the file — and on a 48-file crawl, once per file. After the retry the method raises `HTTPError, "Can't read <url>: the CDN sent an encoding this gem can't decode"`, which `pin` reports and `pristine` counts as a package it couldn't restore.
+- **Where:** `lib/importmap/packager.rb#fetch_remote`, `#encoded?`
+- **Origin:** gate round 2 (parser), PR #30

@@ -1,5 +1,7 @@
 require "uri"
 require "importmap/module_inspector"
+require "importmap/integrity"
+require "importmap/vendored_graph"
 
 # The sibling files a chunked ESM download needs, fetched from the same CDN
 # directory and rewritten so the import map can serve them.
@@ -27,9 +29,9 @@ class Importmap::PackageGraph
   # where the package's directory ends. esm.sh and skypack serve a package from
   # paths that don't spell that out, so a download from them is left remote.
   ROOT_REGEXPS = [
-    %r{\Ahttps://ga\.jspm\.io/npm:((?:@[^/@]+/)?[^/@]+)@[^/]+/},
-    %r{\Ahttps://cdn\.jsdelivr\.net/npm/((?:@[^/@]+/)?[^/@]+)@[^/]+/},
-    %r{\Ahttps://unpkg\.com/((?:@[^/@]+/)?[^/@]+)@[^/]+/}
+    %r{\Ahttps://ga\.jspm\.io/npm:((?:@[^/@]+/)?[^/@]+)@([^/]+)/},
+    %r{\Ahttps://cdn\.jsdelivr\.net/npm/((?:@[^/@]+/)?[^/@]+)@([^/]+)/},
+    %r{\Ahttps://unpkg\.com/((?:@[^/@]+/)?[^/@]+)@([^/]+)/}
   ].map(&:freeze).freeze # :nodoc:
 
   # Importmap::ModuleInspector::RELATIVE_IMPORT_REGEXP with the specifier
@@ -81,7 +83,7 @@ class Importmap::PackageGraph
   # keys the directory must not define. The block fetches a URL and answers nil
   # when the CDN hasn't got it.
   def self.build(url, source, package:, known: {}, forbidden: [], &fetcher)
-    root, name = root_and_package(url)
+    root, name = root_and_package(url).values_at(0, 1)
     return unless root
 
     inspection = Importmap::ModuleInspector.new(source)
@@ -94,15 +96,41 @@ class Importmap::PackageGraph
     new(root, name, url, source, package: package, known: known, forbidden: forbidden, &fetcher).crawl
   end
 
+  # The graph a Packager download needs beside it, or nil when it is one file.
+  # A file the crawl can't own keeps the whole package remote, carrying the
+  # hash of the bytes the CDN served — as served, so the pin doesn't fetch them
+  # a second time. Every URL another pin already vendored is passed in as one
+  # the graph resolves to that pin's key rather than copies, and every key
+  # another pin owns as one it may not define.
+  def self.for_download(packager, package, url, source, body)
+    build(url, source, package: package, known: packager.vendored_entry_urls,
+                       forbidden: packager.pinned_packages - [ package ]) do |file_url|
+      # Tagged the way the entry is: Net::HTTP hands back ASCII-8BIT, which
+      # neither the rewrite's regexes nor the write can read as text.
+      packager.fetch_remote(file_url, allow_missing: true)&.force_encoding("UTF-8")
+    end
+  rescue Unownable => refusal
+    raise Importmap::Packager::Unvendorable.new(refusal.reasons, integrity: Importmap::Integrity.for(body))
+  end
+
   # The package a CDN URL names, or nil for a CDN whose paths don't say which
   # package and version a file belongs to.
   def self.package_for(url)
-    root_and_package(url).last
+    package_and_version_for(url).first
   end
 
-  # The package's own version directory on the CDN, and the package it holds.
+  # That package and the version the URL pins it at — the version the graph is
+  # of, and the fallback for a line's comment when the version isn't the
+  # semver Packager#extract_package_version_from looks for.
+  def self.package_and_version_for(url)
+    root_and_package(url).values_at(1, 2)
+  end
+
+  # The package's own version directory on the CDN, the package it holds and
+  # that package's version, as a MatchData ([] when the CDN is one whose paths
+  # don't say).
   def self.root_and_package(url)
-    ROOT_REGEXPS.filter_map { |regexp| url.to_s.match(regexp) }.first&.values_at(0, 1) || []
+    ROOT_REGEXPS.filter_map { |regexp| url.to_s.match(regexp) }.first || []
   end
 
   # The package the CDN URL names, which is the prefix every key the directory

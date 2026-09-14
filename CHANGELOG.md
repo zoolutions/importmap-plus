@@ -120,11 +120,15 @@
   The entry keeps the flat file and the plain comment it always had, so
   `update`, `outdated`, `lock` and `pristine` read it exactly as before, and a
   `config/importmap.rb` written this way still parses under importmap-rails.
-  Bare specifiers are untouched, and a file another pin already vendored is
+  Bare specifiers are untouched, and a file that is another pin's own entry is
   rewritten to that pin's key rather than copied, so the browser evaluates each
-  module once. `unpin` takes the directory and the line with the pin,
+  module once. (Two pins of one package do each carry their own copy of a chunk
+  they share; both write it under the same key, so one of the copies is what
+  every importer gets and the other is dead weight.) `unpin` takes the directory and the line with the pin,
   `pristine` rebuilds the directory, `pin --minify` minifies every file in it,
-  and `pin --vendor` still downloads the entry on its own.
+  and `pin --vendor` downloads the entry on its own and drops the directory and
+  line it had. A directory the import map doesn't map as one of ours is the
+  app's: `pin` says so and writes nothing rather than renaming it away.
 
   Only jspm, jsDelivr and unpkg are crawled — their URLs say where a package's
   directory ends. A graph that can't be taken over whole (a relative path that
@@ -137,13 +141,15 @@
 
 ### Fixed
 
-- **`fetch_remote` asks the CDN for an unencoded body.** jspm answers some
-  files with `content-encoding: br` whatever the request advertises, and
-  Net::HTTP decompresses gzip and deflate only:
+- **A download the CDN encoded in a way Net::HTTP can't undo is fetched
+  again.** jspm answers some files with `content-encoding: br` whatever the
+  request advertises, and Net::HTTP decompresses gzip and deflate only:
   `@popperjs/core@2.11.8/lib/utils/computeAutoPlacement.js` arrived as brotli
   bytes, which read as invalid UTF-8 and took the source inspection down with
-  `ArgumentError: invalid byte sequence in UTF-8`. Inherited from
-  importmap-rails, which downloads the same way.
+  `ArgumentError: invalid byte sequence in UTF-8`. `pin` now repeats that one
+  request asking for an unencoded body. It doesn't ask up front: supplying an
+  `Accept-Encoding` at all stops Net::HTTP decoding the gzip it does
+  understand. Inherited from importmap-rails, which downloads the same way.
 
 - **`Importmap::Packager::ServiceError` is a class again.** It was assigned
   `Error.new(Error)` — an *instance* — so `rescue Packager::ServiceError`

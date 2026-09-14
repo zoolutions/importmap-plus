@@ -20,7 +20,7 @@ One class per file, title/eyebrow read from each file's own declarations, mapped
 | `pinning.rb` | Pinning packages (Vendoring) | `pin`: vendoring, CDN choice, remote/custom URLs, option survival on rewrite | `lib/importmap/commands.rb`, `lib/importmap/packager.rb` |
 | `esm_run.rb` | esm.run bundles (Vendoring) | `--from esm.run`, the bundle import rewrite, dependency pinning | `lib/importmap/packager.rb` (`rewrite_esm_run_imports`, `ESM_RUN_PROVIDER`) |
 | `minifying.rb` | Minifying (Vendoring) | `pin --minify` / `pristine --minify`, which tool runs, custom minifiers | `lib/importmap/minifier.rb` |
-| `provenance.rb` | Provenance (Vendoring) | the `# @<version> (<provider>[, minified][, vendored][, remote[: <reason>]][, locked])` pin comment and its grammar, including every remote reason | `lib/importmap/packager.rb` (`PIN_PROVENANCE_REGEXP`) |
+| `provenance.rb` | Provenance (Vendoring) | the `# @<version> (<provider>[, minified][, vendored][, remote[: <reason>]][, locked])` pin comment and its grammar, including every remote reason, plus the `# @<version> (graph of <package>)` a `pin_all_from` line carries | `lib/importmap/packager.rb` (`PIN_PROVENANCE_REGEXP`), `lib/importmap/vendored_graph.rb` (`MAPPING_REGEXP`) |
 | `locking.rb` | Locking versions (Vendoring) | `pin --lock`, `lock`/`unlock`, what other commands do to a locked pin | `lib/importmap/commands.rb`, `lib/importmap/packager.rb` |
 | `updating.rb` | Updating & auditing (Vendoring) | `update`, `outdated`, `audit`, `pristine`, `packages`, `json` | `lib/importmap/commands.rb`, `lib/importmap/npm.rb` |
 | `preloading.rb` | Preloading (Serving) | `modulepreload` links, `preload: false`, per-entry-point preloading | `lib/importmap/map.rb` (`preloaded_module_paths`) |

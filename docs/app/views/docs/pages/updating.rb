@@ -162,7 +162,9 @@ class Views::Docs::Pages::Updating < DocsUI::Page
         means. `pristine` restores, it never re-decides: a package pinned as one
         file stays one file, and gets a graph only when a `pin` or `update` gives it
         one. A `--from` that moves such a package to a CDN that bundles takes the
-        graph away again, directory and line together. See
+        graph away again, directory and line together; a `--from` naming a CDN whose
+        files can't be crawled (esm.sh, skypack) can't restore it at all, and is
+        reported rather than leaving an entry whose imports resolve nowhere. See
         [Packages that ship more than one file](/docs/pinning).
 
         A package the CDN can no longer serve the way its pin describes is reported

@@ -215,13 +215,17 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
         happens. `pin <package> --remote` is the way back to a single CDN URL.
 
         Bare specifiers are left alone: a chunk that imports `"react"` still resolves
-        through your import map to your pin of react. A file another pin already
-        vendored is not copied a second time either — the specifier is rewritten to
-        that pin's key, so the browser evaluates the module once.
+        through your import map to your pin of react. A file that is another pin's
+        own entry isn't copied either — the specifier is rewritten to that pin's key,
+        so the browser evaluates the module once. Two pins of one package do each
+        keep their own copy of a chunk they share; both map it to the same key, so
+        one copy is what every importer gets and the other is dead weight on disk.
 
-        The directory belongs to the pin that wrote it and is replaced whole on every
+        The directory belongs to the pin that wrote it — the `pin_all_from` line with
+        the `(graph of …)` comment is what says so — and is replaced whole on every
         `pin`, `update` and `pristine`, so a file the package dropped between versions
-        goes with it. `unpin` takes the directory and its line along with the pin, and
+        goes with it. A directory of that name the import map doesn't map that way is
+        yours: `pin` skips the package and says so rather than renaming it away. `unpin` takes the directory and its line along with the pin, and
         `pin --vendor` drops both — it downloads the entry on its own, which is what
         overriding the check means.
 

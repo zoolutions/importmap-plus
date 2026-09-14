@@ -776,7 +776,7 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
 
       Net::HTTP.stub(:get_response, response) do
-        packager.download("google-libphonenumber", "https://cdn.jsdelivr.net/npm/google-libphonenumber@3.2.42/dist/libphonenumber.js", force: true)
+        packager.download("google-libphonenumber", "https://cdn.jsdelivr.net/npm/google-libphonenumber@3.2.42/dist/libphonenumber.js", force: true, graph: false)
       end
 
       assert_includes File.read("#{vendor_dir}/google-libphonenumber.js"), "module.exports = f"
@@ -1098,7 +1098,7 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
 
   test "download replaces the whole graph directory, so a file the package dropped is gone" do
     Dir.mktmpdir do |vendor_dir|
-      packager = graph_packager(vendor_dir)
+      packager = graph_packager(vendor_dir, %(pin_all_from "#{vendor_dir}/pkg", under: "pkg" # @1.0.0 (graph of pkg)\n))
       FileUtils.mkdir_p("#{vendor_dir}/pkg/dist")
       File.write("#{vendor_dir}/pkg/dist/gone.js", "export default 0")
 
@@ -1106,6 +1106,44 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
 
       assert_not File.exist?("#{vendor_dir}/pkg/dist/gone.js")
       assert File.exist?("#{vendor_dir}/pkg/dist/util.js")
+    end
+  end
+
+  # A directory this gem didn't write is the app's: `pin date-fns` must not
+  # rename away a vendor/javascript/date-fns the app has kept for years.
+  test "download refuses to replace a directory the import map doesn't map as ours" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir, %(pin_all_from "#{vendor_dir}/pkg", under: "pkg"\n))
+      FileUtils.mkdir_p("#{vendor_dir}/pkg")
+      File.write("#{vendor_dir}/pkg/theirs.js", "// hand vendored, years ago")
+
+      stub_cdn(CHUNKED_PACKAGE) do
+        assert_raises(Importmap::VendoredGraph::Occupied) { packager.download("pkg", "#{GRAPH_ROOT}dist/index.js") }
+      end
+
+      assert_equal "// hand vendored, years ago", File.read("#{vendor_dir}/pkg/theirs.js")
+      assert_not File.exist?("#{vendor_dir}/pkg.js")
+      assert_empty Dir.glob("#{vendor_dir}/*.download")
+    end
+  end
+
+  # pristine restores a pin as it stands, but an entry that still imports
+  # siblings is not servable because pristine asked for it: a --from that moves
+  # a graphed package to a CDN whose files can't be crawled would otherwise
+  # write the entry unrewritten and delete the directory it resolves through.
+  test "download checks a forced entry whose pin maps a graph the CDN didn't give" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir, %(pin_all_from "#{vendor_dir}/pkg", under: "pkg" # @1.0.0 (graph of pkg)\n))
+      source = %(export{default}from"./util.js")
+
+      error = stub_cdn({ "https://esm.sh/pkg@1.0.0/index.js" => source }) do
+        assert_raises(Importmap::Packager::Unvendorable) do
+          packager.download("pkg", "https://esm.sh/pkg@1.0.0/index.js", force: true, graph: true)
+        end
+      end
+
+      assert_equal [ "relative imports" ], error.reasons
+      assert_not File.exist?("#{vendor_dir}/pkg.js")
     end
   end
 

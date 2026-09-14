@@ -215,6 +215,10 @@ class Importmap::Commands < Thor
         dependencies = packager.download(package, url, minify: minify, force: vendor, graph: !vendor)
       rescue Importmap::Packager::Unvendorable, Importmap::Packager::NotAnEsModule => refusal
         return pin_remote_package(package, url, preload, integrity: integrity, locked: locked, kept_remote: refusal)
+      rescue Importmap::VendoredGraph::Occupied => occupied
+        # Nothing is written, including the pin: the app is asked to move its
+        # own directory rather than told afterwards that this gem took it.
+        return puts %(Skipping "#{package}": #{occupied.message})
       end
 
       graph = packager.last_graph
@@ -264,6 +268,9 @@ class Importmap::Commands < Thor
       true
     rescue Importmap::Packager::Unvendorable, Importmap::Packager::NotAnEsModule => refusal
       puts %(Couldn't restore "#{package}": it #{refusal.message})
+      false
+    rescue Importmap::VendoredGraph::Occupied => occupied
+      puts %(Couldn't restore "#{package}": #{occupied.message})
       false
     end
 

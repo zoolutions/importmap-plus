@@ -83,8 +83,10 @@ class Importmap::VendoredGraphTest < ActiveSupport::TestCase
       target = Pathname.new(dir).join("pkg")
       FileUtils.mkdir_p target
       File.write(target.join("works.js"), "// the files that work today")
+      importmap = File.join(dir, "importmap.rb")
+      File.write(importmap, %(pin_all_from "#{target}", under: "pkg" # @1.0.0 (graph of pkg)\n))
 
-      graph = vendored_graph(target)
+      graph = vendored_graph(target, importmap)
       partial = graph.write(Struct.new(:files).new({ "new.js" => "export default 1" }))
       FileUtils.rm_rf partial
 
@@ -92,6 +94,39 @@ class Importmap::VendoredGraphTest < ActiveSupport::TestCase
 
       assert_equal "// the files that work today", File.read(target.join("works.js"))
       assert_empty Dir.glob("#{dir}/*.previous")
+    end
+  end
+
+  test "commit refuses to replace a directory the import map doesn't map as ours" do
+    Dir.mktmpdir do |dir|
+      target = Pathname.new(dir).join("pkg")
+      FileUtils.mkdir_p target
+      File.write(target.join("theirs.js"), "// the app's own")
+      importmap = File.join(dir, "importmap.rb")
+      File.write(importmap, %(pin_all_from "#{target}", under: "pkg"\n))
+
+      graph = vendored_graph(target, importmap)
+      partial = graph.write(Struct.new(:files).new({ "new.js" => "export default 1" }))
+
+      assert_raises(Importmap::VendoredGraph::Occupied) { graph.commit(partial) }
+
+      assert_equal "// the app's own", File.read(target.join("theirs.js"))
+    end
+  end
+
+  test "write cleans up its own partial when a file can't be written" do
+    Dir.mktmpdir do |dir|
+      graph = vendored_graph(Pathname.new(dir).join("pkg"))
+
+      assert_raises(RuntimeError) do
+        graph.write(Struct.new(:files).new({ "a.js" => "1", "b.js" => "2" })) do |source|
+          raise "the minifier gave up" if source == "2"
+
+          source
+        end
+      end
+
+      assert_empty Dir.glob("#{dir}/*.download")
     end
   end
 

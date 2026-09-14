@@ -902,6 +902,46 @@ class CommandsTest < ActiveSupport::TestCase
     assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/@popperjs--core")
   end
 
+  # A pin whose graph the CDN no longer serves stops that package being
+  # restored, not the run.
+  test "pristine command reports a package it can't restore and restores the rest" do
+    importmap_config(<<~PINS)
+      pin "qr-scanner", to: "qr-scanner.js" # @1.4.2
+      pin_all_from "vendor/javascript/qr-scanner", under: "qr-scanner" # @1.4.2 (graph of qr-scanner)
+      pin "md5" # @2.2.0
+    PINS
+
+    out, _err = run_importmap_command_expecting_failure("pristine")
+
+    assert_includes out, %(Couldn't restore "qr-scanner": it can't be vendored as a single file (workers))
+    assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/md5.js")
+    assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/qr-scanner.js")
+  end
+
+  # One sibling, so the sentence says "file" rather than "files".
+  test "pin command counts a single sibling file in the singular" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "react@17.0.2")
+
+    assert_includes out, "(with 1 sibling file)"
+    assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/react/cjs/react.production.min.js")
+  end
+
+  # A pin the check kept remote records its CDN only in its URL, so converting
+  # it has to ask that CDN rather than falling back to the default chain.
+  test "pin command vendors a pin kept remote on the CDN its URL names" do
+    importmap_config('pin "@popperjs/core", to: "https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/lib/index.js" # @2.11.8 (remote: relative imports)')
+
+    out, _err = run_importmap_command("pin", "@popperjs/core@2.11.8")
+
+    assert_includes out, "via download from https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/lib/index.js"
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, %(pin "@popperjs/core", to: "@popperjs--core.js" # @2.11.8 (jsdelivr)\n)
+    assert_includes content, %(under: "@popperjs/core", to: "@popperjs--core" # @2.11.8 (graph of @popperjs/core)\n)
+  end
+
   test "pin command with --vendor drops the graph a package had" do
     importmap_config("")
     run_importmap_command("pin", "@popperjs/core@2.11.8")
