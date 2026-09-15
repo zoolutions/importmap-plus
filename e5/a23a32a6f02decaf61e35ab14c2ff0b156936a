@@ -1,0 +1,13 @@
+lode/workflow.md
+  ai_agent 53,102,118,132
+.claude/rules/testing.md
+  ai_agent 73
+.gitignore
+  ai_agent 27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e5a23a32a6f02decaf61e35ab14c2ff0b156936a",
+  "prompts": {}
+}
