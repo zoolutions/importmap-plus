@@ -50,7 +50,7 @@ A `--minify` test **skips** unless bun, esbuild or terser is on `PATH` or in `no
 Every change is checked against these before it is called done; a reviewer will name the one you forgot.
 
 - Pin-line inputs: scoped package (`@scope/name`), a subpath key (`pkg/core`, `@scope/name/sub`), a single-quoted pin, a pin with no version comment, a pin with no provider comment, a malformed line (`Map::InvalidFile`), a pin already carrying `locked`.
-- Pin options that must survive every rewrite (`pin`, `update`, `pristine`, `unpin`): `preload:` including `preload: false` and an array preload, `integrity:` including `integrity: false`, `to:` a custom or remote URL, and the whole provenance comment.
+- Pin options that must survive every rewrite (`pin`, `update`, `pristine`, `unpin`): `preload:` including `preload: false` and an array preload, `integrity:` as a boolean only (`INTEGRITY_OPTION_REGEXP` captures `true`/`false`, so a literal SRI hash is never carried: a remote pin recomputes it from the new bytes or drops it with `--no-integrity`, a vendored pin drops it silently), `to:` a custom or remote URL, and the whole provenance comment.
 - Pin states: a pin written before the feature existed (no new metadata); a remote pin (`to: "https://…"`) that must stay remote and re-resolve from the same CDN; a package present in `vendor/javascript` but absent from the map; an esm.run bundle with dependencies of its own.
 - Downgrade story: a `config/importmap.rb` this change writes must still parse under importmap-rails — metadata rides in the comment, never in a new `pin` keyword.
 - Environments: both asset pipelines (`ENV["ASSETS_PIPELINE"]` — `test/importmap_test.rb` branches on it for integrity and digest expectations, so a new asset-path assertion needs both branches); Ruby 3.1 (no `Data.define`, no anonymous `*`/`**` forwarding) through Ruby 4.0; Rails 6.1 (needs `logger`, `mutex_m`, `drb`, `bigdecimal` declared — see `Appraisals`) through Rails `main`; a machine with no minifier installed; Windows (`.cmd` shims in `Minifier`).
@@ -99,7 +99,7 @@ Reviewer suggestions that are wrong in this repository. Push back on sight with 
 - **CDN / registry transport** — `429`, `5xx`, `ECONNRESET`, `Net::ReadTimeout`, `SSL_read` in `test/commands_test.rb` or a `*_integration_test.rb`, passing on re-run. `HttpRetries` already retries with a growing pause; the question is whether the failing call is actually inside `with_retries` (`grep -n "Net::HTTP\." lib/`).
 - **CDN content drift** — an assertion on a URL or file body that fails consistently from a date onward: the live test pinned a package without an exact version, or the CDN changed a resolution. Pin the version.
 - **Process isolation** — `CommandsTest` and `InstallerTest` `include ActiveSupport::Testing::Isolation`, so each test forks, copies `test/dummy` into a fresh `Dir.mktmpdir` and `chdir`s in. Teardown errors, a missing tmpdir, or a test that passes alone and fails in the suite point here: class-level setup, a `chdir` not undone, a fixture copied once.
-- **Order / state leakage** — `Importmap::HttpRetries.attempts`/`wait`, `Importmap::Packager.endpoint` and `Importmap::Npm.base_uri` are class-level accessors. A test that sets one without restoring it in an `ensure` poisons later tests; `--seed N` reproduces it.
+- **Order / state leakage** — `Importmap::HttpRetries.attempts`/`wait`, `Importmap::Packager.endpoint`, `Importmap::Packager.esm_run_resolver`, `Importmap::Packager.minifier` (`test/packager_test.rb` sets it) and `Importmap::Npm.base_uri` are class-level accessors. A test that sets one without restoring it in an `ensure` poisons later tests; `--seed N` reproduces it.
 - **Environment** — a minifier present or absent changes which tests run (`-v` shows `S` for skipped); `ASSETS_PIPELINE` unset locally; Windows `.cmd` shim lookup.
 - **Rate dependence** — failures that cluster when many cells run at once are jspm rate-limiting the whole matrix from one IP pool, not a bug in the test.
 
@@ -115,7 +115,7 @@ Never `skip`, `retry`, `sleep` or loosen an assertion. A bounded retry around a 
 | `gemfiles/*.gemfile.lock` | gitignored; `git rm --cached` if one appears. `gemfiles/*.gemfile` are generated — resolve `Appraisals`, then `bundle exec appraisal generate` and take the output |
 | `docs/Gemfile.lock` | never hand-merge: take the base's, then `cd docs && bundle install`. The `importmap-plus (X.Y.Z)` pin must equal `Importmap::VERSION` or the frozen docs install fails |
 | `docs/bun.lock` | take the base's, then `cd docs && bun install` |
-| `docs/app/models/doc.rb`, `docs/config/routes.rb` | append-only registries: keep both sides' lines, base order first |
+| `docs/app/models/doc.rb` | append-only registry: keep both sides' lines, base order first (`docs/config/routes.rb` has one generic `docs/:doc` route and never changes per page) |
 | `docs/app/views/docs/pages/*.rb` | prose — merge semantically so the page describes both changes |
 | `test/fixtures/files/*_import_map.rb` | fixtures are exact inputs: add a second fixture for one side's shape rather than merging two shapes into one that tests neither |
 | `lib/importmap/packager.rb`, `commands.rb`, `npm.rb` | the fork's hot files; both sides likely added to the same method. Keep both additions in the base's order and re-run the touched tests before trusting it |
@@ -129,7 +129,7 @@ Mechanical files (the lockfiles, the CHANGELOG, the page registry) are the only 
 - Before pushing: the touched test files, then `bundle exec rake test` with a minifier installed (confirm the `--minify` cases ran, not skipped), plus `cd docs && bundle exec rake lint && bundle exec rspec` if `docs/**` changed, plus the nearest matrix cell if the engine, `Map` or a helper changed.
 - Stress iterations for a flake proof: **10** consecutive green runs judged by exit code, or **3** for a test that hits a live CDN — each iteration there is real traffic, and hammering jspm proves only that rate limits exist. Re-run the exact original repro (same seed, same cell) too.
 - A regression fence is proven by reintroducing the bug and watching the test go red, then restoring.
-- Where evidence goes: `tmp/` (git-ignored) — stress logs, gate diffs, handovers. A flake's mechanism, in one sentence, plus its reproduction recipe, goes in a dated entry in `../test/flaky-tests.md` (create it if missing; it does not exist yet). A flake that is found but not yet fixed gets a GitHub issue labelled `flaky-test` (`gh issue create --label flaky-test`, creating the label once if absent); the fixing PR closes it with `Closes #N`.
+- Where evidence goes: `lode/tmp/` (git-ignored; the repo-root `tmp/` is not) — stress logs, gate diffs, handovers. A flake's mechanism, in one sentence, plus its reproduction recipe, goes in a dated entry in `../test/flaky-tests.md` (create it if missing; it does not exist yet). A flake that is found but not yet fixed gets a GitHub issue labelled `flaky-test` (`gh issue create --label flaky-test`, creating the label once if absent); the fixing PR closes it with `Closes #N`.
 
 ## Rigor
 

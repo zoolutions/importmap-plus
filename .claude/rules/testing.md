@@ -70,7 +70,7 @@ The default is a unit test with the network stubbed. Add a `commands_test.rb` ca
 
 ## Fixtures
 
-`test/fixtures/files/*_import_map.rb` are real `config/importmap.rb` files exercising one shape each (outdated, single quotes, scoped packages, nested paths, vulnerable). Add a fixture for a new pin-line shape rather than building strings in the test; name it for the shape.
+`test/fixtures/files/*_import_map.rb` are real `config/importmap.rb` files exercising one shape each: outdated (double- and single-quoted, with and without a CDN), without CDN and versions, invalid, scoped package (plain and with a nested path), nested package path (plain and with a comment), locked, remote with a reason, vulnerable. Add a fixture for a new pin-line shape rather than building strings in the test; name it for the shape. For a pin line that only one test needs, `create_temp_importmap` (a private helper in `packager_test.rb`) writes a Tempfile and returns its path; `file_fixture("…_import_map.rb")` is for shapes reused across tests and raises if the file does not exist.
 
 ## The CI matrix is part of the test
 
