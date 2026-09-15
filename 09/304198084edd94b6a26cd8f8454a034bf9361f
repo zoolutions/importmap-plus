@@ -1,0 +1,19 @@
+lode/workflow.md
+  s_e4328946ecc9eb::t_96d92564d7a47d 53,102,118,132-145
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "09304198084edd94b6a26cd8f8454a034bf9361f",
+  "prompts": {},
+  "sessions": {
+    "s_e4328946ecc9eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "88c40fa1-2c89-49c9-8b32-5042a7ddae74",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
