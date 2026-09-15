@@ -1,0 +1,26 @@
+lode/review/docs-and-changelog.md
+  s_e4328946ecc9eb::t_affae28096228a 46,49-55
+lode/review/testing.md
+  ai_agent 18
+  s_e4328946ecc9eb::t_affae28096228a 14-17,19
+lode/lode-map.md
+  s_e4328946ecc9eb::t_affae28096228a 27,29-30
+lode/review/profile.md
+  s_e4328946ecc9eb::t_affae28096228a 1-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2a207a864b9ee4e18dea440fa6c19702aab9f9a1",
+  "prompts": {},
+  "sessions": {
+    "s_e4328946ecc9eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "88c40fa1-2c89-49c9-8b32-5042a7ddae74",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
