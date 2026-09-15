@@ -1,0 +1,23 @@
+lode/lode-map.md
+  ai_agent 7
+.claude/rules/testing.md
+  s_e4328946ecc9eb::t_c0a935e1fd0cd4 73
+lode/workflow.md
+  s_e4328946ecc9eb::t_c0a935e1fd0cd4 53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1dd85d9b787229ba1bd5553c9077eb76eb90070b",
+  "prompts": {},
+  "sessions": {
+    "s_e4328946ecc9eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "88c40fa1-2c89-49c9-8b32-5042a7ddae74",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
