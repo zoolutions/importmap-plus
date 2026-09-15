@@ -75,7 +75,7 @@ The `--minify` tests **skip** unless bun, esbuild or terser is on `PATH` or in `
 | `/lode:learn` | Write accepted review findings into `lode/review/`; promote cross-repo classes to zoolutions/claude-plugins |
 | `/lode:sync` | Keep `lode/` true to the code after a change; `audit`, `handover` |
 
-The `/lode:*` commands come from the `lode@zoolutions` plugin and read `lode/workflow.md` for everything specific to this repo — the commands, the constraints to push back on, the conflict rules, the CI matrix and the flake sources. The repo's own commands pin a model tier via frontmatter aliases — `sonnet` for pattern-following implementation, `opus` for orchestration, security and full review, `fable` for read-only planning — so they track the latest model per tier. Subagents doing mechanical work (file finding, pattern scans) get a cheaper model passed explicitly.
+The `/lode:*` commands come from the `lode@zoolutions` plugin and read `lode/workflow.md` for everything specific to this repo — the commands, the constraints to push back on, the conflict rules, the CI matrix and the flake sources. The repo's own commands pin a model tier via frontmatter aliases — `sonnet` for pattern-following implementation, `opus` for orchestration, security and full review — so they track the latest model per tier. Subagents doing mechanical work (file finding, pattern scans) get a cheaper model passed explicitly.
 
 ## Architecture
 
