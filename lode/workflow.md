@@ -131,6 +131,18 @@ Mechanical files (the lockfiles, the CHANGELOG, the page registry) are the only 
 - A regression fence is proven by reintroducing the bug and watching the test go red, then restoring.
 - Where evidence goes: `tmp/` (git-ignored) — stress logs, gate diffs, handovers. A flake's mechanism, in one sentence, plus its reproduction recipe, goes in a dated entry in `../test/flaky-tests.md` (create it if missing; it does not exist yet). A flake that is found but not yet fixed gets a GitHub issue labelled `flaky-test` (`gh issue create --label flaky-test`, creating the label once if absent); the fixing PR closes it with `Closes #N`.
 
+## Rigor
+
+How much review a change buys. `critical` is the request path: the code that runs on every page render of every app, where a wrong import map is a broken site — every gate agent plus a second correctness pass, up to five rounds, and no implementation without an issue or plan that carries a Decision section. `standard` is the default and covers everything else: the CLI, the Packager, the collaborators, the tests, the workflows, and every prose path. Nothing here is `light`: `light` drops the claims and correctness agents, and `lode/review/docs-and-changelog.md` makes the claims agent the enforcer of every `lode/**/*.md` and `docs/app/views/docs/pages/*.rb` statement, while `docs/` is also a Rails app with its own accepted correctness findings (the `Retry-After` arithmetic, the lint globs, the image digest).
+
+- Default: `standard`
+
+| Paths | Tier |
+|---|---|
+| `lib/importmap/map.rb`, `lib/importmap/engine.rb`, `lib/importmap/reloader.rb`, `app/` | critical |
+
+A file no rule names counts as the default; the diff takes the highest tier over its files, so a docs page changed alongside `map.rb` is reviewed at critical. `${CLAUDE_PLUGIN_ROOT}/scripts/rigor.sh` prints the tier; `--tier <t>` on a skill overrides it, and lowering needs a stated reason.
+
 ## See also
 
 - `lode-map.md` — the index
