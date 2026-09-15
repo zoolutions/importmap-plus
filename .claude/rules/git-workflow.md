@@ -9,7 +9,7 @@
 | `main` | the only long-lived branch; releases cut from here | lands via PR; never force-push; never commit to it directly |
 | `feat/*`, `fix/*`, `chore/*`, `docs/*`, `ci/*`, `sync/*` | work branches | root off fresh `origin/main` |
 
-Stacked PRs are allowed (a PR based on another feature branch) when the second genuinely builds on the first — say so in the PR body and let `/finish-prs` walk them in order. Never rebase a published branch: merge `main` forward into it.
+Stacked PRs are allowed (a PR based on another feature branch) when the second genuinely builds on the first — say so in the PR body and let `/lode:finish-prs` walk them in order. Never rebase a published branch: merge `main` forward into it.
 
 ## Starting work
 
@@ -64,7 +64,7 @@ There is no RuboCop at the gem root. Don't add one in a feature PR; upstream fil
 2. Commit in small steps; run the checklist
 3. `/lode:gate` — the push hook refuses `git push` and `gh pr create` until it has passed on the exact tree; paste its report into the PR body
 4. `git push -u origin <branch>` and `gh pr create` with a summary and a test plan. Write the body to a file and pass `--body-file` when it has code fences — with a single-quoted heredoc backticks pass through verbatim, so never escape them.
-5. `/github-review-pr` when CI or a reviewer says something; `/finish-prs` for a stack
+5. `/lode:review-pr` when CI or a reviewer says something; `/lode:finish-prs` for a stack
 6. Squash merge on `main` when green and approved
 
 A `feat:` PR also updates `CHANGELOG.md` under the next version heading and the relevant `docs/` page in the same PR.
@@ -88,7 +88,7 @@ It refuses a dirty tree or a non-`main` branch, bumps `lib/importmap/version.rb`
 ## Rules
 
 - **NEVER** commit directly to `main`
-- **NEVER** force-push a published branch (`--force-with-lease` only inside `/finish-prs`, on a branch nobody else has)
+- **NEVER** force-push a published branch (`--force-with-lease` only inside `/lode:finish-prs`, on a branch nobody else has)
 - **NEVER** push to `upstream`
 - **NEVER** hand-merge a lockfile
 - **ALWAYS** run the tests before pushing; the live ones too

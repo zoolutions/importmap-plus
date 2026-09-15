@@ -24,7 +24,7 @@
 # Ignore Gemfile.lock files for Rails main branch.
 /gemfiles/*.lock
 
-# Worktrees created by /finish-prs and parallel agents
+# Worktrees left by the retired local /finish-prs and by parallel agents (the plugin's /lode:finish-prs uses mktemp)
 /.claude/worktrees/
 
 # lode/tmp is session scratch (gate output, handovers); never memory

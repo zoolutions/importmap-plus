@@ -11,3 +11,9 @@ How the suites assert, where a loose assertion has already let a regression thro
 - **Where:** `test/commands_test.rb:"update command resolves a subpath pin from its own CDN, not its package's"` (and the sibling `update command with a subpath name re-pins only that key`)
 - **Proven by:** `test/commands_test.rb:"update command resolves a subpath pin from its own CDN, not its package's"`
 - **Origin:** PR #23
+
+### A pin line only one test needs goes through `create_temp_importmap`; a shape reused across tests is a fixture file
+- **Holds because:** `test/fixtures/files/` holds twelve `*_import_map.rb` fixtures, each one shape, and `file_fixture` raises when the file does not exist. Building a one-line map for a single assertion as a thirteenth fixture file, or inlining a reused shape as a string, are the two mistakes the retired local `/tdd` guarded against; the guidance now lives in `.claude/rules/testing.md` → Fixtures, which the plugin's `/lode:tdd` reads for the fixture convention.
+- **Where:** `test/packager_test.rb#create_temp_importmap` (private; writes a Tempfile and returns its path); `.claude/rules/testing.md` → Fixtures
+- **Proven by:** `test/packager_test.rb:"extract_existing_pin_options with preload false"` and its three neighbours use the helper; the remote-reason tests use `file_fixture("remote_reason_import_map.rb")`
+- **Origin:** gate 2026-09-15 (PR #30)

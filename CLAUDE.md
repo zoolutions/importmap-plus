@@ -6,7 +6,7 @@ This is a **maintained fork that still tracks upstream**. The `upstream` remote 
 
 ## Memory
 
-Durable project memory lives in `lode/` (index: `lode/lode-map.md`). Read it before exploring the code. `lode/review/` holds accepted review findings as rules about the system; `/lode:gate` enforces them before any push and `/lode:learn` adds to them. The lode describes the system as it is; `CHANGELOG.md` records what changed.
+Durable project memory lives in `lode/` (index: `lode/lode-map.md`; the workflow profile the `/lode:*` commands read is `lode/workflow.md`). Read it before exploring the code. `lode/review/` holds accepted review findings as rules about the system; `/lode:gate` enforces them before any push and `/lode:learn` adds to them. The lode describes the system as it is; `CHANGELOG.md` records what changed.
 
 ## Tech Stack
 
@@ -60,24 +60,22 @@ The `--minify` tests **skip** unless bun, esbuild or terser is on `PATH` or in `
 
 | Command | Purpose |
 |---------|---------|
-| `/lfg` | Full autonomous workflow: branch off `main` → understand → explore → plan → TDD → verify → PR |
-| `/plan` | Fable-powered, read-only planning → GitHub issue or `docs/plans/` markdown (execute with `/lfg`) |
+| `/lode:lfg` | Full autonomous workflow: branch off `main` → understand → explore → plan → TDD → verify → gate → PR |
+| `/lode:plan` | Read-only planning → GitHub issue or `docs/plans/` markdown (execute with `/lode:lfg`) |
 | `/architect` | Order multi-layer work across engine → Map → helpers → CLI → Packager/Npm → docs |
-| `/tdd` | Enforce RED → GREEN → REFACTOR with Minitest |
+| `/lode:tdd` | Enforce RED → GREEN → REFACTOR with Minitest |
 | `/security` | Audit CDN and registry input handling, vendored-file paths, shell-outs, SRI |
 | `/perf` | Baseline the request path (`Map#to_json`, preload resolution) against `main` in a worktree |
 | `/review-pr` | Review a PR for pattern and fork-constraint compliance |
-| `/github-review-pr` | Full PR pass: resolve conflicts with `main`, fix CI failures, then process review comments |
-| `/github-review-failures` | Diagnose and fix CI failures until green |
-| `/github-review-comments` | Process unresolved PR review comments |
-| `/finish-prs` | Drive a stack of open PRs to merge-ready, one at a time, in order |
-| `/debug-flaky` | Root-cause an intermittent test — evidence → repro → stress-proofed fix; never skip/retry |
+| `/lode:review-pr` | Full PR pass: resolve conflicts with the base, fix CI failures, then process review comments |
+| `/lode:finish-prs` | Drive a stack of open PRs to merge-ready, one at a time, in order |
+| `/lode:debug-flaky` | Root-cause an intermittent test — evidence → repro → stress-proofed fix; never skip/retry |
 | `/upstream-sync` | Merge a new importmap-rails release, bump `UPSTREAM_VERSION`, re-sync the docs |
 | `/lode:gate` | Pre-PR gate (plugin `lode@zoolutions`): fresh-context review against the rules and `lode/review/`, mutation check, loops until clean; the push hook requires it |
 | `/lode:learn` | Write accepted review findings into `lode/review/`; promote cross-repo classes to zoolutions/claude-plugins |
 | `/lode:sync` | Keep `lode/` true to the code after a change; `audit`, `handover` |
 
-Commands pin a model tier via frontmatter aliases — `sonnet` for pattern-following implementation, `opus` for orchestration, security and full review, `fable` for read-only planning — so they track the latest model per tier. Subagents doing mechanical work (file finding, pattern scans) get a cheaper model passed explicitly.
+The `/lode:*` commands come from the `lode@zoolutions` plugin and read `lode/workflow.md` for everything specific to this repo — the commands, the constraints to push back on, the conflict rules, the CI matrix and the flake sources. The repo's own commands pin a model tier via frontmatter aliases — `sonnet` for pattern-following implementation, `opus` for orchestration, security and full review — so they track the latest model per tier. Subagents doing mechanical work (file finding, pattern scans) get a cheaper model passed explicitly.
 
 ## Architecture
 

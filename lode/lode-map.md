@@ -4,6 +4,7 @@ The index of this repository's durable memory. Read this first; it beats a direc
 
 - `summary.md` — what importmap-plus is, the three invariants, the fork stance
 - `terminology.md` — the words this repo uses (pin line, provenance comment, provider chain, remote reason, appraisal cell…)
+- `workflow.md` — the profile the shared `/lode:lfg`, `/lode:review-pr`, `/lode:finish-prs`, `/lode:debug-flaky`, `/lode:tdd` and `/lode:plan` commands read: the commands to run, branch and PR conventions, layer ownership, the input shapes every change is checked against, reviewer suggestions to push back on, docs and CHANGELOG duties, the CI matrix and how to read it, the real flake sources, per-file conflict rules, what verification means here, and the review tier each path buys (Rigor)
 - `practices.md` — practices learned from review that `../.claude/rules/` does not state: grammar tables and safe failure direction for parsers, the pin-answers-for-itself rule, atomic writes, one-fact-every-page docs
 - `plans/README.md` — plans live in `../docs/plans/` and GitHub issues; handovers in `tmp/` (not committed)
 
@@ -23,9 +24,10 @@ Accepted review findings rewritten as rules about the system, verified against t
 - `review/packager.md` — lock derivation, esm.run version conflicts, specifier-only rewriting, atomic writes, `name@version/subpath`, reload after write
 - `review/cli.md` — `--vendor` scope and `--remote` precedence, locked dependencies kept, explicit `--from` moves a pin, `pristine` rewrites only on change, a pin answers for itself first, versioned keys only for bare `update`, registry errors recorded per package, one *Not a bug* (upstream's vendored-path message)
 - `review/inspection-and-tools.md` — strings before comments, regex-literal contexts, qualified `Worker`, wasm forms, computed imports, non-ESM markers, keep-not-drop invariant, minifier tool normalisation
-- `review/docs-and-changelog.md` — the `remote:` reason list, flag limits on every page, link-time SyntaxError wording, the minifier hook location, docs lint globs, `Retry-After`
+- `review/docs-and-changelog.md` — the `remote:` reason list, flag limits on every page, link-time SyntaxError wording, the minifier hook location, docs lint globs, `Retry-After`, every hand-written list recomputed from the tree
 - `review/workflows-and-deploy.md` — docs-ci path filters, release `tag` input, action and workflow SHA pins, the Bun image digest, the `version.rb` conflict rule
-- `review/testing.md` — both halves of a provider split asserted, h1 assertions in docs specs
+- `review/testing.md` — both halves of a provider split asserted, h1 assertions in docs specs, `create_temp_importmap` versus a fixture file
+- `review/profile.md` — every profile heading present (Rigor), the request path critical and nothing light, evidence in `lode/tmp/`, `doc.rb` the only page registry, a command attribution names the command that writes it now, a fix commit contains only its own hunks
 
 ## Not memory
 
