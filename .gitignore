@@ -26,6 +26,3 @@
 
 # Worktrees created by /finish-prs and parallel agents
 /.claude/worktrees/
-
-# lode/tmp is session scratch (gate output, handovers); never memory
-/lode/tmp/
