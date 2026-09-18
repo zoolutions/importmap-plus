@@ -1,4 +1,5 @@
 require "importmap/map"
+require "importmap/early_hints"
 
 # Use Rails.application.importmap to access the map
 Rails::Application.send(:attr_accessor, :importmap)
@@ -11,6 +12,7 @@ module Importmap
     config.importmap.cache_sweepers = []
     config.importmap.rescuable_asset_errors = []
     config.importmap.preload_strategy = :all
+    config.importmap.early_hints = true
 
     config.autoload_once_paths = %W( #{root}/app/helpers #{root}/app/controllers )
 

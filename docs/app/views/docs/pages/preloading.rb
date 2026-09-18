@@ -12,6 +12,7 @@ class Views::Docs::Pages::Preloading < DocsUI::Page
     opting_out
     entry_points
     reachable
+    early_hints
   end
 
   private
@@ -162,6 +163,52 @@ class Views::Docs::Pages::Preloading < DocsUI::Page
           Network panel of a page you know is lazy.
         MD
       end
+    end
+  end
+
+  def early_hints
+    DocsUI::Section("103 Early Hints", description: "importmap-plus only.") do
+      md <<~'MD'
+        A modulepreload link is still markup: the browser acts on it once it has
+        parsed that far into the HTML, so every module waits for the response to
+        start streaming. The same list can go out before the response as a
+        [103 Early Hints](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/103)
+        `Link` header, and the fetches begin while your app is still rendering.
+
+        `javascript_importmap_tags` sends one, for exactly the modules it is
+        about to preload:
+      MD
+      DocsUI::Code(<<~HTTP, lexer: :http)
+        HTTP/1.1 103 Early Hints
+        Link: </assets/application-abc.js>; rel=modulepreload, </assets/@hotwired--stimulus-def.js>; rel=modulepreload
+      HTTP
+      md <<~'MD'
+        This is what Rails' own `javascript_include_tag` and `stylesheet_link_tag`
+        already do for their assets, and it needs the same thing they do: a server
+        that puts `rack.early_hints` in the Rack env. Puma does when you ask it to:
+      MD
+      DocsUI::Code(<<~RUBY, filename: "config/puma.rb")
+        early_hints true
+      RUBY
+      md <<~'MD'
+        On a server that doesn't, `send_early_hints` is a no-op — nothing is sent
+        and nothing breaks. Turn it off entirely with:
+      MD
+      DocsUI::Code(<<~RUBY, filename: "config/application.rb")
+        config.importmap.early_hints = false
+      RUBY
+      md <<~'MD'
+        The hinted set is the tags' set, so it narrows with them: `preload: false`,
+        an entry point's own list, and `preload_strategy = :reachable` all decide
+        what gets hinted. The header carries no `integrity` parameter — browsers
+        don't honour one there — and the modulepreload tag in the body still does,
+        which is where the hash has to match.
+
+        A hint is only sent while the response hasn't started. Under
+        `render stream: true` the layout renders after the 200 is already going
+        out, so nothing is hinted for that page — a 103 written then would land
+        in the middle of the body. Rails guards its own early hints the same way.
+      MD
     end
   end
 end
