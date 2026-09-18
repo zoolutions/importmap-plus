@@ -193,6 +193,14 @@ class Importmap::Map
     end
   end
 
+  # Yields every key the map defines and the +MappedFile+ it maps to, with the
+  # `pin_all_from` directories expanded into the keys they contribute — what
+  # #to_json is about to resolve, before a resolver has touched it. Returns an
+  # Enumerator without a block.
+  def each_expanded_package(&block)
+    expanded_packages_and_directories.each(&block)
+  end
+
   private
     MappedDir  = Struct.new(:dir, :path, :under, :preload, :integrity, keyword_init: true)
     MappedFile = Struct.new(:name, :path, :preload, :integrity, keyword_init: true)

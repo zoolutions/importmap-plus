@@ -1281,6 +1281,32 @@ class CommandsTest < ActiveSupport::TestCase
     assert_not_includes content, "integrity:"
   end
 
+  test "doctor command reports a pin the asset pipeline can't resolve and exits non-zero" do
+    out, _err = run_importmap_command_expecting_failure("doctor")
+
+    assert_includes out, %(error    pin "not_there" → nowhere.js: no such asset\n)
+    assert_includes out, "1 error, 0 warnings\n"
+  end
+
+  test "doctor command is quiet and exits zero when the map and the vendored files are sound" do
+    importmap_config('pin "application"')
+    run_importmap_command("pin", "md5@2.2.0")
+
+    out, _err = run_importmap_command("doctor")
+
+    assert_equal "0 errors, 0 warnings\n", out
+  end
+
+  test "doctor command reports a vendored file no pin serves" do
+    importmap_config('pin "application"')
+    File.write("#{@tmpdir}/dummy/vendor/javascript/old-lib.js", "export default 1\n")
+
+    out, _err = run_importmap_command("doctor")
+
+    assert_includes out, "warning  vendor/javascript/old-lib.js isn't pinned by anything\n"
+    assert_includes out, "0 errors, 1 warning\n"
+  end
+
   private
     # A registry that can't answer for a package is the case under test, and
     # the live registry won't produce it on demand. Stub the one method that

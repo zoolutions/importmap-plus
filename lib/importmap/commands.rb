@@ -5,6 +5,7 @@ require "importmap/vendored_graph"
 require "importmap/npm"
 require "importmap/provider_chain"
 require "importmap/integrity"
+require "importmap/doctor"
 
 class Importmap::Commands < Thor
   include Thor::Actions
@@ -173,7 +174,32 @@ class Importmap::Commands < Thor
     puts npm.packages_with_versions.map { |x| x.join(' ') }
   end
 
+  desc "doctor", "Check the importmap and the vendored files for problems"
+  option :online, type: :boolean, default: false, desc: "Also fetch every remote pin and check its integrity hash"
+  def doctor
+    require Rails.root.join("config/environment")
+
+    doctor = Importmap::Doctor.new(
+      importmap: Rails.application.importmap,
+      resolver: ActionController::Base.helpers,
+      root: Rails.root,
+      asset_paths: asset_paths,
+      online: options[:online]
+    )
+
+    doctor.diagnose.each { |finding| puts finding }
+    puts doctor.summary
+
+    exit 1 if doctor.errors?
+  end
+
   private
+    # Where a logical path is looked for on disk. Every engine adds its own, so
+    # a file a gem serves resolves here exactly as it does in a request.
+    def asset_paths
+      Rails.application.config.respond_to?(:assets) ? Rails.application.config.assets.paths : []
+    end
+
     def packager
       @packager ||= Importmap::Packager.new
     end

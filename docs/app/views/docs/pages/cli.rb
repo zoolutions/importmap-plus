@@ -12,6 +12,7 @@ class Views::Docs::Pages::Cli < DocsUI::Page
     pin_options
     update_options
     pristine_options
+    doctor_options
     exit_codes
   end
 
@@ -31,7 +32,8 @@ class Views::Docs::Pages::Cli < DocsUI::Page
           [ [ :code, "audit" ], "Lists known vulnerabilities for the pinned versions.", [ :md, "[Updating](/docs/updating)" ] ],
           [ [ :code, "pristine" ], "Redownloads every vendored package at its pinned version, graph directories and all. Reports the packages it couldn't restore and exits non-zero.", [ :md, "[Updating](/docs/updating)" ] ],
           [ [ :code, "packages" ], "Prints every package with a version, one per line.", [ :md, "[Updating](/docs/updating)" ] ],
-          [ [ :code, "json" ], "Boots the app and prints the resolved import map as JSON.", [ :md, "[Updating](/docs/updating)" ] ]
+          [ [ :code, "json" ], "Boots the app and prints the resolved import map as JSON.", [ :md, "[Updating](/docs/updating)" ] ],
+          [ [ :code, "doctor" ], "Boots the app and checks the import map and the vendored files against what is on disk. Offline unless you pass --online. Exits non-zero on any error.", [ :md, "[Updating](/docs/updating)" ] ]
         ]
       )
       md <<~'MD'
@@ -90,6 +92,17 @@ class Views::Docs::Pages::Cli < DocsUI::Page
     end
   end
 
+  def doctor_options
+    DocsUI::Section("doctor options") do
+      DocsUI::PropTable(
+        [
+          [ [ :code, "--online" ], "Boolean", "false", "Also fetch every remote pin, reporting one the CDN no longer serves and an integrity: hash that doesn't match the bytes it served. Every other check reads only the map and the files on disk." ]
+        ],
+        headers: [ "Option", "Type", "Default", "Description" ]
+      )
+    end
+  end
+
   def exit_codes
     DocsUI::Section("Exit status") do
       DocsUI::Table(
@@ -101,6 +114,7 @@ class Views::Docs::Pages::Cli < DocsUI::Page
           [ [ :code, "update" ], "a named package has no pin, or names are combined with --all; nothing is updated in either case" ],
           [ [ :code, "pristine" ], "a package couldn't be restored the way its pin describes, or a dependency of an esm.run bundle was skipped; the rest are restored" ],
           [ [ :code, "lock / unlock" ], "a named package has no pin, has no version to lock at, or was given with a version" ],
+          [ [ :code, "doctor" ], "any finding is an error; warnings alone exit 0" ],
           [ "any", "a CDN or registry request fails after three attempts; the message names the URL" ]
         ]
       )

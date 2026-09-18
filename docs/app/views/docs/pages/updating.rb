@@ -1,19 +1,21 @@
 # frozen_string_literal: true
 
-# update, outdated, audit, pristine, packages and json — keeping what is
-# vendored current and inspecting it.
+# update, outdated, audit, pristine, doctor, packages and json — keeping what
+# is vendored current, checking it, and inspecting it.
 class Views::Docs::Pages::Updating < DocsUI::Page
   title "Updating & auditing"
   eyebrow "Vendoring"
 
-  def lead = "Update by name or all at once, see what is outdated, check the registry for advisories, and redownload what you have."
+  def lead = "Update by name or all at once, see what is outdated, check the registry for advisories, check the app against its own files, and redownload what you have."
 
   def content
     update
     outdated
     audit
     pristine
+    doctor
     inspecting
+    ci
   end
 
   private
@@ -172,6 +174,105 @@ class Views::Docs::Pages::Updating < DocsUI::Page
         single file (workers)` — and the rest of the packages are still restored;
         the command exits non-zero to say it didn't do all of it, as it does when a
         dependency of an esm.run bundle, pinned on the way, had to be skipped.
+      MD
+    end
+  end
+
+  def doctor
+    DocsUI::Section("doctor") do
+      md <<~'MD'
+        `outdated` and `audit` ask the registry about your packages. `doctor` asks
+        nothing: it boots the app and checks the import map against the files that
+        are actually there, which is the half nothing else covers. Until it existed,
+        a pin whose file had gone missing said so in the browser and nowhere else.
+      MD
+      DocsUI::Code(<<~SHELL, lexer: :console)
+        $ ./bin/importmap doctor
+        error    pin "not_there" → nowhere.js: no such asset
+        error    vendor/javascript/shoelace.js imports "lit/decorators.js", which isn't pinned
+        error    vendor/javascript/popper.js imports "./enums.js" by relative path — run bin/importmap pin @popperjs/core to vendor its files
+        warning  vendor/javascript/old-lib.js isn't pinned by anything
+        warning  "@hotwired/turbo" and "@hotwired/turbo-rails" both resolve to turbo.min.js
+        3 errors, 2 warnings
+      SHELL
+      md <<~'MD'
+        What it looks for, in the order it reports:
+
+        - a pin the asset pipeline can't resolve — the file named by `to:`, or by the
+          key, isn't on any asset path;
+        - a file the map serves that imports a bare specifier no key defines, whether
+          statically or through `import("…")`. A specifier under a pinned package —
+          `lit/decorators.js` where `lit` is pinned — counts as covered;
+        - a vendored file importing a sibling by relative path that isn't beside it,
+          which is what a download from before this gem vendored
+          [file graphs](/docs/pinning) looks like;
+        - a vendored file that isn't an ES module, which a CDN can still hand back;
+        - a file in `vendor/javascript` that no pin serves, including a `.mjs`, which
+          `pin_all_from` never picks up;
+        - two keys resolving to one file or URL, and two vendored files holding one
+          package at two versions — two copies of a module are two modules, each with
+          its own state.
+
+        The first four are errors and make the command exit 1. The last two are
+        warnings: they cost bytes and cause confusion, but the app still runs, so
+        they leave the exit status alone.
+
+        `--online` adds the one check that needs the network — that every remote pin
+        is still served, and still serves the bytes its
+        [integrity hash](/docs/integrity) was computed from:
+      MD
+      DocsUI::Code(<<~SHELL, lexer: :console)
+        $ ./bin/importmap doctor --online
+        error    pin "md5" → https://ga.jspm.io/npm:md5@2.2.0/md5.js: integrity doesn't match what the CDN served
+        error    pin "charenc" → https://ga.jspm.io/npm:charenc@0.0.2/gone.js: the CDN answered 404
+        2 errors, 0 warnings
+      SHELL
+      DocsUI::Callout(:note) do
+        md <<~'MD'
+          `doctor` reports; it never edits `config/importmap.rb` or anything under
+          `vendor/javascript`. [`pin`](/docs/pinning), `unpin` and `pristine` are
+          what fix what it finds — a check that rewrote your files is a check you
+          couldn't run in CI.
+        MD
+      end
+    end
+  end
+
+  def ci
+    DocsUI::Section("Checking the app in CI") do
+      md <<~'MD'
+        The three checks answer different questions, so a pipeline that runs all of
+        them is a pipeline that catches all three kinds of drift:
+      MD
+      DocsUI::Table(
+        [ "Command", "Asks", "Needs the network" ],
+        [
+          [ [ :code, "doctor" ], "Does the import map match the files in this repo?", "No, unless --online" ],
+          [ [ :code, "audit" ], "Is a pinned version known to be vulnerable?", "Yes" ],
+          [ [ :code, "outdated" ], "Has a pinned package moved on?", "Yes" ]
+        ]
+      )
+      DocsUI::Code(<<~'YAML', filename: ".github/workflows/importmap.yml", lexer: :yaml)
+        - name: Check the import map against the repo
+          run: bin/importmap doctor
+
+        - name: Check for advisories
+          run: bin/importmap audit
+
+        - name: Check for updates
+          run: bin/importmap outdated
+      YAML
+      md <<~'MD'
+        `doctor` is the one worth running on every pull request: it is offline, so it
+        is fast and can't fail because a CDN is having a bad afternoon. `audit` and
+        `outdated` both talk to the registry, and `outdated` exits 1 for any unlocked
+        package that has moved — useful on a schedule, noisy on every commit unless
+        you [lock](/docs/locking) the versions you mean to hold.
+
+        Add `--online` to `doctor` on the scheduled run instead of the per-commit
+        one. It fetches every remote pin, which is the same tradeoff: it catches a
+        CDN that has dropped a file or started serving different bytes, and it can't
+        be told apart from a CDN outage while it's happening.
       MD
     end
   end
