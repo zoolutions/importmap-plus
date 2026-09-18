@@ -156,6 +156,22 @@ class Views::Docs::Pages::Updating < DocsUI::Page
         Remote pins are skipped, since there is nothing to redownload. A `--from` or
         `--minify` that changes a package's provenance is recorded on its pin, so the
         next `update` keeps it.
+
+        A package whose pin is followed by a `pin_all_from` line has its file graph
+        crawled again and the directory rebuilt — that is what restoring such a pin
+        means. `pristine` restores, it never re-decides: a package pinned as one
+        file stays one file, and gets a graph only when a `pin` or `update` gives it
+        one. A `--from` that moves such a package to a CDN that bundles takes the
+        graph away again, directory and line together; a `--from` naming a CDN whose
+        files can't be crawled (esm.sh, skypack) can't restore it at all, and is
+        reported rather than leaving an entry whose imports resolve nowhere. See
+        [Packages that ship more than one file](/docs/pinning).
+
+        A package the CDN can no longer serve the way its pin describes is reported
+        and skipped — `Couldn't restore "pdfjs-dist": it can't be vendored as a
+        single file (workers)` — and the rest of the packages are still restored;
+        the command exits non-zero to say it didn't do all of it, as it does when a
+        dependency of an esm.run bundle, pinned on the way, had to be skipped.
       MD
     end
   end

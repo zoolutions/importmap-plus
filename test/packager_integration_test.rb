@@ -49,18 +49,34 @@ class Importmap::PackagerIntegrationTest < ActiveSupport::TestCase
     end
   end
 
-  test "download refuses a live package whose file can't stand alone" do
+  test "download vendors a live package's file graph beside its entry" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = Importmap::Packager.new \
+        Rails.root.join("config/importmap.rb"),
+        vendor_path: Pathname.new(vendor_dir)
+
+      packager.download("react", "https://ga.jspm.io/npm:react@17.0.2/index.js")
+
+      assert_equal 1, packager.last_graph.size
+      entry = File.read(Pathname.new(vendor_dir).join("react.js"))
+      assert_includes entry, %(from"react/cjs/react.production.min")
+      assert_no_match %r{(?:from|import)\s*\(?\s*["']\.}, entry
+      assert File.exist?(Pathname.new(vendor_dir).join("react/cjs/react.production.min.js"))
+    end
+  end
+
+  test "download refuses a live package that needs more than its file graph" do
     Dir.mktmpdir do |vendor_dir|
       packager = Importmap::Packager.new \
         Rails.root.join("config/importmap.rb"),
         vendor_path: Pathname.new(vendor_dir)
 
       error = assert_raises(Importmap::Packager::Unvendorable) do
-        packager.download("react", "https://ga.jspm.io/npm:react@17.0.2/index.js")
+        packager.download("fflate", "https://ga.jspm.io/npm:fflate@0.8.2/esm/browser.js")
       end
 
-      assert_equal [ "relative imports" ], error.reasons
-      assert_not File.exist?(Pathname.new(vendor_dir).join("react.js"))
+      assert_equal [ "workers" ], error.reasons
+      assert_not File.exist?(Pathname.new(vendor_dir).join("fflate.js"))
     end
   end
 end

@@ -22,14 +22,14 @@ class Views::Docs::Pages::Cli < DocsUI::Page
       DocsUI::Table(
         [ "Command", "What it does", "Docs" ],
         [
-          [ [ :code, "pin [PACKAGES]" ], "Resolves each package's version on the npm registry and the package itself on a CDN, downloads it to vendor/javascript (or pins the URL, with --remote or because the file can't stand alone) and writes the pin.", [ :md, "[Pinning](/docs/pinning)" ] ],
-          [ [ :code, "unpin [PACKAGES]" ], "Removes the pin and the vendored file.", [ :md, "[Pinning](/docs/pinning)" ] ],
+          [ [ :code, "pin [PACKAGES]" ], "Resolves each package's version on the npm registry and the package itself on a CDN, downloads it to vendor/javascript with the sibling files it imports (or pins the URL, with --remote or because the download can't stand alone) and writes the pin.", [ :md, "[Pinning](/docs/pinning)" ] ],
+          [ [ :code, "unpin [PACKAGES]" ], "Removes the pin, the vendored file and the graph directory it maps.", [ :md, "[Pinning](/docs/pinning)" ] ],
           [ [ :code, "lock [PACKAGES]" ], "Marks the pins as locked at their current version. No network.", [ :md, "[Locking](/docs/locking)" ] ],
           [ [ :code, "unlock [PACKAGES]" ], "Removes the lock marker. No network.", [ :md, "[Locking](/docs/locking)" ] ],
           [ [ :code, "update [PACKAGES]" ], "Re-pins the outdated packages: the named ones, or every one.", [ :md, "[Updating](/docs/updating)" ] ],
           [ [ :code, "outdated" ], "Lists packages the registry has a newer version of.", [ :md, "[Updating](/docs/updating)" ] ],
           [ [ :code, "audit" ], "Lists known vulnerabilities for the pinned versions.", [ :md, "[Updating](/docs/updating)" ] ],
-          [ [ :code, "pristine" ], "Redownloads every vendored package at its pinned version.", [ :md, "[Updating](/docs/updating)" ] ],
+          [ [ :code, "pristine" ], "Redownloads every vendored package at its pinned version, graph directories and all. Reports the packages it couldn't restore and exits non-zero.", [ :md, "[Updating](/docs/updating)" ] ],
           [ [ :code, "packages" ], "Prints every package with a version, one per line.", [ :md, "[Updating](/docs/updating)" ] ],
           [ [ :code, "json" ], "Boots the app and prints the resolved import map as JSON.", [ :md, "[Updating](/docs/updating)" ] ]
         ]
@@ -53,7 +53,7 @@ class Views::Docs::Pages::Cli < DocsUI::Page
           [ [ :code, "--from CDN" ], "String", "the pin's CDN, else jspm then esm.run then jsdelivr", "jspm, unpkg, jsdelivr, esm.sh, skypack or esm.run. Naming one turns off the fallback chain: that CDN is asked once. Also moves a remote pin to that CDN." ],
           [ [ :code, "--remote" ], "Boolean", "false", "Pin the resolved URL instead of vendoring a download; converts a vendored pin." ],
           [ [ :code, "--integrity / --no-integrity" ], "Boolean", "true", "Fetch a pin that stays remote to write a subresource-integrity hash of it. --no-integrity skips the fetch; integrity: false on the pin turns it off for good. Vendored downloads are unaffected." ],
-          [ [ :code, "--vendor" ], "Boolean", "what the pin says", "Download the package even when its file looks like it needs siblings beside it; converts a pin that was kept remote. Applies only to the packages you name, not the dependencies resolved with them, and --remote wins if you pass both. Recorded on the pin." ],
+          [ [ :code, "--vendor" ], "Boolean", "what the pin says", "Download the entry file on its own even when it looks like it needs siblings beside it, dropping the graph directory it had; converts a pin that was kept remote. Applies only to the packages you name, not the dependencies resolved with them, and --remote wins if you pass both. Recorded on the pin." ],
           [ [ :code, "--minify / --no-minify" ], "Boolean", "what the pin says", "Run the download through bun, esbuild or terser. Recorded on the pin." ],
           [ [ :code, "--lock / --no-lock" ], "Boolean", "what the pin says", "Lock the named packages at this version, or drop their lock. Dependencies are never locked." ],
           [ [ :code, "--force" ], "Boolean", "false", "Re-pin locked packages, keeping each lock at the new version." ],
@@ -97,7 +97,9 @@ class Views::Docs::Pages::Cli < DocsUI::Page
         [
           [ [ :code, "outdated" ], "an unlocked package is outdated" ],
           [ [ :code, "audit" ], "a vulnerability is known for a pinned version" ],
+          [ [ :code, "pin / update" ], "a package was skipped — its directory is in the way, or its CDN failed partway through a crawl — while the rest were pinned; the skipped pin is left exactly as it was" ],
           [ [ :code, "update" ], "a named package has no pin, or names are combined with --all; nothing is updated in either case" ],
+          [ [ :code, "pristine" ], "a package couldn't be restored the way its pin describes, or a dependency of an esm.run bundle was skipped; the rest are restored" ],
           [ [ :code, "lock / unlock" ], "a named package has no pin, has no version to lock at, or was given with a version" ],
           [ "any", "a CDN or registry request fails after three attempts; the message names the URL" ]
         ]

@@ -28,8 +28,9 @@ class Views::Docs::Pages::Provenance < DocsUI::Page
         pin "choices.js" # @11.2.4 (minified)
         pin "stimulus-use" # @0.53.1 (esm.run, minified, locked)
         pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js" # @2.2.0 (locked)
-        pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js" # @2.11.8 (remote: relative imports)
+        pin "fflate", to: "https://ga.jspm.io/npm:fflate@0.8.2/esm/browser.js" # @0.8.2 (remote: workers)
         pin "monaco-editor", to: "monaco-editor.js" # @0.52.2 (vendored)
+        pin_all_from "vendor/javascript/@popperjs--core", under: "@popperjs/core", to: "@popperjs--core" # @2.11.8 (graph of @popperjs/core)
       RUBY
       md <<~'MD'
         The CDN is named when it isn't jspm — including one the fallback chain
@@ -44,6 +45,17 @@ class Views::Docs::Pages::Provenance < DocsUI::Page
         by hand and it is kept as it is. A remote pin has no comment unless it is
         locked or was kept remote; then the version from its URL is written out so
         the detail has something to hang off.
+
+        `graph of <package>` marks the one line that isn't a pin: the `pin_all_from`
+        that maps the file graph downloaded beside a chunked package's entry — see
+        [Packages that ship more than one file](/docs/pinning). It names the package
+        the files came from, which is the prefix their keys are written under, and
+        it is not always the package the entry's own pin names. The entry keeps its
+        plain comment, so `update`, `outdated` and `lock` read the pin exactly as
+        they always did. The graph line is read only by the commands that own the
+        directory — `pin`, `update`, `pristine` and `unpin` — each looking for the
+        directory it wrote, and a `pin_all_from` you wrote yourself carries no such
+        comment and is never touched.
       MD
     end
   end
@@ -68,6 +80,7 @@ class Views::Docs::Pages::Provenance < DocsUI::Page
     DocsUI::Section("Grammar", description: "In case you write or edit the comment by hand.") do
       DocsUI::Code(<<~TEXT, lexer: :plaintext)
         pin "<name>"[, options] # @<version>[ (<detail>[, <detail>...])]
+        pin_all_from "<dir>", under: "<package>"[, options] # @<version> (graph of <package>)
 
         detail := <provider> | minified | vendored | remote | remote: <reason> | locked | locked: <range>
       TEXT

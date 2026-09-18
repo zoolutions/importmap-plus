@@ -50,11 +50,11 @@
   URL and the reason goes on the pin:
 
   ```
-  $ bin/importmap pin @popperjs/core@2.11.8
-  Pinning "@popperjs/core" to https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js (kept remote: relative imports)
+  $ bin/importmap pin fflate@0.8.2
+  Pinning "fflate" to https://ga.jspm.io/npm:fflate@0.8.2/esm/browser.js (kept remote: workers)
   ```
   ```ruby
-  pin "@popperjs/core", to: "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js" # @2.11.8 (remote: relative imports)
+  pin "fflate", to: "https://ga.jspm.io/npm:fflate@0.8.2/esm/browser.js" # @0.8.2 (remote: workers)
   ```
 
   The pin then behaves like any other remote pin — `pin` and `update`
@@ -98,7 +98,80 @@
 
   [kept remote]: https://importmap-plus.zoolutions.llc/docs/pinning
 
+- **`pin` vendors a package's whole file graph, so a chunked package no longer
+  needs a CDN at runtime.** A package whose entry imports a sibling by relative
+  path — `@popperjs/core`, `date-fns`, `lodash-es`, and every package built by
+  a bundler that splits chunks — could not be vendored: the browser resolves
+  `./enums.js` against a digested asset path, and neither Propshaft nor
+  Sprockets rewrites `import` statements. Those packages were [kept remote].
+  `pin` now downloads the closed set of files the entry reaches, rewrites every
+  relative specifier to a bare key, and maps the directory with one
+  `pin_all_from` line:
+
+  ```
+  $ bin/importmap pin @popperjs/core@2.11.8
+  Pinning "@popperjs/core" to vendor/javascript/@popperjs/core.js via download from https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js (with 47 sibling files)
+  ```
+  ```ruby
+  pin "@popperjs/core", to: "@popperjs--core.js" # @2.11.8
+  pin_all_from "vendor/javascript/@popperjs--core", under: "@popperjs/core", to: "@popperjs--core" # @2.11.8 (graph of @popperjs/core)
+  ```
+
+  The entry keeps the flat file and the plain comment it always had, so
+  `update`, `outdated`, `lock` and `pristine` read it exactly as before, and a
+  `config/importmap.rb` written this way still parses under importmap-rails.
+  Bare specifiers are untouched, and a file that is another pin's own entry is
+  rewritten to that pin's key rather than copied, so the browser evaluates each
+  module once. (Two pins of one package do each carry their own copy of a chunk
+  they share; both write it under the same key, so one of the copies is what
+  every importer gets and the other is dead weight.) `unpin` takes the directory and the line with the pin,
+  `pristine` rebuilds the directory, `pin --minify` minifies every file in it,
+  and `pin --vendor` downloads the entry on its own and drops the directory and
+  line it had. A directory the import map doesn't map as one of ours is the
+  app's: `pin` says so, writes nothing rather than renaming it away, and exits
+  non-zero — as it does when a CDN fails partway through a crawl, where the pin
+  and the files it had are left exactly as they were.
+
+  Only jspm, jsDelivr and unpkg are crawled — their URLs say where a package's
+  directory ends. A graph that can't be taken over whole (a relative path that
+  climbs out of the package, a sibling the CDN hasn't got, a sibling that isn't
+  JavaScript, two files that would collapse to one key) keeps the whole package
+  remote, as does a download that also spawns a worker, reads
+  `import.meta.url`, computes an `import()` or names a `.wasm` file. A pin
+  importmap-plus had kept remote for its relative imports is converted back to
+  a download by the next `pin` or `update`, on the CDN its URL names.
+
+  Two things `pin` says out loud rather than doing quietly: a key some other
+  package's graph already maps (a directory wins over a pin, so the pin would
+  do nothing), and a second directory mapping a package one already maps at
+  another version (a file they share resolves to one of them).
+
 ### Fixed
+
+- **A CDN that fails mid-crawl leaves the pin alone.** Vendoring a graph makes
+  one request per file — 250 of them for `date-fns` — so a 503 that outlives
+  the retries is far likelier than it was for a single download. `pin` and
+  `pristine` report it (`Skipping "date-fns": Unexpected response code (503)`)
+  and change nothing, rather than taking it for "this package can't be
+  vendored" and converting a working pin to a remote one, which would delete
+  the very files that make it work.
+- **`pristine` reports a package it can't restore and carries on.** It is the
+  repair command, and a pin whose graph the CDN no longer serves the way the
+  pin describes now raises where nothing used to — unrescued, that ended the
+  whole run with a backtrace and left every package after it unrestored. Each
+  one that fails is reported (`Couldn't restore "pdfjs-dist": it can't be
+  vendored as a single file (workers)`), the rest are restored, and the command
+  exits non-zero to say it didn't do all of it — as it does when a dependency
+  of an esm.run bundle, pinned on the way, had to be skipped.
+- **A download the CDN encoded in a way Net::HTTP can't undo is fetched
+  again.** jspm answers some files with `content-encoding: br` whatever the
+  request advertises, and Net::HTTP decompresses gzip and deflate only:
+  `@popperjs/core@2.11.8/lib/utils/computeAutoPlacement.js` arrived as brotli
+  bytes, which read as invalid UTF-8 and took the source inspection down with
+  `ArgumentError: invalid byte sequence in UTF-8`. `pin` now repeats that one
+  request asking for an unencoded body. It doesn't ask up front: supplying an
+  `Accept-Encoding` at all stops Net::HTTP decoding the gzip it does
+  understand. Inherited from importmap-rails, which downloads the same way.
 
 - **`Importmap::Packager::ServiceError` is a class again.** It was assigned
   `Error.new(Error)` — an *instance* — so `rescue Packager::ServiceError`

@@ -296,7 +296,7 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       def body() { "version" => "9.9.9" }.to_json end
     end.new
 
-    Net::HTTP.stub(:get_response, ->(uri) { requested << uri.to_s; resolved }) do
+    Net::HTTP.stub(:get_response, ->(uri, *) { requested << uri.to_s; resolved }) do
       result = @packager.import("md5", "@hotwired/stimulus@3", "apexcharts@7.1.0/core", from: "esm.run")
 
       assert_equal({
@@ -320,7 +320,7 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       def body() { "version" => "7.1.0" }.to_json end
     end.new
 
-    Net::HTTP.stub(:get_response, ->(uri) { requested << uri.to_s; resolved }) do
+    Net::HTTP.stub(:get_response, ->(uri, *) { requested << uri.to_s; resolved }) do
       result = @packager.import("apexcharts/core", "@scope/pkg/sub", from: "esm.run")
 
       assert_equal({
@@ -496,7 +496,7 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       def code() "200" end
       def body() "export default 1" end
     end.new
-    flaky = ->(_uri) { attempts += 1; raise Errno::ECONNRESET, "SSL_connect" if attempts < 3; response }
+    flaky = ->(_uri, *) { attempts += 1; raise Errno::ECONNRESET, "SSL_connect" if attempts < 3; response }
 
     without_retry_wait do
       Dir.mktmpdir do |vendor_dir|
@@ -512,7 +512,7 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
 
   test "download gives up on a connection that keeps resetting" do
     attempts = 0
-    broken = ->(_uri) { attempts += 1; raise Errno::ECONNRESET, "SSL_connect" }
+    broken = ->(_uri, *) { attempts += 1; raise Errno::ECONNRESET, "SSL_connect" }
 
     without_retry_wait do
       Dir.mktmpdir do |vendor_dir|
@@ -737,7 +737,9 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
         end
       end
 
-      assert_equal [ "relative imports", "workers" ], error.reasons
+      # The graph answers for the relative imports, so only the worker is why
+      # this package still can't be vendored, and only that is reported.
+      assert_equal [ "workers" ], error.reasons
       assert_equal "// the file that works today", File.read(existing)
     end
   end
@@ -774,7 +776,7 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
 
       Net::HTTP.stub(:get_response, response) do
-        packager.download("google-libphonenumber", "https://cdn.jsdelivr.net/npm/google-libphonenumber@3.2.42/dist/libphonenumber.js", force: true)
+        packager.download("google-libphonenumber", "https://cdn.jsdelivr.net/npm/google-libphonenumber@3.2.42/dist/libphonenumber.js", force: true, graph: false)
       end
 
       assert_includes File.read("#{vendor_dir}/google-libphonenumber.js"), "module.exports = f"
@@ -830,7 +832,7 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
 
       dependencies = Net::HTTP.stub(:get_response, response) do
-        packager.download("@popperjs/core", "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js", force: true)
+        packager.download("@popperjs/core", "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js", force: true, graph: false)
       end
 
       assert_equal [], dependencies
@@ -947,7 +949,7 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     Dir.mktmpdir do |vendor_dir|
       packager = Importmap::Packager.new(Rails.root.join("config/importmap.rb"), vendor_path: Pathname.new(vendor_dir))
 
-      body = Net::HTTP.stub(:get_response, ->(_uri) { response }) do
+      body = Net::HTTP.stub(:get_response, ->(_uri, *) { response }) do
         packager.fetch_remote("https://ga.jspm.io/npm:md5@2.2.0/md5.js")
       end
 
@@ -958,7 +960,7 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
 
   test "fetch_remote retries a reset connection and then raises" do
     attempts = 0
-    broken = ->(_uri) { attempts += 1; raise Errno::ECONNRESET, "SSL_connect" }
+    broken = ->(_uri, *) { attempts += 1; raise Errno::ECONNRESET, "SSL_connect" }
 
     without_retry_wait do
       error = Net::HTTP.stub(:get_response, broken) do
@@ -976,7 +978,7 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       def body() "" end
     end.new
 
-    error = Net::HTTP.stub(:get_response, ->(_uri) { response }) do
+    error = Net::HTTP.stub(:get_response, ->(_uri, *) { response }) do
       assert_raises(Importmap::Packager::HTTPError) { @packager.fetch_remote("https://ga.jspm.io/npm:md5@2.2.0/md5.js") }
     end
 
@@ -986,7 +988,7 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
   test "a download kept remote carries the hash of the bytes it fetched, so nothing fetches them twice" do
     unvendorable = Class.new do
       def code() "200" end
-      def body() %(export{top}from"./enums.js") end
+      def body() %(export default new Worker(u)) end
     end.new
     not_es_module = Class.new do
       def code() "200" end
@@ -1012,7 +1014,7 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
   test "a kept-remote esm.run bundle is hashed as the CDN serves it, not as rewritten for vendoring" do
     response = Class.new do
       def code() "200" end
-      def body() %(import"/npm/dep@1.0.0/+esm";export{top}from"./enums.js") end
+      def body() %(import"/npm/dep@1.0.0/+esm";export default new Worker(u)) end
     end.new
 
     Dir.mktmpdir do |vendor_dir|
@@ -1023,12 +1025,97 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
       end
 
       assert_equal Importmap::Integrity.for(response.body), error.integrity
-      assert_not_equal Importmap::Integrity.for(%(import"dep";export{top}from"./enums.js")), error.integrity
+      assert_not_equal Importmap::Integrity.for(%(import"dep";export default new Worker(u))), error.integrity
+    end
+  end
+
+  # jspm answers some files brotli-encoded however the request advertises
+  # itself, and Net::HTTP decompresses gzip and deflate only — so the body
+  # arrives as bytes no source file has.
+  test "fetch_remote asks again for an unencoded body when the CDN encoded one Net::HTTP can't read" do
+    sent = []
+    encoded = Struct.new(:code, :body).new("200", "\x1b!\x06\x00\x8c\xd3".dup.force_encoding("ASCII-8BIT"))
+    plain   = Struct.new(:code, :body).new("200", "export default 1")
+
+    Net::HTTP.stub(:get_response, ->(_uri, headers = nil) { sent << headers; sent.size == 1 ? encoded : plain }) do
+      assert_equal "export default 1", @packager.fetch_remote("https://ga.jspm.io/npm:md5@2.2.0/md5.js")
+    end
+
+    assert_equal [ nil, { "Accept-Encoding" => "identity" } ], sent
+  end
+
+  # Supplying an Accept-Encoding at all stops Net::HTTP decoding the gzip it
+  # does understand, so a body it could read is never asked for twice.
+  test "fetch_remote lets Net::HTTP negotiate an encoding it can read" do
+    sent = []
+    response = Struct.new(:code, :body).new("200", "export default 1")
+
+    Net::HTTP.stub(:get_response, ->(_uri, headers = nil) { sent << headers; response }) do
+      @packager.fetch_remote("https://ga.jspm.io/npm:md5@2.2.0/md5.js")
+    end
+
+    assert_equal [ nil ], sent
+  end
+
+  test "fetch_remote says so when a body stays unreadable after asking for it plain" do
+    encoded = Struct.new(:code, :body).new("200", "\x1b!\x06\x00\x8c\xd3".dup.force_encoding("ASCII-8BIT"))
+
+    error = Net::HTTP.stub(:get_response, ->(_uri, _headers = nil) { encoded }) do
+      assert_raises(Importmap::Packager::HTTPError) { @packager.fetch_remote("https://ga.jspm.io/npm:md5@2.2.0/md5.js") }
+    end
+
+    assert_match %r{Can't read https://ga\.jspm\.io/npm:md5@2\.2\.0/md5\.js}, error.message
+  end
+
+  # A sibling the CDN hasn't got means the crawl can't own the package. A
+  # sibling the CDN *fails* on says nothing about the package: raising keeps
+  # the pin it has, where an Unvendorable would convert it to a remote pin and
+  # delete the files that work today.
+  # The entry's partial waits through the whole graph write, so Ctrl-C there is
+  # the case a bare rescue misses. The entry is written first and cleans up
+  # its own partial, so the interrupt has to land on a *sibling* — the second
+  # file through the stub — to reach the cleanup under test.
+  test "download leaves no entry partial behind when the write is interrupted" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir)
+      files = 0
+
+      stub_cdn(CHUNKED_PACKAGE) do
+        packager.stub(:remove_sourcemap_comment_from, ->(source) { (files += 1) == 1 ? source : raise(Interrupt) }) do
+          assert_raises(Interrupt) { packager.download("pkg", "#{GRAPH_ROOT}dist/index.js") }
+        end
+      end
+
+      assert_equal 2, files, "expected the interrupt to land on the first sibling"
+      assert_empty Dir.glob("#{vendor_dir}/*.download")
+      assert_not File.exist?("#{vendor_dir}/pkg.js")
+    end
+  end
+
+  test "download raises rather than keeping a package remote when the CDN fails on a sibling" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir)
+      entry = "#{GRAPH_ROOT}dist/index.js"
+      responder = ->(uri, _headers = nil) do
+        body = CHUNKED_PACKAGE[uri.to_s]
+        next Struct.new(:code, :body).new("200", body.dup.force_encoding("ASCII-8BIT")) if uri.to_s == entry
+
+        Struct.new(:code, :body).new("503", "Service unavailable")
+      end
+
+      without_retry_wait do
+        Net::HTTP.stub(:get_response, responder) do
+          assert_raises(Importmap::Packager::HTTPError) { packager.download("pkg", entry) }
+        end
+      end
+
+      assert_not File.exist?("#{vendor_dir}/pkg.js")
+      assert_empty Dir.glob("#{vendor_dir}/*.download")
     end
   end
 
   test "fetch_remote wraps a failure the retry doesn't know as its own HTTPError" do
-    error = Net::HTTP.stub(:get_response, ->(_uri) { raise Zlib::GzipFile::Error, "not in gzip format" }) do
+    error = Net::HTTP.stub(:get_response, ->(_uri, *) { raise Zlib::GzipFile::Error, "not in gzip format" }) do
       assert_raises(Importmap::Packager::HTTPError) { @packager.fetch_remote("https://ga.jspm.io/npm:md5@2.2.0/md5.js") }
     end
 
@@ -1052,7 +1139,294 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     assert_not packager.integrity_hash?("missing")
   end
 
+  test "download vendors the file graph a chunked package needs and rewrites its entry" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir)
+
+      stub_cdn(CHUNKED_PACKAGE) { packager.download("pkg", "#{GRAPH_ROOT}dist/index.js") }
+
+      assert_equal %(import u from"pkg/dist/util";import c from"pkg/_/chunk";export{u,c}),
+        File.read("#{vendor_dir}/pkg.js").lines.last
+      assert_equal %(export default "café"), File.read("#{vendor_dir}/pkg/dist/util.js")
+      assert_equal %(export default 2), File.read("#{vendor_dir}/pkg/_/chunk.js")
+      assert_equal 2, packager.last_graph.size
+    end
+  end
+
+  test "download replaces the whole graph directory, so a file the package dropped is gone" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir, %(pin_all_from "#{vendor_dir}/pkg", under: "pkg" # @1.0.0 (graph of pkg)\n))
+      FileUtils.mkdir_p("#{vendor_dir}/pkg/dist")
+      File.write("#{vendor_dir}/pkg/dist/gone.js", "export default 0")
+
+      stub_cdn(CHUNKED_PACKAGE) { packager.download("pkg", "#{GRAPH_ROOT}dist/index.js") }
+
+      assert_not File.exist?("#{vendor_dir}/pkg/dist/gone.js")
+      assert File.exist?("#{vendor_dir}/pkg/dist/util.js")
+    end
+  end
+
+  # A directory this gem didn't write is the app's: `pin date-fns` must not
+  # rename away a vendor/javascript/date-fns the app has kept for years.
+  test "download refuses to replace a directory the import map doesn't map as ours" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir, %(pin_all_from "#{vendor_dir}/pkg", under: "pkg"\n))
+      FileUtils.mkdir_p("#{vendor_dir}/pkg")
+      File.write("#{vendor_dir}/pkg/theirs.js", "// hand vendored, years ago")
+
+      stub_cdn(CHUNKED_PACKAGE) do
+        assert_raises(Importmap::VendoredGraph::Occupied) { packager.download("pkg", "#{GRAPH_ROOT}dist/index.js") }
+      end
+
+      assert_equal "// hand vendored, years ago", File.read("#{vendor_dir}/pkg/theirs.js")
+      assert_not File.exist?("#{vendor_dir}/pkg.js")
+      assert_empty Dir.glob("#{vendor_dir}/*.download")
+    end
+  end
+
+  # pristine restores a pin as it stands, but an entry that still imports
+  # siblings is not servable because pristine asked for it: a --from that moves
+  # a graphed package to a CDN whose files can't be crawled would otherwise
+  # write the entry unrewritten and delete the directory it resolves through.
+  test "download checks a forced entry whose pin maps a graph the CDN didn't give" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir, %(pin_all_from "#{vendor_dir}/pkg", under: "pkg" # @1.0.0 (graph of pkg)\n))
+      source = %(export{default}from"./util.js")
+
+      error = stub_cdn({ "https://esm.sh/pkg@1.0.0/index.js" => source }) do
+        assert_raises(Importmap::Packager::Unvendorable) do
+          packager.download("pkg", "https://esm.sh/pkg@1.0.0/index.js", force: true, graph: true)
+        end
+      end
+
+      assert_equal [ "relative imports" ], error.reasons
+      assert_not File.exist?("#{vendor_dir}/pkg.js")
+    end
+  end
+
+  test "download keeps a package remote for the reasons its graph can't answer for" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir)
+      source = %(import u from"./util.js";export default new Worker(u))
+
+      error = stub_cdn({ "#{GRAPH_ROOT}dist/index.js" => source }) do
+        assert_raises(Importmap::Packager::Unvendorable) { packager.download("pkg", "#{GRAPH_ROOT}dist/index.js") }
+      end
+
+      assert_equal [ "workers" ], error.reasons
+      assert_equal Importmap::Integrity.for(source), error.integrity
+      assert_empty Dir.glob("#{vendor_dir}/*")
+    end
+  end
+
+  test "download leaves the graph an app has when the crawl refuses" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir)
+      FileUtils.mkdir_p("#{vendor_dir}/pkg/dist")
+      File.write("#{vendor_dir}/pkg/dist/util.js", "// the file that works today")
+
+      stub_cdn({ "#{GRAPH_ROOT}dist/index.js" => %(export{default}from"./gone.js") }) do
+        assert_raises(Importmap::Packager::Unvendorable) { packager.download("pkg", "#{GRAPH_ROOT}dist/index.js") }
+      end
+
+      assert_equal "// the file that works today", File.read("#{vendor_dir}/pkg/dist/util.js")
+      assert_empty Dir.glob("#{vendor_dir}/*.download")
+    end
+  end
+
+  test "download without a graph vendors the entry alone and drops the directory its pin maps" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir, %(pin_all_from "#{vendor_dir}/pkg", under: "pkg" # @1.0.0 (graph of pkg)\n))
+      FileUtils.mkdir_p("#{vendor_dir}/pkg")
+      File.write("#{vendor_dir}/pkg/stale.js", "export default 0")
+
+      stub_cdn(CHUNKED_PACKAGE) { packager.download("pkg", "#{GRAPH_ROOT}dist/index.js", force: true, graph: false) }
+
+      assert_includes File.read("#{vendor_dir}/pkg.js"), %(from"./util.js")
+      assert_nil packager.last_graph
+      assert_not File.exist?("#{vendor_dir}/pkg")
+    end
+  end
+
+  # An app's own vendor/javascript/<name> directory is not this gem's to
+  # delete: only a directory the import map maps was written by a download.
+  test "download without a graph leaves a directory the import map doesn't map" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir, %(pin_all_from "#{vendor_dir}/pkg", under: "pkg"\n))
+      FileUtils.mkdir_p("#{vendor_dir}/pkg")
+      File.write("#{vendor_dir}/pkg/theirs.js", "export default 0")
+
+      stub_cdn(CHUNKED_PACKAGE) { packager.download("pkg", "#{GRAPH_ROOT}dist/index.js", force: true, graph: false) }
+
+      assert_equal "export default 0", File.read("#{vendor_dir}/pkg/theirs.js")
+    end
+  end
+
+  # force skips the single-file check, not the crawl: pristine passes it to
+  # restore a pin exactly as it stands, graph directory and all.
+  test "download crawls the graph of a forced download too" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir)
+
+      stub_cdn(CHUNKED_PACKAGE) { packager.download("pkg", "#{GRAPH_ROOT}dist/index.js", force: true) }
+
+      assert_equal 2, packager.last_graph.size
+      assert File.exist?("#{vendor_dir}/pkg/dist/util.js")
+    end
+  end
+
+  test "download rewrites a graph file another pin already vendored to that pin's key" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir, %(pin "pkg"\n))
+      File.write("#{vendor_dir}/pkg.js", "// pkg@1.0.0 downloaded from #{GRAPH_ROOT}dist/index.js\n\nexport default 1")
+
+      stub_cdn(CHUNKED_PACKAGE.merge("#{GRAPH_ROOT}dist/lightbox.js" => %(export{default}from"./index.js"))) do
+        packager.download("pkg/lightbox", "#{GRAPH_ROOT}dist/lightbox.js")
+      end
+
+      assert_equal %(export{default}from"pkg"), File.read("#{vendor_dir}/pkg--lightbox.js").lines.last
+      assert_equal 0, packager.last_graph.size
+      assert_not File.exist?("#{vendor_dir}/pkg--lightbox/dist/index.js")
+    end
+  end
+
+  test "download minifies every file of the graph and heads only the entry" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir)
+
+      with_minifier(->(source) { "//min\n#{source}" }) do
+        stub_cdn(CHUNKED_PACKAGE) { packager.download("pkg", "#{GRAPH_ROOT}dist/index.js", minify: true) }
+      end
+
+      assert_includes File.read("#{vendor_dir}/pkg/dist/util.js"), "//min"
+      assert_includes File.read("#{vendor_dir}/pkg.js"), "downloaded from #{GRAPH_ROOT}dist/index.js (minified)"
+      assert_not_includes File.read("#{vendor_dir}/pkg/dist/util.js"), "downloaded from"
+    end
+  end
+
+  # The CDN's own version segment, not a semver-looking string elsewhere in the
+  # URL: a line rendered with a blank version is one no command can find again.
+  test "graph_pin_for takes the version from the package the URL names" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir)
+
+      assert_equal %(pin_all_from "#{vendor_dir}/pkg", under: "pkg" # @latest (graph of pkg)),
+        packager.graph_pin_for("pkg", "https://ga.jspm.io/npm:pkg@latest/index.js")
+      assert_equal %(pin_all_from "#{vendor_dir}/pkg", under: "pkg" # @2 (graph of pkg)),
+        packager.graph_pin_for("pkg", "https://ga.jspm.io/npm:pkg@2/index.js")
+      assert_equal %(pin_all_from "#{vendor_dir}/pkg", under: "pkg" # @1.0.0-beta.1 (graph of pkg)),
+        packager.graph_pin_for("pkg", "https://ga.jspm.io/npm:pkg@1.0.0-beta.1/dist/index.js")
+      # The package's own segment, not the first semver-looking thing in the
+      # path: a chunk filename must not supply the version.
+      assert_equal %(pin_all_from "#{vendor_dir}/pkg", under: "pkg" # @2 (graph of pkg)),
+        packager.graph_pin_for("pkg", "https://ga.jspm.io/npm:pkg@2/chunks/dep@9.9.9/index.js")
+
+      # Whatever the version looks like, the line has to be findable again.
+      line = packager.graph_pin_for("pkg", "https://ga.jspm.io/npm:pkg@latest/index.js")
+      assert_match packager.vendored_graph("pkg").line_regexp, line
+      assert_equal [ [ "#{vendor_dir}/pkg", "pkg", "latest" ] ], Importmap::VendoredGraph.mappings_in(line)
+    end
+  end
+
+  test "graph_pin_for maps the directory under the package the CDN URL names" do
+    Dir.mktmpdir do |vendor_dir|
+      packager = graph_packager(vendor_dir)
+
+      assert_equal %(pin_all_from "#{vendor_dir}/pkg", under: "pkg" # @1.0.0 (graph of pkg)),
+        packager.graph_pin_for("pkg", "#{GRAPH_ROOT}dist/index.js")
+      assert_equal %(pin_all_from "#{vendor_dir}/@popperjs--core", under: "@popperjs/core", to: "@popperjs--core" # @2.11.8 (graph of @popperjs/core)),
+        packager.graph_pin_for("@popperjs/core", "https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js")
+      assert_equal %(pin_all_from "#{vendor_dir}/buffer", under: "@jspm/core", to: "buffer", preload: false # @2.1.0 (graph of @jspm/core)),
+        packager.graph_pin_for("buffer", "https://ga.jspm.io/npm:@jspm/core@2.1.0/nodelibs/browser/buffer.js", false)
+    end
+  end
+
+  test "remove_graph drops the line that maps a directory and the directory with it" do
+    Dir.mktmpdir do |vendor_dir|
+      importmap = create_temp_importmap(<<~RUBY)
+        pin "pkg" # @1.0.0
+        pin_all_from "#{vendor_dir}/pkg", under: "pkg" # @1.0.0 (graph of pkg)
+        pin_all_from "#{vendor_dir}/other", under: "other" # @1.0.0 (graph of other)
+      RUBY
+      packager = Importmap::Packager.new(importmap, vendor_path: Pathname.new(vendor_dir))
+      FileUtils.mkdir_p("#{vendor_dir}/pkg")
+
+      assert packager.vendored_graph("pkg").mapped?
+      assert_not packager.vendored_graph("nothing").mapped?
+
+      packager.remove_graph("pkg")
+
+      assert_not packager.vendored_graph("pkg").mapped?
+      assert_not File.exist?("#{vendor_dir}/pkg")
+      assert_includes File.read(importmap), %(pin_all_from "#{vendor_dir}/other")
+      assert_includes File.read(importmap), %(pin "pkg" # @1.0.0)
+    end
+  end
+
+  test "remove takes the graph directory and its line with the pin" do
+    Dir.mktmpdir do |vendor_dir|
+      importmap = create_temp_importmap(<<~RUBY)
+        pin "pkg" # @1.0.0
+        pin_all_from "#{vendor_dir}/pkg", under: "pkg" # @1.0.0 (graph of pkg)
+      RUBY
+      packager = Importmap::Packager.new(importmap, vendor_path: Pathname.new(vendor_dir))
+      FileUtils.mkdir_p("#{vendor_dir}/pkg")
+      File.write("#{vendor_dir}/pkg.js", "export default 1")
+
+      packager.remove("pkg")
+
+      assert_equal "", File.read(importmap).strip
+      assert_not File.exist?("#{vendor_dir}/pkg")
+      assert_not File.exist?("#{vendor_dir}/pkg.js")
+      # The same instance is asked again: #importmap is memoised, and a caller
+      # that removes a pin and then looks for it must not see the old file.
+      assert_not packager.packaged?("pkg")
+    end
+  end
+
+  test "fetch_remote answers nil for a file the CDN hasn't got only when the caller allows it" do
+    missing = Class.new { def code() "404" end; def body() "" end }.new
+
+    Net::HTTP.stub(:get_response, missing) do
+      assert_nil @packager.fetch_remote("https://ga.jspm.io/npm:pkg@1.0.0/gone.js", allow_missing: true)
+      assert_raises(Importmap::Packager::HTTPError) { @packager.fetch_remote("https://ga.jspm.io/npm:pkg@1.0.0/gone.js") }
+    end
+  end
+
   private
+    GRAPH_ROOT = "https://ga.jspm.io/npm:pkg@1.0.0/".freeze
+
+    CHUNKED_PACKAGE = {
+      "#{GRAPH_ROOT}dist/index.js" => %(import u from"./util.js";import c from"../_/chunk.js";export{u,c}),
+      "#{GRAPH_ROOT}dist/util.js"  => %(export default "café"),
+      "#{GRAPH_ROOT}_/chunk.js"    => %(export default 2)
+    }.freeze
+
+    def graph_packager(vendor_dir, importmap = "")
+      Importmap::Packager.new(create_temp_importmap(importmap), vendor_path: Pathname.new(vendor_dir))
+    end
+
+    # One lambda for every URL the crawl asks for, so a file the fake package
+    # doesn't have answers 404 the way a CDN does.
+    def stub_cdn(files, &block)
+      responder = ->(uri, *) do
+        body = files[uri.to_s]
+        # Net::HTTP tags a body ASCII-8BIT however the file is encoded, and a
+        # published bundle has bytes above 0x7f in it.
+        Struct.new(:code, :body).new(body ? "200" : "404", body.to_s.dup.force_encoding("ASCII-8BIT"))
+      end
+
+      Net::HTTP.stub(:get_response, responder, &block)
+    end
+
+    def with_minifier(minifier)
+      original = Importmap::Packager.minifier
+      Importmap::Packager.minifier = minifier
+      yield
+    ensure
+      Importmap::Packager.minifier = original
+    end
+
     def without_retry_wait
       original = Importmap::Packager.retry_wait
       Importmap::Packager.retry_wait = 0

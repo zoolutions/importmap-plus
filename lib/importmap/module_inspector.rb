@@ -137,11 +137,14 @@ class Importmap::ModuleInspector
     statements.match?(ESM_STATEMENT_REGEXP) || !code.match?(COMMONJS_REGEXP)
   end
 
-  private
-    def code
-      @code ||= without_block_comments
-    end
+  # The source with its block comments discounted: what every pattern above is
+  # matched against, and what Importmap::PackageGraph reads its specifiers out
+  # of, so the crawl follows exactly the imports this class counted.
+  def code
+    @code ||= without_block_comments
+  end
 
+  private
     def statements
       @statements ||= without_block_comments(statements_only: true)
     end

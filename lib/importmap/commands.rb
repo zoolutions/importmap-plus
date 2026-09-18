@@ -1,5 +1,7 @@
 require "thor"
 require "importmap/packager"
+require "importmap/package_graph"
+require "importmap/vendored_graph"
 require "importmap/npm"
 require "importmap/provider_chain"
 require "importmap/integrity"
@@ -35,6 +37,8 @@ class Importmap::Commands < Thor
                                 lock: requested.include?(package) ? options[:lock] : nil,
                                 vendor: requested.include?(package) && options[:vendor])
     end
+
+    exit 1 if skipped.any?
   end
 
   desc "lock [*PACKAGES]", "Lock packages at their pinned version"
@@ -65,6 +69,7 @@ class Importmap::Commands < Thor
   option :minify, type: :boolean, desc: "Minify every download; defaults to what each vendored file already is"
   def pristine
     packages = prepare_packages_with_versions
+    unrestored = []
 
     for_each_import_grouped_by_provider(packages, env: options[:env], from: options[:from]) do |package, url|
       if packager.remote_pin?(package)
@@ -72,17 +77,13 @@ class Importmap::Commands < Thor
       elsif (resolved = version_drift_of_locked(package, url))
         puts %(Skipping "#{package}" (locked at #{packager.pin_provenance(package)[:version]}, CDN resolved #{resolved}))
       else
-        minify = options[:minify].nil? ? vendored_minified?(package) : options[:minify]
-
-        puts %(Downloading "#{package}" to #{packager.vendor_path}/#{package}.js from #{url}#{" (minified)" if minify})
-
-        # pristine restores what each pin already says, so a package vendored
-        # before the single-file check existed — or on purpose with --vendor —
-        # is downloaded again rather than converted. pin is where that is decided.
-        pin_esm_run_dependencies packager.download(package, url, minify: minify, force: true), minify: minify
-        record_provenance(package, url, minify) if provenance_changed?(package, url, minify)
+        unrestored << package unless restore_package(package, url)
       end
     end
+
+    # skipped: an esm.run bundle's dependency is pinned on the way, and one the
+    # CDN failed on is skipped the same way pin skips it.
+    exit 1 if unrestored.any? || skipped.any?
   end
 
   desc "json", "Show the full importmap in json"
@@ -164,7 +165,7 @@ class Importmap::Commands < Thor
       end
     end
 
-    exit 1 if unchecked_packages.any?
+    exit 1 if unchecked_packages.any? || skipped.any?
   end
 
   desc "packages", "Print out packages with version numbers"
@@ -191,9 +192,16 @@ class Importmap::Commands < Thor
       # A pin vendored on purpose stays vendored: without this an update would
       # inspect the download again, refuse it again, and quietly undo --vendor.
       vendor ||= packager.vendored?(package)
+      # A pin kept remote only because its file imports siblings is vendored
+      # again now that the whole graph can be. The reason its comment records
+      # is one this gem has since learned to answer, and without this an app
+      # that hit the check once would never see the fix arrive.
+      regraph = packager.remote_reason(package) == Importmap::PackageGraph::REASON
       existing_url = existing_options[:to] if existing_options[:to].to_s.match?(Importmap::Packager::REMOTE_URL_REGEXP)
 
-      if existing_url && !vendor
+      report_graph_shadowing(package)
+
+      if existing_url && !vendor && !regraph
         repin_remote_package(package, url, existing_url, preload, env: env, from: from, integrity: integrity, locked: locked)
       elsif remote
         pin_remote_package(package, url, preload, integrity: integrity, locked: locked)
@@ -208,17 +216,85 @@ class Importmap::Commands < Thor
       minify = vendored_minified?(package) if minify.nil?
 
       begin
-        dependencies = packager.download(package, url, minify: minify, force: vendor)
+        dependencies = packager.download(package, url, minify: minify, force: vendor, graph: !vendor)
       rescue Importmap::Packager::Unvendorable, Importmap::Packager::NotAnEsModule => refusal
         return pin_remote_package(package, url, preload, integrity: integrity, locked: locked, kept_remote: refusal)
+      rescue Importmap::VendoredGraph::Occupied => occupied
+        # Nothing is written, including the pin: the app is asked to move its
+        # own directory rather than told afterwards that this gem took it.
+        return skip(package, occupied.message)
+      rescue Importmap::Packager::Error => error
+        # The CDN couldn't be read once its retries were spent. The pin is left
+        # exactly as it was: a package that vendors today must not turn into a
+        # remote pin — losing the files that make it work — because of a 503.
+        return skip(package, error.message)
       end
 
-      puts %(Pinning "#{package}" to #{packager.vendor_path}/#{package}.js via download from #{url}#{" (minified)" if minify})
+      graph = packager.last_graph
+
+      puts %(Pinning "#{package}" to #{packager.vendor_path}/#{package}.js via download from #{url}#{" (minified)" if minify}#{graph_note(graph)})
 
       update_importmap_with_pin(package, packager.vendored_pin_for(package, url, preload, minify: minify, integrity: integrity, locked: locked, vendored: vendor))
+
+      # The line that maps the graph directory goes with the download: a
+      # package that stopped needing one takes its line and its files with it,
+      # or pin_all_from keeps mapping files nothing imports.
+      if graph
+        update_importmap_with_graph_pin(package, packager.graph_pin_for(package, url, preload))
+      else
+        packager.remove_graph(package)
+      end
+
       report_lock(package) if locked
 
       pin_esm_run_dependencies(dependencies, preload: preload, minify: minify)
+    end
+
+    # A package that couldn't be pinned has said why on stdout; this is what
+    # makes the exit code say so too, or `pin x && git commit` commits a tree
+    # with no pin in it. Kept on the command rather than returned up through
+    # pin_package, because an esm.run bundle's dependencies are pinned two
+    # calls down and are skipped the same way.
+    def skip(package, reason)
+      puts %(Skipping "#{package}": #{reason})
+      skipped << package
+    end
+
+    def skipped
+      @skipped ||= []
+    end
+
+    # pristine restores what each pin already says, so a package vendored
+    # before the single-file check existed — or on purpose with --vendor — is
+    # downloaded again rather than converted, and only a pin that already maps
+    # a graph directory has one crawled again. pin is where both are decided.
+    #
+    # A package the CDN can no longer serve the way its pin describes stops
+    # that one package being restored, not the run: pristine is the repair
+    # command, and the packages after it in the batch still need repairing.
+    def restore_package(package, url)
+      minify = options[:minify].nil? ? vendored_minified?(package) : options[:minify]
+
+      puts %(Downloading "#{package}" to #{packager.vendor_path}/#{package}.js from #{url}#{" (minified)" if minify})
+
+      dependencies = packager.download(package, url, minify: minify, force: true,
+                                                     graph: packager.vendored_graph(package).mapped?)
+
+      # A download that came back as one file — a --from that moved the package
+      # to a bundling CDN — takes its graph line with it, or pin_all_from is
+      # left mapping the directory that download just removed.
+      packager.remove_graph(package) unless packager.last_graph
+
+      pin_esm_run_dependencies dependencies, minify: minify
+      record_provenance(package, url, minify) if provenance_changed?(package, url, minify)
+
+      true
+    rescue Importmap::Packager::Unvendorable, Importmap::Packager::NotAnEsModule => refusal
+      puts %(Couldn't restore "#{package}": it #{refusal.message})
+      false
+    rescue Importmap::Packager::Error => error
+      puts %(Couldn't restore "#{package}": #{error.message})
+      false
     end
 
     def lock_package(spec)
@@ -477,9 +553,21 @@ class Importmap::Commands < Thor
       key  = packager.package_key_for(spec)
       name = packager.package_name_for(key)
 
-      return packager.pin_provenance(key)&.dig(:provider) if key == name
+      return packager.pin_provenance(key)&.dig(:provider) || kept_remote_provider(key) if key == name
 
       provider_of_pin(key) || provider_of_pin(name)
+    end
+
+    # A pin the single-file check kept remote records its CDN only in its URL:
+    # the comment's provider slot is taken by the reason it was kept. Asking the
+    # URL keeps such a pin on its own CDN when it is re-pinned — and, now that a
+    # chunked package can be vendored whole, when it converts to a download.
+    # A pin the app made remote itself carries no reason and is left to
+    # repin_remote_package, which resolves it from its URL as it always did.
+    def kept_remote_provider(key)
+      return unless packager.remote_reason(key)
+
+      packager.provider_for_url(packager.extract_existing_pin_options(key).dig(key, :to))
     end
 
     # A vendored pin records its CDN in the version comment; a remote one
@@ -512,6 +600,7 @@ class Importmap::Commands < Thor
       remote = kept_remote&.reasons&.first || packager.remote_reason(package)
 
       packager.remove_existing_package_file(package)
+      packager.remove_graph(package)
 
       update_importmap_with_pin(package, packager.pin_for(package, url, preloads: preload, integrity: integrity,
                                                            locked: locked, remote: remote))
@@ -571,8 +660,52 @@ class Importmap::Commands < Thor
       nil
     end
 
+    # Importmap::Map expands a directory over the packages, so a key some other
+    # package's graph already maps resolves to that file whatever the pin about
+    # to be written says. Say so rather than write a line that does nothing.
+    def report_graph_shadowing(package)
+      mapped = Importmap::VendoredGraph.mapping_for(importmap_source, package)
+
+      puts %(Note: the graph of "#{mapped}" already maps "#{package}", and a mapped directory wins over a pin) if mapped
+    end
+
+    # Two directories mapping one package write their files under the same
+    # prefix, so at two versions the app gets one of them for every file the
+    # two share, and which one depends on the order of the lines.
+    def report_graph_conflict(pin)
+      directory, under, version = Importmap::VendoredGraph.mappings_in(pin).first
+      conflict = Importmap::VendoredGraph.conflict_in(importmap_source, under: under, version: version, except: directory)
+
+      puts %(Note: #{conflict.first} already maps "#{under}" at #{conflict.last}; a file both carry resolves to one of them) if conflict
+    end
+
+    def importmap_source
+      File.exist?("config/importmap.rb") ? File.read("config/importmap.rb") : ""
+    end
+
+    # How many files came down with the entry, so an app can see that a chunked
+    # package was vendored whole rather than as the one file that would 404.
+    def graph_note(graph)
+      %( (with #{graph.size} sibling #{"file".pluralize(graph.size)})) if graph && graph.size.positive?
+    end
+
+    def update_importmap_with_graph_pin(package, pin)
+      report_graph_conflict(pin)
+
+      if packager.vendored_graph(package).mapped?
+        gsub_file("config/importmap.rb", packager.vendored_graph(package).line_regexp, pin, verbose: false)
+      else
+        append_to_file("config/importmap.rb", "#{pin}\n", verbose: false)
+      end
+
+      packager.reload!
+    end
+
     def update_importmap_with_pin(package, pin)
       new_pin = "#{pin}\n"
+      # Two esm.run bundles can need one dependency: skipped on the first
+      # bundle's turn and pinned on the second's, it is in the tree after all.
+      skipped.delete(package)
 
       if packager.packaged?(package)
         gsub_file("config/importmap.rb", Importmap::Map.pin_line_regexp_for(package), pin, verbose: false)

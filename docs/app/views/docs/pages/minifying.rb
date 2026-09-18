@@ -50,7 +50,9 @@ class Views::Docs::Pages::Minifying < DocsUI::Page
       md <<~'MD'
         From then on `update`, `pristine` and a plain `pin` keep minifying that
         package; `--no-minify` turns it off again. Dependencies pinned alongside a
-        `--minify` download are minified too.
+        `--minify` download are minified too, and so is every sibling file of a
+        package [vendored with its file graph](/docs/pinning) — the header comment
+        goes on the entry only.
       MD
     end
   end
@@ -58,8 +60,8 @@ class Views::Docs::Pages::Minifying < DocsUI::Page
   def everything
     DocsUI::Section("Everything already vendored") do
       md <<~'MD'
-        `pristine` redownloads every vendored package; with `--minify` it minifies
-        them all in one go and records it on each pin:
+        `pristine` redownloads every vendored package it still can; with `--minify`
+        it minifies them all in one go and records it on each pin:
       MD
       DocsUI::Code(<<~SHELL, lexer: :shell)
         ./bin/importmap pristine --minify

@@ -49,6 +49,15 @@ class Views::Docs::Pages::Preloading < DocsUI::Page
       md <<~'MD'
         `bin/importmap` keeps `preload:` when it rewrites a pin, so a `preload: false`
         survives `update`.
+
+        A package [vendored with its file graph](/docs/pinning) gets a
+        `pin_all_from` line carrying whatever the entry's pin says, so a
+        `preload: false` entry doesn't preload its chunks and a preloaded one does.
+        That is one link per file — 48 of them for `@popperjs/core`, which imports
+        every one of its files statically. A package that reaches some of its files
+        through a lazy `import("./chunk.js")` preloads those too, since the line
+        maps the whole directory; pin it `preload: false` if that matters more than
+        the waterfall.
       MD
     end
   end
