@@ -154,9 +154,10 @@ class Importmap::Doctor
 
     def packages_vendored_twice
       vendored_versions.group_by { |_file, package, _version| package }.filter_map do |package, group|
-        files, versions = group.map { |file, _, _| relative(file) }, group.map { |_, _, version| version }
+        versions = group.map { |_file, _package, version| version }
         next if versions.uniq.size < 2
 
+        files = group.map { |file, _package, _version| relative(file) }
         warning("#{files.to_sentence} #{all_or_both(files)} vendor #{package}, at #{versions.to_sentence}")
       end
     end
