@@ -1,0 +1,44 @@
+lib/importmap/commands.rb
+  s_d05650ccc1130b::t_367c478662f6c2 177-195,197-202
+  s_d05650ccc1130b::t_ec387d11c282cb 8
+docs/app/views/docs/pages/cli.rb
+  s_d05650ccc1130b::t_ae42f722692c8b 95-105
+  s_d05650ccc1130b::t_348afd71f013e6 35-36
+  s_d05650ccc1130b::t_2414fd6cc5c2b6 15
+  s_d05650ccc1130b::t_bab6c68eccaea4 117
+CHANGELOG.md
+  s_d05650ccc1130b::t_506e9462eecd7a 149-178
+test/commands_test.rb
+  s_d05650ccc1130b::t_dffb27405fcae1 1284-1309
+lib/importmap/doctor.rb
+  s_d05650ccc1130b::t_c4524139efafe2 1-216,222,235-330
+  s_d05650ccc1130b::t_28677ad67f87a0 217-221,223-234
+docs/app/views/docs/pages/updating.rb
+  s_d05650ccc1130b::t_bf9d1d883174cf 3-4,9,16,18
+  s_d05650ccc1130b::t_96b7554ac67146 181-279
+test/doctor_test.rb
+  s_d05650ccc1130b::t_60dec07d9f03fd 152-166
+  s_d05650ccc1130b::t_d18150a1e43178 1-151,167-322
+test/import_scanner_test.rb
+  s_d05650ccc1130b::t_246b51646f3c33 1-97
+lib/importmap/import_scanner.rb
+  s_d05650ccc1130b::t_980ae0b2a0ad51 1-53
+lib/importmap/map.rb
+  s_d05650ccc1130b::t_dd87ce5db7175a 196-203
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "838f5aa68b83c51066249a6797b2e1211a02f5e3",
+  "prompts": {},
+  "sessions": {
+    "s_d05650ccc1130b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a311af46-2dce-4593-a98a-b0cb096158a4",
+        "model": "claude-opus-5"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
