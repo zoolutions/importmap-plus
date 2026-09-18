@@ -1,0 +1,62 @@
+lib/importmap/graph.rb
+  s_b21aa50006f9a2::t_f322665db5778c 1-126
+test/dummy/app/javascript/graph/scoped.js
+  s_b21aa50006f9a2::t_3110a1e3a9e322 1
+lib/importmap/engine.rb
+  s_b21aa50006f9a2::t_6f439368f18750 13
+test/dummy/app/javascript/graph/lazy_chart.js
+  s_b21aa50006f9a2::t_3110a1e3a9e322 1-3
+docs/app/views/docs/pages/preloading.rb
+  s_b21aa50006f9a2::t_4911fa92b8368b 14
+  s_b21aa50006f9a2::t_e8344c55a3406d 89-166
+test/dummy/app/javascript/graph/b.js
+  s_b21aa50006f9a2::t_3110a1e3a9e322 1
+test/dummy/app/javascript/graph/a.js
+  s_b21aa50006f9a2::t_3110a1e3a9e322 1-4
+test/graph_test.rb
+  s_b21aa50006f9a2::t_520627260a8270 1-96,98-100,102-103,106-125
+  s_b21aa50006f9a2::t_467d0922b65abd 97,101,104-105
+test/dummy/app/javascript/graph/cycle_a.js
+  s_b21aa50006f9a2::t_3110a1e3a9e322 1-3
+test/dummy/app/javascript/graph/chart_dep.js
+  s_b21aa50006f9a2::t_3110a1e3a9e322 1
+test/dummy/app/javascript/graph/cycle_b.js
+  s_b21aa50006f9a2::t_3110a1e3a9e322 1-3
+test/importmap_test.rb
+  s_b21aa50006f9a2::t_a055ff0d8d61a1 474-477,479-483
+  s_b21aa50006f9a2::t_1fe4edf03c4185 478
+  s_b21aa50006f9a2::t_c05bc5a1812f67 457-473
+  s_b21aa50006f9a2::t_5e2bcb6405d757 411-456,484-495,500-525
+docs/app/views/docs/pages/configuration.rb
+  s_b21aa50006f9a2::t_36fa67d7de3a60 25-26
+CHANGELOG.md
+  s_b21aa50006f9a2::t_dbf161263b7991 179-209
+test/dummy/app/javascript/graph/deep_importer.js
+  s_b21aa50006f9a2::t_3110a1e3a9e322 1-3
+test/dummy/app/javascript/graph/entry.js
+  s_b21aa50006f9a2::t_3110a1e3a9e322 1-6
+lib/importmap/map.rb
+  s_b21aa50006f9a2::t_d3ea938022f268 2
+  s_b21aa50006f9a2::t_20cbd198126f8f 278-279
+  s_b21aa50006f9a2::t_424845502aee9a 301
+  s_b21aa50006f9a2::t_f986c3efda4921 305
+  s_b21aa50006f9a2::t_a244e1661ea3ed 219
+  s_b21aa50006f9a2::t_58b2cc58a320db 280-294,299-300,302-304
+  s_b21aa50006f9a2::t_b47a16b4fe768b 295-298
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "bd44cdb9ae6f54e33beb582326f3879d73af3317",
+  "prompts": {},
+  "sessions": {
+    "s_b21aa50006f9a2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7c513615-7335-49e0-b648-c6fff7f82d2d",
+        "model": "claude-opus-5"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
