@@ -207,6 +207,28 @@
   changes. The default `:all` — upstream's behaviour, one link per
   `preload: true` pin — is unchanged and never opens a file.
 
+- **`javascript_importmap_tags` sends its modulepreload links as 103 Early
+  Hints.** A modulepreload link is markup, so the browser can only act on it
+  once the HTML has streamed far enough to be parsed — the whole module graph
+  waits on the response. The same list now goes out ahead of it as a `Link`
+  header, and the fetches start while the app is still rendering:
+
+  ```
+  HTTP/1.1 103 Early Hints
+  Link: </assets/application-abc.js>; rel=modulepreload, </assets/@hotwired--stimulus-def.js>; rel=modulepreload
+  ```
+
+  Exactly the modules the tags preload, so `preload: false`, an entry point's
+  own list and `preload_strategy = :reachable` all narrow the hinted set with
+  the tags. No `integrity` parameter: browsers don't honour one on a `Link`
+  header, and the tag in the body still carries it.
+
+  This is what Rails' own `javascript_include_tag` and `stylesheet_link_tag`
+  already do, and it needs what they need — a server that puts
+  `rack.early_hints` in the env, which Puma does with `early_hints true`. On a
+  server without it, `send_early_hints` is a no-op and nothing changes. Off
+  with `config.importmap.early_hints = false`.
+
 ### Fixed
 
 - **A CDN that fails mid-crawl leaves the pin alone.** Vendoring a graph makes
