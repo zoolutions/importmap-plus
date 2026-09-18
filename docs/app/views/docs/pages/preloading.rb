@@ -11,6 +11,7 @@ class Views::Docs::Pages::Preloading < DocsUI::Page
     default
     opting_out
     entry_points
+    reachable
   end
 
   private
@@ -83,6 +84,84 @@ class Views::Docs::Pages::Preloading < DocsUI::Page
         A pin with `preload: true` is preloaded for every entry point; one with a
         name is preloaded only when that entry point is rendered.
       MD
+    end
+  end
+
+  def reachable
+    DocsUI::Section("Preloading what the page reaches", description: "importmap-plus only.") do
+      md <<~'MD'
+        `preload: false` is bookkeeping. An app on this gem carried this line:
+
+        ```ruby
+        # imported only by apexcharts.js, which is itself lazy. Without it,
+        # 1.1 MB was preloaded on every page.
+        pin "apexcharts/core", preload: false
+        ```
+
+        Nothing in the import map knew that. `apexcharts` was pinned
+        `preload: false` because the app loads it with `import()`, but every
+        package *it* imports still said `preload: true`, so the browser fetched
+        the whole chart library on every page to render a page with no chart on
+        it. Each of those dependencies needs its own `preload: false`, and the
+        list changes whenever the package does — or whenever a package is
+        [vendored with its file graph](/docs/pinning) and contributes a whole
+        directory of pins to the same question.
+
+        The import graph already answers it. `app/javascript`,
+        `vendor/javascript` and every `pin_all_from` directory are files on
+        disk, and their `import` statements name pin keys. Turn on
+        `preload_strategy`:
+      MD
+      DocsUI::Code(<<~RUBY, filename: "config/application.rb")
+        config.importmap.preload_strategy = :reachable
+      RUBY
+      md <<~'MD'
+        and `javascript_importmap_tags "application"` emits a modulepreload link
+        only for the pins `application` actually reaches.
+
+        ### What counts as reachable
+
+        A static `import` — `import "x"`, `import a from "x"`,
+        `export * from "x"` — is an edge; the browser fetches `x` while linking
+        the module, which is exactly what a modulepreload link is for. A dynamic
+        `import("x")` is not: it is the app saying "later", and preloading its
+        target would undo the deferral. So the set is the entry point, plus
+        everything reachable from it through static imports, however deep.
+
+        Relative imports are resolved against the importing pin's own path and
+        matched back to the pin holding that path. A pin whose file isn't on the
+        asset paths, and a pin pointing at a CDN URL, are leaves: they are
+        preloaded if something reaches them, and nothing is read from them.
+      MD
+      DocsUI::PropTable(
+        [
+          [ [ :code, "preload: true" ], "the default", "Preloaded only when the entry point reaches it." ],
+          [ [ :code, %(preload: "admin") ], "a name", "Preloaded whenever that entry point is rendered, reachable or not — the app overruling the graph." ],
+          [ [ :code, "preload: false" ], "off", "Never preloaded, under either strategy." ]
+        ]
+      )
+      md <<~'MD'
+        That last row is the escape hatch: a module your app reaches in a way a
+        regex can't see — a specifier built at runtime, an import inside a
+        string — gets a pin naming the entry point, and it is preloaded again.
+
+        ### Cost
+
+        The files are read once per import map cache generation and cached with
+        the rendered map, so a production render costs nothing beyond the first
+        one after boot. In development the cache sweeper drops it on every `.js`
+        change under `app/javascript` or `vendor/javascript`, and the next
+        render reads each reachable file once — around a millisecond for a
+        13-file graph. The default `:all` never opens a file.
+      MD
+      DocsUI::Callout(:note) do
+        md <<~'MD'
+          `:all` — upstream importmap-rails' behaviour, one link per
+          `preload: true` pin — stays the default. `:reachable` changes what
+          your pages preload, so it is opt-in: turn it on, then check the
+          Network panel of a page you know is lazy.
+        MD
+      end
     end
   end
 end

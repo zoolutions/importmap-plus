@@ -22,7 +22,8 @@ class Views::Docs::Pages::Configuration < DocsUI::Page
           [ [ :code, "paths" ], "Array<Pathname>", "[]", "Import map files, drawn in order. The engine appends config/importmap.rb during initialization, so files added in application.rb or an environment file are drawn before it; engines append theirs here." ],
           [ [ :code, "sweep_cache" ], "Boolean", "true in development and test", "Watch the JavaScript directories and clear the rendered map when a file changes. Only takes effect when classes are reloadable." ],
           [ [ :code, "cache_sweepers" ], "Array<Pathname>", "[] — app/javascript and vendor/javascript are added when the watcher is installed", "The directories the watcher covers, read once when sweep_cache is on and classes are reloadable. Engines append their JavaScript directories before importmap.cache_sweeper runs." ],
-          [ [ :code, "rescuable_asset_errors" ], "Array<Class>", "the pipeline's missing-asset error", "Errors that make a pin resolve to nothing (and log a warning) instead of raising. Propshaft::MissingAssetError and Sprockets' AssetNotFound are added for you." ]
+          [ [ :code, "rescuable_asset_errors" ], "Array<Class>", "the pipeline's missing-asset error", "Errors that make a pin resolve to nothing (and log a warning) instead of raising. Propshaft::MissingAssetError and Sprockets' AssetNotFound are added for you." ],
+          [ [ :code, "preload_strategy" ], "Symbol", ":all", "Which preload: true pins get a modulepreload link. :all is every one of them, upstream's behaviour. :reachable is only those the entry point reaches through static imports — see Preloading. A pin naming an entry point, and preload: false, mean the same under both." ]
         ]
       )
       DocsUI::Code(<<~RUBY, filename: "config/application.rb")
