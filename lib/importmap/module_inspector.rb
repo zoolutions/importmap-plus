@@ -19,10 +19,10 @@ class Importmap::ModuleInspector
   RELATIVE_IMPORT_REGEXP = /(?<![\w.$])(?:from|import)\s*\(?\s*["']\.{1,2}\//.freeze # :nodoc:
   # import() of anything but a string literal: the specifier is computed at
   # runtime, so what it resolves to can't be known here, let alone vendored.
-  # The whitespace lives inside the lookahead on purpose, which is what lets
-  # `import( "crypt" )` read as static. Written as `import\s*\(\s*` followed by
-  # the lookahead, `\s*` would backtrack to zero and the lookahead read the space
-  # rather than the quote, misreading that same call as computed.
+  # The whitespace lives inside the lookahead on purpose: as `import\s*\(\s*`
+  # followed by a negative lookahead, `\s*` backtracks to zero and the lookahead
+  # then reads the space rather than the quote, so `import( "crypt" )` reads as
+  # computed.
   COMPUTED_IMPORT_REGEXP = /(?<![\w.$])import\s*\((?!\s*["'][^"']*["']\s*[),])/.freeze # :nodoc:
   # A worker is fetched as its own top-level script and never goes through the
   # import map, so its URL has to exist on its own.
