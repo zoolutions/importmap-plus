@@ -1,4 +1,5 @@
 require "pathname"
+require "importmap/graph"
 
 class Importmap::Map
   attr_reader :packages, :directories
@@ -215,6 +216,7 @@ class Importmap::Map
 
     def clear_cache
       @cache.clear
+      @graph = nil
     end
 
     def rescuable_asset_error?(error)
@@ -273,7 +275,34 @@ class Importmap::Map
     end
 
     def expanded_preloading_packages_and_directories(entry_point:)
-      expanded_packages_and_directories.select { |name, mapping| mapping.preload.in?([true, false]) ? mapping.preload : (Array(mapping.preload) & Array(entry_point)).any? }
+      preloading = expanded_packages_and_directories.select { |name, mapping| mapping.preload.in?([true, false]) ? mapping.preload : (Array(mapping.preload) & Array(entry_point)).any? }
+      reachable_only(preloading, entry_point: entry_point)
+    end
+
+    # With config.importmap.preload_strategy == :reachable, a pin that says
+    # `preload: true` is preloaded only when the entry point's own imports
+    # reach it, so a package behind an `import()` stops being fetched on every
+    # page without anyone maintaining a `preload: false` for it and for
+    # everything it depends on. A pin naming the entry point is the app
+    # overruling the graph, and `preload: false` is off either way.
+    def reachable_only(packages, entry_point:)
+      return packages unless Rails.application.config.importmap.preload_strategy == :reachable
+
+      reachable = graph.reachable_from(Array(entry_point))
+      packages.select { |name, mapping| mapping.preload != true || reachable.include?(name) }
+    end
+
+    # Memoised beside the rendered map rather than inside it: #cache_as shares
+    # one namespace with the cache_key the preload helper passes, which is the
+    # entry point's own name, so an app with an entry point named "graph" would
+    # read this back as its preload set. Dropped by the same clear_cache the
+    # sweeper calls when a .js file under a watched directory changes.
+    def graph
+      @graph ||= Importmap::Graph.new(self, roots: asset_paths)
+    end
+
+    def asset_paths
+      (config = Rails.application.config).respond_to?(:assets) ? config.assets.paths : []
     end
 
     def expanded_packages_and_directories

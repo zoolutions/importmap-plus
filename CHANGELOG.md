@@ -176,6 +176,37 @@
   the asset paths and the files on disk, so the default is fast and can't fail
   because a CDN is having a bad afternoon.
 
+- **`config.importmap.preload_strategy = :reachable` preloads what the entry
+  point actually reaches.** Every pin with `preload: true` gets a modulepreload
+  link on every page, so a package the app only loads with `import()` is
+  fetched up front anyway unless someone writes `preload: false` on it — and on
+  everything it depends on, and keeps that list right as the package changes.
+  An app on this gem carried the comment "imported only by apexcharts.js, which
+  is itself lazy. Without it, 1.1 MB was preloaded on every page."
+
+  The import graph already knows. `app/javascript`, `vendor/javascript` and
+  every `pin_all_from` directory are files on disk, and their `import`
+  statements name pin keys:
+
+  ```ruby
+  # config/application.rb
+  config.importmap.preload_strategy = :reachable
+  ```
+
+  `javascript_importmap_tags "application"` now emits a link only for the pins
+  `application` reaches through **static** imports, however deep. A dynamic
+  `import()` is the lazy boundary and contributes nothing — preloading its
+  target is the deferral the app asked for, undone. A pin naming an entry point
+  (`preload: "admin"`) is preloaded whether or not the graph reaches it, which
+  is the escape hatch for a specifier no regex can see; `preload: false` stays
+  off either way.
+
+  Nothing new happens on the request path: the files are the ones the asset
+  pipeline already serves, read once per import map cache generation and
+  dropped by the same sweeper that drops the rendered map when a `.js` file
+  changes. The default `:all` — upstream's behaviour, one link per
+  `preload: true` pin — is unchanged and never opens a file.
+
 ### Fixed
 
 - **A CDN that fails mid-crawl leaves the pin alone.** Vendoring a graph makes
