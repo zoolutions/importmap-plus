@@ -146,6 +146,36 @@
   do nothing), and a second directory mapping a package one already maps at
   another version (a file they share resolves to one of them).
 
+- **`bin/importmap doctor` checks an app's import map and vendored files,
+  offline.** `audit` and `outdated` ask the npm registry about your packages;
+  nothing asked whether the map still matched the files in the repo. A pin
+  whose file had gone missing, a vendored file importing a bare specifier
+  nobody pinned, a vendored file still importing the siblings it was downloaded
+  beside, a CommonJS bundle a CDN handed back — each of those said so in the
+  browser and nowhere else. `doctor` boots the app and reports them:
+
+  ```
+  $ bin/importmap doctor
+  error    pin "not_there" → nowhere.js: no such asset
+  error    vendor/javascript/shoelace.js imports "lit/decorators.js", which isn't pinned
+  error    vendor/javascript/popper.js imports "./enums.js" by relative path — run bin/importmap pin @popperjs/core to vendor its files
+  warning  vendor/javascript/old-lib.js isn't pinned by anything
+  warning  "@hotwired/turbo" and "@hotwired/turbo-rails" both resolve to turbo.min.js
+  3 errors, 2 warnings
+  ```
+
+  Errors exit 1, so it belongs in CI beside `audit` and `outdated`; warnings —
+  a file nothing serves, including a `.mjs` that `pin_all_from` never picks up,
+  and two keys on one file or one package vendored at two versions — leave the
+  exit status alone. It reports and never edits: `pin`, `unpin` and `pristine`
+  are what fix what it finds.
+
+  `--online` adds the one check that needs the network, fetching every remote
+  pin to report one the CDN no longer serves and an `integrity:` hash that
+  doesn't match the bytes it does serve. Every other check reads only the map,
+  the asset paths and the files on disk, so the default is fast and can't fail
+  because a CDN is having a bad afternoon.
+
 ### Fixed
 
 - **A CDN that fails mid-crawl leaves the pin alone.** Vendoring a graph makes
