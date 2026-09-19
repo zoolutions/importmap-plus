@@ -250,7 +250,10 @@ class Views::Docs::Pages::MultiFilePackages < DocsUI::Page
         so the override can't quietly vendor something you never asked about. Pass
         `--remote` and `--vendor` together and
         [`--remote`](/docs/pinning#pinning-to-a-remote-url) wins — it names a
-        destination, where `--vendor` only overrides a check.
+        destination, where `--vendor` only overrides a check. For the same reason
+        it leaves a pin on a host no CDN answers for alone, reporting it as
+        [skipped](/docs/pinning#custom-urls) rather than vendoring whatever the
+        package spec resolved to.
 
         Packages an app already vendored before this check existed are not rewritten
         on their own, and `bin/importmap pristine` downloads them again exactly as

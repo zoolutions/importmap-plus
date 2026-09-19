@@ -197,6 +197,20 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
         $ ./bin/importmap pin md5
         Skipping "md5" pinned to custom URL https://cdn.example.com/md5.js
       SHELL
+      md <<~'MD'
+        `--vendor` doesn't override that. It overrides the check that refuses a
+        download — not the URL you chose to pin — so it reports the same skip and
+        names itself in it:
+      MD
+      DocsUI::Code(<<~SHELL, lexer: :console)
+        $ ./bin/importmap pin md5 --vendor
+        Skipping "md5" pinned to custom URL https://cdn.example.com/md5.js (--vendor doesn't move a pin to another source; pass --from to choose one)
+      SHELL
+      md <<~'MD'
+        Naming a CDN with `--from` is how you move such a pin on purpose: it
+        re-resolves the package there and rewrites the line, vendoring it if you
+        also passed `--vendor`.
+      MD
     end
   end
 

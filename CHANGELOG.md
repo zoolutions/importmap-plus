@@ -284,6 +284,17 @@
   for it, whether that pin is vendored, recording the CDN in its comment, or
   remote, carrying it in the URL with no comment at all.
 
+- **`pin --vendor` leaves a pin to a custom URL alone.** `--vendor` is meant to
+  override the check that refuses a download, not the URL an app chose to pin,
+  but it reached the vendoring path before the branch that skips custom URLs
+  could run: `bin/importmap pin md5 --vendor` against
+  `pin "md5", to: "https://cdn.example.com/md5.js"` downloaded md5 from
+  whichever CDN the spec resolved to and replaced the line with
+  `pin "md5" # @2.3.0 (vendored)`, without a word about the URL it had just
+  dropped. It now reports the skip the way a plain `pin` does and names the
+  flag in it. Moving such a pin on purpose is still `--from`, which re-resolves
+  it from the CDN you name.
+
 ## 1.1.0
 
 ### Added
