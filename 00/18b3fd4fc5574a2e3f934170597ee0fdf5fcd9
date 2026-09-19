@@ -1,0 +1,29 @@
+docs/app/views/docs/pages/pinning.rb
+  s_6636aecd4f198d::t_696712487c5b2b 207-210
+test/fixtures/files/single_quote_array_preload_import_map.rb
+  s_6636aecd4f198d::t_9cc41370bf6f34 1-3
+test/packager_test.rb
+  s_6636aecd4f198d::t_bef9dec1144a9e 1396-1433
+test/packager_single_quotes_test.rb
+  s_6636aecd4f198d::t_b11b3812530c1c 22-35
+CHANGELOG.md
+  s_6636aecd4f198d::t_696712487c5b2b 287-297
+lib/importmap/packager.rb
+  s_6636aecd4f198d::t_44b595961f3d8a 15-18,550-553,560-564,567
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "0018b3fd4fc5574a2e3f934170597ee0fdf5fcd9",
+  "prompts": {},
+  "sessions": {
+    "s_6636aecd4f198d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4d05d54e-684c-4b9e-a3cf-708941689c93",
+        "model": "claude-opus-5"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
