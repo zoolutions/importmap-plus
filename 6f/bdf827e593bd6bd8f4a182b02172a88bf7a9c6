@@ -1,0 +1,37 @@
+docs/app/views/docs/pages/pinning.rb
+  s_78babf649c3f2e::t_f1bef5b5587453 101-123,147-149
+lib/importmap/batch_resolver.rb
+  s_78babf649c3f2e::t_1fbc23afc0af35 52,57-58,62-65
+  s_78babf649c3f2e::t_1079fea5cc6a13 1-51,53-56,59-61,66-133
+test/commands_test.rb
+  s_78babf649c3f2e::t_ad3e14d61097c0 1138-1171
+  s_78babf649c3f2e::t_3b799320893b71 1063,1129,1236
+test/batch_resolver_test.rb
+  s_78babf649c3f2e::t_cfb8f1670a6a57 1-181
+CHANGELOG.md
+  s_78babf649c3f2e::t_9c609ae4e4d90c 246-278
+docs/app/views/docs/pages/updating.rb
+  s_78babf649c3f2e::t_f1bef5b5587453 49-54,182-183
+docs/app/views/docs/pages/cli.rb
+  s_78babf649c3f2e::t_f1bef5b5587453 114
+docs/app/views/docs/pages/upgrading.rb
+  s_78babf649c3f2e::t_f1bef5b5587453 54
+lib/importmap/commands.rb
+  s_78babf649c3f2e::t_b5a1aacec3a916 7,43,88,170,530-531,535-538
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6fbdf827e593bd6bd8f4a182b02172a88bf7a9c6",
+  "prompts": {},
+  "sessions": {
+    "s_78babf649c3f2e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "43575601-eb5c-4927-b758-342807e26be7",
+        "model": "unknown"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
