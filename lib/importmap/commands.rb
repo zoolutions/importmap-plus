@@ -229,6 +229,8 @@ class Importmap::Commands < Thor
 
       if existing_url && !vendor && !regraph
         repin_remote_package(package, url, existing_url, preload, env: env, from: from, integrity: integrity, locked: locked)
+      elsif existing_url && from.nil? && packager.provider_for_url(existing_url).nil?
+        keep_custom_url(package, existing_url)
       elsif remote
         pin_remote_package(package, url, preload, integrity: integrity, locked: locked)
       else
@@ -631,6 +633,16 @@ class Importmap::Commands < Thor
       update_importmap_with_pin(package, packager.pin_for(package, url, preloads: preload, integrity: integrity,
                                                            locked: locked, remote: remote))
       report_lock(package) if locked
+    end
+
+    # A URL on a host no provider answers for is the app's own choice, and the
+    # branch above skips it — but only while `vendor` is false. --vendor is
+    # about overriding the check that refuses a download, not about moving a
+    # pin to another source, so it lands here instead of vendoring whatever the
+    # spec happened to resolve to. Naming a CDN with --from is how a pin is
+    # moved on purpose, and that still goes through repin_remote_package.
+    def keep_custom_url(package, existing_url)
+      puts %(Skipping "#{package}" pinned to custom URL #{existing_url} (--vendor doesn't move a pin to another source; pass --from to choose one))
     end
 
     def repin_remote_package(package, url, existing_url, preload, env:, from: nil, integrity: nil, locked: false)

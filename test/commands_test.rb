@@ -1307,6 +1307,31 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes out, "0 errors, 1 warning\n"
   end
 
+  test "pin command with --vendor leaves a pin to a custom URL untouched" do
+    importmap_config('pin "md5", to: "https://cdn.example.com/md5.js", preload: false')
+
+    out, _err = run_importmap_command("pin", "md5@2.3.0", "--vendor")
+
+    assert_includes out, 'Skipping "md5" pinned to custom URL https://cdn.example.com/md5.js'
+    assert_includes out, "--vendor doesn't move a pin to another source"
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, 'pin "md5", to: "https://cdn.example.com/md5.js", preload: false'
+    assert_not File.exist?("#{@tmpdir}/dummy/vendor/javascript/md5.js")
+  end
+
+  test "pin command with --vendor and --from vendors a custom-URL pin from the CDN that was named" do
+    importmap_config('pin "md5", to: "https://cdn.example.com/md5.js", preload: false')
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0", "--vendor", "--from", "jspm")
+
+    assert_includes out, 'Pinning "md5" to vendor/javascript/md5.js'
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, 'pin "md5", preload: false # @2.2.0'
+    assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/md5.js")
+  end
+
   private
     # A registry that can't answer for a package is the case under test, and
     # the live registry won't produce it on demand. Stub the one method that
