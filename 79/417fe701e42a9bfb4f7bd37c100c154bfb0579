@@ -1,0 +1,27 @@
+docs/app/views/docs/pages/multi_file_packages.rb
+  s_6636aecd4f198d::t_92f6049a57b891 253-256
+lib/importmap/commands.rb
+  s_6636aecd4f198d::t_5f2ae61929896b 232-233,638-645
+test/commands_test.rb
+  s_6636aecd4f198d::t_8a7ff2a50281ef 1310-1334
+docs/app/views/docs/pages/pinning.rb
+  s_6636aecd4f198d::t_92f6049a57b891 200-213
+CHANGELOG.md
+  s_6636aecd4f198d::t_92f6049a57b891 287-297
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "79417fe701e42a9bfb4f7bd37c100c154bfb0579",
+  "prompts": {},
+  "sessions": {
+    "s_6636aecd4f198d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4d05d54e-684c-4b9e-a3cf-708941689c93",
+        "model": "claude-opus-5"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
