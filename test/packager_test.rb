@@ -1393,6 +1393,44 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     end
   end
 
+  test "extract_existing_pin_options reads an array preload written with single quotes" do
+    packager = Importmap::Packager.new(file_fixture("single_quote_array_preload_import_map.rb"))
+
+    assert_equal({ preload: [ "admin" ] }, extract_options_for_package(packager, "md5"))
+    assert_equal({ preload: [ "admin", "app" ] }, extract_options_for_package(packager, "charenc"))
+    assert_equal({ preload: [] }, extract_options_for_package(packager, "crypt"))
+  end
+
+  test "extract_existing_pin_options keeps an empty array preload" do
+    temp_importmap = create_temp_importmap(<<~PINS)
+      pin "package1", preload: []
+      pin "package2", preload: [], integrity: true
+    PINS
+    packager = Importmap::Packager.new(temp_importmap)
+
+    assert_equal({ preload: [] }, extract_options_for_package(packager, "package1"))
+    assert_equal({ preload: [], integrity: true }, extract_options_for_package(packager, "package2"))
+  end
+
+  test "pin_for writes an empty array preload rather than dropping it" do
+    assert_equal %(pin "react", preload: []), @packager.pin_for("react", preloads: [])
+    assert_equal %(pin "react", preload: [] # @17.0.2),
+                 @packager.vendored_pin_for("react", "https://cdn/react@17.0.2", [])
+    assert_equal %(pin "react"), @packager.pin_for("react", preloads: nil)
+  end
+
+  test "an array preload survives being read and written again" do
+    temp_importmap = create_temp_importmap(<<~PINS)
+      pin 'package1', preload: ['admin', 'app']
+      pin 'package2', preload: []
+    PINS
+    packager = Importmap::Packager.new(temp_importmap)
+
+    assert_equal %(pin "package1", preload: ["admin", "app"]),
+                 packager.pin_for("package1", preloads: extract_options_for_package(packager, "package1")[:preload])
+    assert_equal %(pin "package2", preload: []),
+                 packager.pin_for("package2", preloads: extract_options_for_package(packager, "package2")[:preload])
+  end
   private
     GRAPH_ROOT = "https://ga.jspm.io/npm:pkg@1.0.0/".freeze
 

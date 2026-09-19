@@ -204,8 +204,10 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
     DocsUI::Section("Pin options survive a rewrite") do
       md <<~'MD'
         When a pin is rewritten — by `pin`, `update` or `pristine` — the options on
-        it are carried over: `preload: false`, `preload: "admin"`, `integrity: true`
-        and `integrity: false` all stay. An explicit `integrity:` *hash* is dropped
+        it are carried over: `preload: false`, `preload: "admin"`,
+        `preload: ["admin", "app"]`, `preload: []`, `integrity: true` and
+        `integrity: false` all stay, whether the pin is written with double quotes
+        or single ones. An explicit `integrity:` *hash* is dropped
         when the URL changes, since the old hash would no longer match the new file;
         see [Subresource integrity](/docs/integrity) for pinning fresh hashes.
 

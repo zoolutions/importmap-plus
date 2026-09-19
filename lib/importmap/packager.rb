@@ -12,7 +12,10 @@ class Importmap::Packager
   include Importmap::HttpRetries
 
   PIN_REGEX = /#{Importmap::Map::PIN_REGEX}(.*)/.freeze # :nodoc:
-  PRELOAD_OPTION_REGEXP = /preload:\s*(\[[^\]]+\]|true|false|["'][^"']*["'])/.freeze # :nodoc:
+  # The bracketed form matches an empty array too: `preload: []` is a pin an
+  # app wrote, and a rewrite that dropped it would start preloading the package
+  # on every page.
+  PRELOAD_OPTION_REGEXP = /preload:\s*(\[[^\]]*\]|true|false|["'][^"']*["'])/.freeze # :nodoc:
   TO_OPTION_REGEXP = /to:\s*["']([^"']*)["']/.freeze # :nodoc:
   # Only the booleans: a hash string is tied to the file it was computed for,
   # so a rewrite that changes the URL has to drop it.
@@ -544,16 +547,24 @@ class Importmap::Packager
       when "false"
         false
       when /^\[.*\]$/
-        JSON.parse(value)
+        # config/importmap.rb is Ruby, not JSON, and a single-quoted pin is a
+        # supported shape here, so the entry points are scanned out of the
+        # literal rather than parsed. JSON.parse raised on every one of them.
+        value.scan(/["']([^"']*)["']/).flatten
       else
         value.gsub(/["']/, "")
       end
     end
 
     def preload(preloads)
+      # nil is "the pin carries no preload:"; [] is the pin carrying one that
+      # names no entry point. Array() flattens both to [], so the difference
+      # has to be read before it.
+      return "" if preloads.nil?
+
       case Array(preloads)
       in []
-        ""
+        %(, preload: [])
       in ["true"] | [true]
         %(, preload: true)
       in ["false"] | [false]
