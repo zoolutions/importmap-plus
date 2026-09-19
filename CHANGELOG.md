@@ -284,6 +284,17 @@
   for it, whether that pin is vendored, recording the CDN in its comment, or
   remote, carrying it in the URL with no comment at all.
 
+- **An array `preload:` survives a rewrite however it is quoted, and
+  `preload: []` stays `preload: []`.** The option was read back through
+  `JSON.parse`, so `pin 'md5', preload: ['admin']` — single quotes being a
+  supported pin shape everywhere else in this gem — took down every command
+  that reads a pin with `JSON::ParserError: unexpected character`. And
+  `preload: []` matched nothing at all, so `pin`, `update` and `pristine`
+  dropped it and quietly restored the `preload: true` default on a package the
+  app had asked to preload for no entry point. `config/importmap.rb` is Ruby,
+  not JSON: the entry points are scanned out of the literal now, and an empty
+  array is written back as one.
+
 - **`pin --vendor` leaves a pin to a custom URL alone.** `--vendor` is meant to
   override the check that refuses a download, not the URL an app chose to pin,
   but it reached the vendoring path before the branch that skips custom URLs
