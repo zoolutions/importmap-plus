@@ -19,4 +19,18 @@ class Importmap::PackagerSingleQuotesTest < ActiveSupport::TestCase
     assert @packager.remove("md5")
     assert_not @packager.packaged?("md5")
   end
+
+  test "extract_existing_pin_options with single quotes" do
+    assert_equal({ preload: true, to: "https://cdn.skypack.dev/md5", integrity: false },
+                 @packager.extract_existing_pin_options("md5")["md5"])
+  end
+
+  test "an array preload with single quotes is read and written back without its quotes mattering" do
+    packager = Importmap::Packager.new(file_fixture("single_quote_array_preload_import_map.rb"))
+
+    assert_equal [ "admin", "app" ], packager.extract_existing_pin_options("charenc")["charenc"][:preload]
+    assert_equal %(pin "charenc", preload: ["admin", "app"]),
+                 packager.pin_for("charenc", preloads: [ "admin", "app" ])
+    assert_equal %(pin "crypt", preload: []), packager.pin_for("crypt", preloads: [])
+  end
 end
