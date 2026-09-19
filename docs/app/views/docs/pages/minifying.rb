@@ -51,7 +51,7 @@ class Views::Docs::Pages::Minifying < DocsUI::Page
         From then on `update`, `pristine` and a plain `pin` keep minifying that
         package; `--no-minify` turns it off again. Dependencies pinned alongside a
         `--minify` download are minified too, and so is every sibling file of a
-        package [vendored with its file graph](/docs/pinning) — the header comment
+        package [vendored with its file graph](/docs/multi-file-packages) — the header comment
         goes on the entry only.
       MD
     end

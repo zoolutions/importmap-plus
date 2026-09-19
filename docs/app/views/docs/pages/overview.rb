@@ -11,6 +11,7 @@ class Views::Docs::Pages::Overview < DocsUI::Page
   def content
     what_it_is
     what_it_adds
+    what_it_adds_at_request_time
     what_stays_the_same
     where_next
   end
@@ -50,9 +51,26 @@ class Views::Docs::Pages::Overview < DocsUI::Page
           [ [ :code, "--from esm.run" ], "Vendors jsDelivr's one-file bundle, rewrites its imports to bare specifiers, and pins the dependencies it needs.", [ :md, "[esm.run bundles](/docs/esm-run)" ] ],
           [ [ :code, "pin --lock" ], "Holds a package at a version. update, pristine and pin leave it there until you unlock it or pass --force.", [ :md, "[Locking versions](/docs/locking)" ] ],
           [ [ :code, "update [PACKAGES] --all --force" ], "Update by name, or everything explicitly; --force moves locked packages and re-locks them.", [ :md, "[Updating & auditing](/docs/updating)" ] ],
+          [ "Multi-file packages", "A package whose entry imports siblings is vendored with its whole file graph; one that needs more than files can give it stays on its CDN, with the reason on the pin.", [ :md, "[Multi-file packages](/docs/multi-file-packages)" ] ],
+          [ "Registry-latest and CDN fallback", "A version is resolved on the npm registry first, then asked of jspm, esm.run and jsDelivr in turn until one of them has it.", [ :md, "[Pinning packages](/docs/pinning#choosing-a-cdn)" ] ],
+          [ [ :code, "doctor" ], "Checks the import map against the files that are actually there, offline, and exits non-zero on an error, so CI can run it.", [ :md, "[Updating & auditing](/docs/updating#doctor)" ] ],
           [ "Provenance", "The pin comment records the CDN, minification and lock, so nothing silently drifts back to jspm.", [ :md, "[Provenance](/docs/provenance)" ] ],
           [ "Remote pins stay remote", "A pin with a CDN URL is re-resolved from that CDN; preload: and boolean integrity: survive every rewrite.", [ :md, "[Pinning packages](/docs/pinning)" ] ],
+          [ "Remote pins hash themselves", "A pin left on a CDN carries a subresource-integrity hash of the bytes that were resolved, rewritten whenever the URL moves.", [ :md, "[Subresource integrity](/docs/integrity)" ] ],
           [ "Requests retry", "A reset connection, a timeout or a 429/5xx is tried three times with a growing pause before the command gives up.", [ :md, "[Configuration](/docs/configuration)" ] ]
+        ]
+      )
+    end
+  end
+
+  def what_it_adds_at_request_time
+    DocsUI::Section("What it adds at request time",
+                    description: "Two opt-in settings; the tags are otherwise byte-for-byte upstream's.") do
+      DocsUI::Table(
+        [ "Setting", "What it does", "Docs" ],
+        [
+          [ [ :code, "preload_strategy = :reachable" ], "Preloads what the entry point actually imports instead of every preloaded pin, so a package a page never reaches costs nothing.", [ :md, "[Preloading](/docs/preloading#preloading-what-the-page-reaches)" ] ],
+          [ [ :code, "early_hints" ], "Sends the modulepreload links as a 103 Early Hints response, so the browser starts fetching them before the HTML is rendered.", [ :md, "[Preloading](/docs/preloading#103-early-hints)" ] ]
         ]
       )
     end

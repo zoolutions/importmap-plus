@@ -25,8 +25,12 @@ An app without an import map yet:
 | `--from esm.run` | Vendors jsDelivr's one-file bundle, rewrites its imports to bare specifiers, and pins the dependencies it needs. |
 | `pin --lock`, `lock`, `unlock` | Holds a package at a version. `update`, `pristine` and `pin` leave it there until you unlock it or pass `--force`. |
 | `update [PACKAGES] --all --force` | Update by name, or everything explicitly; `--force` moves locked packages and re-locks them. |
-| Provenance | The pin comment records the CDN, minification and lock — `pin "luxon" # @3.7.2 (esm.run, minified, locked)` — so nothing silently drifts back to jspm. |
-| Remote pins stay remote | A pin with a CDN URL is re-resolved from that CDN; `preload:` and a boolean `integrity:` survive every rewrite; a custom URL is left alone. |
+| Multi-file packages | A package whose entry imports siblings by relative path is vendored with its whole file graph, mapped by one `pin_all_from` line. One that needs more than files can give it — a worker, `import.meta.url`, a `.wasm` — stays on its CDN with the reason on the pin. |
+| Registry-latest, then CDN fallback | A bare name is resolved on the npm registry, then asked of jspm, esm.run and jsDelivr in turn until one of them has it. `--from` disables the fallback. |
+| `doctor` | Checks the import map against the files that are actually there — offline, reporting only, non-zero on an error — so CI catches a 404 that otherwise shows up on one page in the browser. |
+| Provenance | The pin comment records the CDN, minification, lock and why a package was kept remote — `pin "luxon" # @3.7.2 (esm.run, minified, locked)` — so nothing silently drifts back to jspm. |
+| Remote pins stay remote | A pin with a CDN URL is re-resolved from that CDN and carries a subresource-integrity hash of the bytes that were resolved; `preload:` and a boolean `integrity:` survive every rewrite; a custom URL is left alone. |
+| Preload what the page reaches | `config.importmap.preload_strategy = :reachable` preloads what the entry point actually imports rather than every preloaded pin, and `config.importmap.early_hints` sends those links as a 103 Early Hints response. Both opt-in. |
 | Requests retry | A reset connection, a timeout or a 429/5xx is tried three times with a growing pause before the command gives up. |
 
 ```bash
@@ -34,12 +38,16 @@ An app without an import map yet:
 ./bin/importmap pin @hotwired/stimulus@3.2.2 --lock
 ./bin/importmap update stimulus-use
 ./bin/importmap outdated
+./bin/importmap doctor
 ```
 
 ```ruby
 # config/importmap.rb
 pin "luxon" # @3.7.2 (esm.run, minified)
 pin "@hotwired/stimulus", to: "@hotwired--stimulus.js" # @3.2.2 (locked)
+pin "@popperjs/core", to: "@popperjs--core.js" # @2.11.8
+pin_all_from "vendor/javascript/@popperjs--core", under: "@popperjs/core", to: "@popperjs--core" # @2.11.8 (graph of @popperjs/core)
+pin "fflate", to: "https://ga.jspm.io/npm:fflate@0.8.2/esm/browser.js" # @0.8.2 (remote: workers)
 ```
 
 The full guide — every command, option and behaviour, plus importmap-rails' own documentation for the parts that are unchanged — is at [importmap-plus.zoolutions.llc](https://importmap-plus.zoolutions.llc).
