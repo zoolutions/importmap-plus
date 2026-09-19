@@ -7,6 +7,7 @@ require "importmap/package_graph"
 require "importmap/vendored_graph"
 require "importmap/http_retries"
 require "importmap/integrity"
+require "importmap/esm_run"
 
 class Importmap::Packager
   include Importmap::HttpRetries
@@ -32,20 +33,6 @@ class Importmap::Packager
     "esm.sh"           => "esm.sh"
   }.freeze # :nodoc:
 
-  # jsDelivr's bundling endpoint (https://www.jsdelivr.com/esm): one minified
-  # ESM file per package, with its dependencies referenced as /npm/dep@ver/+esm.
-  ESM_RUN_PROVIDER    = "esm.run".freeze # :nodoc:
-  ESM_RUN_CDN         = "https://cdn.jsdelivr.net/npm/".freeze # :nodoc:
-  ESM_RUN_URL_REGEXP  = %r{\Ahttps://cdn\.jsdelivr\.net/npm/.+/\+esm\z}.freeze # :nodoc:
-  # An esm.run bundle's own imports: `from"/npm/dep@1.2.3/+esm"`, `import"…"`,
-  # `import("…")`, `export … from"…"`. Anchored on the keyword so an ordinary
-  # string that happens to look like a bundle URL is left alone. What it does
-  # not do is parse JavaScript, so the same text inside a string or a comment
-  # would still be rewritten — a jsDelivr bundle is esbuild output whose only
-  # surviving comment is the banner, and a root-relative /npm/ URL is
-  # meaningless anywhere but in one of its own imports.
-  ESM_RUN_IMPORT_REGEXP =
-    %r{((?:\bfrom|\bimport)\s*\(?\s*)(["'])/npm/((?:@[^/"'@]+/)?[^/"'@]+)@([^/"']+)((?:/[^"']*?)?)/\+esm\2}.freeze # :nodoc:
   # name[@version][/subpath] — a leading "@" distinguishes a scoped name
   # (@scope/pkg) from an unscoped name with a subpath (apexcharts/core).
   PACKAGE_SPEC_REGEXP = %r{\A(@[^@/]+/[^@/]+|[^@/]+)(?:@([^/]+))?(/.+)?\z}.freeze # :nodoc:
@@ -111,9 +98,6 @@ class Importmap::Packager
   singleton_class.attr_accessor :endpoint
   self.endpoint = URI("https://api.jspm.io/generate")
 
-  singleton_class.attr_accessor :esm_run_resolver
-  self.esm_run_resolver = URI("https://data.jsdelivr.com/v1/packages/npm/")
-
   # CDNs reset connections and rate-limit bursts. Each request is tried this
   # many times, pausing retry_wait × attempt between tries, before it fails.
   # Shared with Importmap::Npm, which talks to the registry the same way.
@@ -126,6 +110,13 @@ class Importmap::Packager
     def retry_wait = Importmap::HttpRetries.wait
     def retry_wait=(value)
       Importmap::HttpRetries.wait = value
+    end
+
+    # Where --from esm.run resolves versions. Documented on this class since
+    # before Importmap::EsmRun held it, so it keeps answering here.
+    def esm_run_resolver = Importmap::EsmRun.resolver
+    def esm_run_resolver=(value)
+      Importmap::EsmRun.resolver = value
     end
   end
 
@@ -159,7 +150,7 @@ class Importmap::Packager
   def import(*packages, env: "production", from: "jspm")
     @last_import_error = nil
 
-    return import_from_esm_run(packages) if esm_run?(from)
+    return Importmap::EsmRun.new(self).imports(packages) if esm_run?(from)
 
     response = post_json({
       "install"      => Array(packages),
@@ -331,12 +322,12 @@ class Importmap::Packager
   # going to be vendored or only hashed for a remote pin. Writes nothing and
   # inspects nothing. Like #post_json, a failure the retry doesn't recognise
   # still comes out as this class's HTTPError rather than a backtrace.
-  def fetch_remote(url, allow_missing: false)
-    response = get_response(url)
+  def fetch_remote(url, allow_missing: false, description: "downloading #{url}")
+    response = get_response(url, description: description)
     # jspm answers some files brotli whatever the request advertises, and
     # Net::HTTP decodes gzip and deflate only. Not asked up front: supplying an
     # Accept-Encoding at all stops it decoding the gzip it does understand.
-    response = get_response(url, IDENTITY_ENCODING) if response.code == "200" && encoded?(response.body)
+    response = get_response(url, IDENTITY_ENCODING, description: description) if response.code == "200" && encoded?(response.body)
 
     if response.code == "200"
       # Still unreadable asked plain: say so, rather than let ModuleInspector raise.
@@ -408,7 +399,7 @@ class Importmap::Packager
   end
 
   def provider_for_url(url)
-    return ESM_RUN_PROVIDER if url.to_s.match?(ESM_RUN_URL_REGEXP)
+    return Importmap::EsmRun::PROVIDER if Importmap::EsmRun.url?(url)
 
     PROVIDER_HOSTS[URI(url.to_s).host]
   rescue URI::InvalidURIError
@@ -416,7 +407,7 @@ class Importmap::Packager
   end
 
   def esm_run?(provider)
-    provider.to_s == ESM_RUN_PROVIDER
+    Importmap::EsmRun.provider?(provider)
   end
 
   # The import-map key a package spec pins: "apexcharts@7.1.0/core" pins
@@ -613,8 +604,8 @@ class Importmap::Packager
       nil
     end
 
-    def get_response(url, headers = nil)
-      with_retries("downloading #{url}") { Net::HTTP.get_response(URI(url), headers) }
+    def get_response(url, headers = nil, description: "downloading #{url}")
+      with_retries(description) { Net::HTTP.get_response(URI(url), headers) }
     end
 
     # An encoding Net::HTTP couldn't undo is the one thing that reaches here as
@@ -654,7 +645,7 @@ class Importmap::Packager
     def download_package_file(package, url, minify: false, force: false, graph: true)
       body   = fetch_remote(url)
       source = body.dup.force_encoding("UTF-8")
-      source, dependencies = rewrite_esm_run_imports(source) if url.match?(ESM_RUN_URL_REGEXP)
+      source, dependencies = Importmap::EsmRun.rewrite_imports(source) if Importmap::EsmRun.url?(url)
 
       @last_graph = Importmap::PackageGraph.for_download(self, package, url, source, body) if graph
       source = @last_graph.entry_source if @last_graph
@@ -734,65 +725,6 @@ class Importmap::Packager
     def commit_entry(package, partial)
       remove_existing_package_file(package) if vendored_package_path(package).directory?
       File.rename(partial, vendored_package_path(package))
-    end
-
-    # Turns import "/npm/dep@1.2.3/+esm" into import "dep" so the bundle
-    # resolves through the import map, and lists what it needs pinned.
-    def rewrite_esm_run_imports(source)
-      dependencies = {}
-      versions = Hash.new { |hash, key| hash[key] = [] }
-
-      rewritten = source.gsub(ESM_RUN_IMPORT_REGEXP) do
-        keyword, quote, name, version, subpath = $1, $2, $3, $4, $5.to_s
-        key = "#{name}#{subpath}"
-        dependencies[key] ||= "#{ESM_RUN_CDN}#{name}@#{version}#{subpath}/+esm"
-        versions[key] << version unless versions[key].include?(version)
-        "#{keyword}#{quote}#{name}#{subpath}#{quote}"
-      end
-
-      # An import map maps a bare specifier to one file, so a bundle that
-      # imports the same package at two versions can only get the first one
-      # it asked for. Say so rather than pick silently.
-      versions.each do |key, seen|
-        next if seen.one?
-
-        warn %(#{key} is imported at #{seen.join(", ")} by this bundle; pinning @#{seen.first}, an import map holds one version)
-      end
-
-      [rewritten, dependencies.to_a]
-    end
-
-    def import_from_esm_run(packages)
-      imports = packages.to_h do |spec|
-        name, requested, subpath = spec.match(PACKAGE_SPEC_REGEXP)&.captures
-        raise Error, "Can't parse package spec #{spec.inspect}" unless name
-
-        version = resolve_esm_run_version(name, requested)
-        return nil unless version
-
-        ["#{name}#{subpath}", "#{ESM_RUN_CDN}#{name}@#{version}#{subpath}/+esm"]
-      end
-
-      { imports: imports }
-    end
-
-    def resolve_esm_run_version(name, requested)
-      uri = self.class.esm_run_resolver.dup
-      uri.path += "#{name}/resolved"
-      uri.query = "specifier=#{URI.encode_www_form_component(requested)}" if requested
-
-      response = with_retries("resolving #{uri}") { Net::HTTP.get_response(uri) }
-
-      case response.code
-      when "200"
-        JSON.parse(response.body)["version"]
-      when "404"
-        nil
-      else
-        handle_failure_response(response)
-      end
-    rescue JSON::ParserError
-      raise HTTPError, "Unexpected response from #{uri}"
     end
 
     def remove_sourcemap_comment_from(source)

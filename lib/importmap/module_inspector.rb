@@ -6,7 +6,7 @@ require "strscan"
 # itself — a sibling module, a worker script, a wasm binary, its own directory
 # via import.meta.url — resolves to a 404 in the browser.
 #
-# Like Packager::ESM_RUN_IMPORT_REGEXP this reads the source with regexes
+# Like Importmap::EsmRun::IMPORT_REGEXP this reads the source with regexes
 # rather than parsing JavaScript, so the same text inside a string still counts.
 # It is deliberately the cautious direction: a false positive keeps a working
 # remote pin, and `pin --vendor` is the escape hatch. Every judgement call here

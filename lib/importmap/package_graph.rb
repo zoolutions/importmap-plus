@@ -36,7 +36,7 @@ class Importmap::PackageGraph
 
   # Importmap::ModuleInspector::RELATIVE_IMPORT_REGEXP with the specifier
   # captured, so the same forms it counts are the ones rewritten here. Like
-  # that one and Packager::ESM_RUN_IMPORT_REGEXP it doesn't parse JavaScript,
+  # that one and Importmap::EsmRun::IMPORT_REGEXP it doesn't parse JavaScript,
   # so a data string that spells out an import statement is rewritten inside
   # the string too, and a form it can't read — a magic comment between the
   # keyword and the specifier, an unterminated literal — isn't rewritten at

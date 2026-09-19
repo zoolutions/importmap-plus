@@ -88,6 +88,7 @@ HttpRetries    lib/importmap/http_retries.rb                    bounded retries 
 ModuleInspector lib/importmap/module_inspector.rb               whether a download can be served as one file          (fork-only file)
 PackageGraph   lib/importmap/package_graph.rb                   crawls a chunked package's siblings, rewrites them    (fork-only file)
 VendoredGraph  lib/importmap/vendored_graph.rb                  the graph directory and the pin_all_from line         (fork-only file)
+EsmRun         lib/importmap/esm_run.rb                          the esm.run provider: URLs, import rewrite, versions  (fork-only file)
 Installer      lib/install/, lib/tasks/importmap_tasks.rake     rails importmap:install
 ```
 
@@ -112,7 +113,7 @@ Two paths, kept apart: the **request path** (engine → Map → helpers, no I/O 
 | Gemspec | `importmap-rails.gemspec` (deleted here) | `importmap-plus.gemspec` |
 | Entry point | `lib/importmap-rails.rb` (kept — still the real entry) | `lib/importmap-plus.rb` requires it |
 | Release | `bin/release` pushed from a laptop with an API key | `bin/release` → GitHub Release → trusted publishing (`release.yml`) |
-| Fork-only files | — | `minifier.rb`, `http_retries.rb`, `module_inspector.rb`, `package_graph.rb`, `vendored_graph.rb`, `provider_chain.rb`, `integrity.rb`, `CHANGELOG.md`, `release.yml`, `deploy-docs.yml`, `docs-ci.yml`, `docs/` |
+| Fork-only files | — | `minifier.rb`, `http_retries.rb`, `module_inspector.rb`, `package_graph.rb`, `vendored_graph.rb`, `provider_chain.rb`, `integrity.rb`, `esm_run.rb`, `CHANGELOG.md`, `release.yml`, `deploy-docs.yml`, `docs-ci.yml`, `docs/` |
 
 Upstream files this fork has modified heavily, which WILL conflict on sync: `commands.rb`, `packager.rb`, `npm.rb`, `README.md`, `ci.yml`, `test/commands_test.rb`, `test/packager_test.rb`. Per-file resolution rules: `.claude/rules/upstream-sync.md`.
 
