@@ -44,7 +44,7 @@ Investigation tells you what the codebase says; this finds what the REQUEST does
    - downgrade story: what does importmap-rails do with a `config/importmap.rb` this feature has written?
    - anything with no precedent in this repo — flag it as unknown-unknown territory
 2. **Interview the user** with AskUserQuestion, one question at a time, ordered by blast radius: public CLI/DSL surface first, then pin-file format (it is persisted in every app), then output wording. Rules:
-   - Skip anything `CLAUDE.md`, the rules, or an existing issue already answers.
+   - Skip anything `AGENTS.md`, the rules, or an existing issue already answers.
    - 2–5 questions is the sweet spot; zero is fine when the request is unambiguous — say so.
    - Every question offers concrete options with a recommended default.
 3. **Record the answers** in the plan's Decision section as `Settled in interview:` bullets — constraints the executor must not re-litigate.
