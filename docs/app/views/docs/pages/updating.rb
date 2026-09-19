@@ -46,6 +46,12 @@ class Views::Docs::Pages::Updating < DocsUI::Page
         against the CDN. Every other package still updates, and the command exits 1
         so a script knows it didn't do all it was asked.
 
+        A package its CDN can't resolve is reported with the CDN's own reason and
+        left where it is. It doesn't hold back the rest: the CDN is asked for each
+        package on its own once it refuses the batch, so every package it can build
+        still updates, from the CDN its pin names. The command exits 1 to say it
+        didn't do all it was asked.
+
         A package is re-resolved together with the dependencies its CDN lists for it,
         so those move as well, keeping their own pin options. Each package comes back
         from the CDN its pin comment names ([Provenance](/docs/provenance)); a remote
@@ -173,7 +179,8 @@ class Views::Docs::Pages::Updating < DocsUI::Page
         and skipped — `Couldn't restore "pdfjs-dist": it can't be vendored as a
         single file (workers)` — and the rest of the packages are still restored;
         the command exits non-zero to say it didn't do all of it, as it does when a
-        dependency of an esm.run bundle, pinned on the way, had to be skipped.
+        dependency of an esm.run bundle, pinned on the way, had to be skipped, or
+        when the CDN a pin names couldn't resolve the package at all.
       MD
     end
   end

@@ -51,6 +51,7 @@ class Views::Docs::Pages::Upgrading < DocsUI::Page
           [ "A failed CDN request is a raw backtrace.", "Requests are retried three times with a growing pause; the failure then names the URL." ],
           [ "A download that imports sibling files, spawns a worker or fetches a .wasm is vendored anyway and 404s in the browser.", "It is pinned to its CDN URL instead, the pin says why, and pin --vendor overrides. See below." ],
           [ "pin asks jspm and nothing else; a package its generator can't build reports \"Couldn't find any packages\".", "jspm, then esm.run, then jsDelivr, until one answers. The CDN that did is recorded on the pin. --from turns the fallback off." ],
+          [ "One package a CDN refuses fails the whole command, which still exits 0.", "The refused batch is asked for one package at a time, so the rest are pinned from the CDN they would have come from alone. pin, update and pristine exit 1 when a package was left unresolved." ],
           [ "pin foo takes whatever version jspm has indexed.", "The npm registry decides the version, then every CDN is asked for that one." ],
           [ "A CDN that hands back a UMD bundle is vendored, and the import fails to link in the browser.", "It is pinned to its CDN URL with (remote: not an ES module). pin --vendor overrides." ]
         ]
