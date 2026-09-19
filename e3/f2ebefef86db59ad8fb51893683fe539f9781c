@@ -1,0 +1,50 @@
+docs/app/views/docs/pages/multi_file_packages.rb
+  s_799829dc1aaf61::t_ba65fe1d54a9b0 3-6,10,13-161,165-285
+  s_799829dc1aaf61::t_69ead73f34f10b 1-2,7-9,11-12,286-289
+  s_799829dc1aaf61::t_0f289469da1b7d 162-164
+docs/app/views/docs/pages/preloading.rb
+  s_799829dc1aaf61::t_b5a1148b607d3e 55,108
+docs/spec/requests/internal_links_spec.rb
+  s_799829dc1aaf61::t_5de5ee79885df8 28
+  s_799829dc1aaf61::t_e80cf9589a4173 1-12,14-27,29-39
+  s_799829dc1aaf61::t_e72e2fb1890e0c 13
+docs/app/models/doc.rb
+  s_799829dc1aaf61::t_6b3a40fe57dbb8 25
+docs/app/views/docs/pages/overview.rb
+  s_799829dc1aaf61::t_89cecbae4e9f60 66-78
+  s_799829dc1aaf61::t_e3d2d70fd83524 14
+  s_799829dc1aaf61::t_8a775ac482a40a 54-56,59
+docs/app/views/docs/pages/provenance.rb
+  s_799829dc1aaf61::t_6779ff9d1f787e 52-53
+  s_799829dc1aaf61::t_56591de9f16b13 42-44
+docs/app/views/docs/pages/upgrading.rb
+  s_799829dc1aaf61::t_b5a1148b607d3e 72,91
+docs/app/views/docs/pages/minifying.rb
+  s_799829dc1aaf61::t_b5a1148b607d3e 54
+docs/app/views/docs/pages/pinning.rb
+  s_799829dc1aaf61::t_8e081d550694f0 15
+  s_799829dc1aaf61::t_dce6f7fe0f83af 136-138,140-145,151,154-156
+docs/app/views/docs/pages/integrity.rb
+  s_799829dc1aaf61::t_d0c7a8a8b7153b 59-60
+docs/app/views/docs/pages/updating.rb
+  s_799829dc1aaf61::t_b5a1148b607d3e 170,208
+README.md
+  s_799829dc1aaf61::t_9a17e5c0239d87 41,48-50
+  s_799829dc1aaf61::t_25079410a81bd1 28-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e3f2ebefef86db59ad8fb51893683fe539f9781c",
+  "prompts": {},
+  "sessions": {
+    "s_799829dc1aaf61": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4802b92d-1e30-48fe-8412-781a9ff0ae72",
+        "model": "claude-opus-5"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
