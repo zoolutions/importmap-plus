@@ -52,7 +52,7 @@ class Views::Docs::Pages::Preloading < DocsUI::Page
         `bin/importmap` keeps `preload:` when it rewrites a pin, so a `preload: false`
         survives `update`.
 
-        A package [vendored with its file graph](/docs/pinning) gets a
+        A package [vendored with its file graph](/docs/multi-file-packages) gets a
         `pin_all_from` line carrying whatever the entry's pin says, so a
         `preload: false` entry doesn't preload its chunks and a preloaded one does.
         That is one link per file — 48 of them for `@popperjs/core`, which imports
@@ -105,7 +105,7 @@ class Views::Docs::Pages::Preloading < DocsUI::Page
         the whole chart library on every page to render a page with no chart on
         it. Each of those dependencies needs its own `preload: false`, and the
         list changes whenever the package does — or whenever a package is
-        [vendored with its file graph](/docs/pinning) and contributes a whole
+        [vendored with its file graph](/docs/multi-file-packages) and contributes a whole
         directory of pins to the same question.
 
         The import graph already answers it. `app/javascript`,

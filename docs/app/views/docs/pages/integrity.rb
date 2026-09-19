@@ -56,7 +56,8 @@ class Views::Docs::Pages::Integrity < DocsUI::Page
         A vendored file is served by your app; a remote pin is fetched from a CDN on
         every page load, and it is the one place the app trusts a third party at
         runtime. So when `bin/importmap` writes a pin that stays remote — `--remote`,
-        or a package [kept remote](/docs/pinning) because its file can't stand alone —
+        or a package [kept remote](/docs/multi-file-packages#packages-kept-remote)
+        because its file can't stand alone —
         it fetches the URL it just resolved, hashes those bytes and writes the hash
         with the pin:
       MD

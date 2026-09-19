@@ -39,8 +39,9 @@ class Views::Docs::Pages::Provenance < DocsUI::Page
         [Locking versions](/docs/locking). `remote: <reason>` says the package was
         pinned to its CDN URL because the downloaded file can't stand alone, or
         because it isn't an ES module, and `vendored` says `--vendor` overrode that
-        check — see [Packages that can't be vendored alone](/docs/pinning) and
-        [Packages the CDN hands back as CommonJS](/docs/pinning). A bare `remote`,
+        check — see [Packages kept remote](/docs/multi-file-packages#packages-kept-remote)
+        and [Packages the CDN hands back as CommonJS](/docs/multi-file-packages#packages-the-cdn-hands-back-as-commonjs).
+        A bare `remote`,
         with no reason after it, means the same thing without saying why; write one
         by hand and it is kept as it is. A remote pin has no comment unless it is
         locked or was kept remote; then the version from its URL is written out so
@@ -48,7 +49,8 @@ class Views::Docs::Pages::Provenance < DocsUI::Page
 
         `graph of <package>` marks the one line that isn't a pin: the `pin_all_from`
         that maps the file graph downloaded beside a chunked package's entry — see
-        [Packages that ship more than one file](/docs/pinning). It names the package
+        [Vendoring the file graph](/docs/multi-file-packages#vendoring-the-file-graph).
+        It names the package
         the files came from, which is the prefix their keys are written under, and
         it is not always the package the entry's own pin names. The entry keeps its
         plain comment, so `update`, `outdated` and `lock` read the pin exactly as

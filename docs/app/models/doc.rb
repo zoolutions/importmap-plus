@@ -22,6 +22,7 @@ class Doc
 
   # Vendoring
   page "Pinning packages",     group: "Vendoring", slug: "pinning", view: "Pinning"
+  page "Multi-file packages",  group: "Vendoring", slug: "multi-file-packages", view: "MultiFilePackages"
   page "esm.run bundles",      group: "Vendoring", slug: "esm-run", view: "EsmRun"
   page "Minifying",            group: "Vendoring"
   page "Provenance",           group: "Vendoring"

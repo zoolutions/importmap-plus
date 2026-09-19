@@ -167,7 +167,7 @@ class Views::Docs::Pages::Updating < DocsUI::Page
         graph away again, directory and line together; a `--from` naming a CDN whose
         files can't be crawled (esm.sh, skypack) can't restore it at all, and is
         reported rather than leaving an entry whose imports resolve nowhere. See
-        [Packages that ship more than one file](/docs/pinning).
+        [Vendoring the file graph](/docs/multi-file-packages#vendoring-the-file-graph).
 
         A package the CDN can no longer serve the way its pin describes is reported
         and skipped — `Couldn't restore "pdfjs-dist": it can't be vendored as a
@@ -205,7 +205,7 @@ class Views::Docs::Pages::Updating < DocsUI::Page
           `lit/decorators.js` where `lit` is pinned — counts as covered;
         - a vendored file importing a sibling by relative path that isn't beside it,
           which is what a download from before this gem vendored
-          [file graphs](/docs/pinning) looks like;
+          [file graphs](/docs/multi-file-packages) looks like;
         - a vendored file that isn't an ES module, which a CDN can still hand back;
         - a file in `vendor/javascript` that no pin serves, including a `.mjs`, which
           `pin_all_from` never picks up;

@@ -69,7 +69,7 @@ class Views::Docs::Pages::Upgrading < DocsUI::Page
         one `pin_all_from` line mapping them. A pin importmap-plus had kept remote
         for that reason is converted back to a download by the same command, on the
         CDN its URL names. See
-        [Packages that ship more than one file](/docs/pinning).
+        [Vendoring the file graph](/docs/multi-file-packages#vendoring-the-file-graph).
 
         ### Packages you vendored that can't stand alone
 
@@ -88,7 +88,7 @@ class Views::Docs::Pages::Upgrading < DocsUI::Page
         say — `bin/importmap pin pdfjs-dist --vendor` puts it back and marks the pin
         `(vendored)` so it stays that way. If it didn't, and a `.wasm` decoder or a
         sibling module was quietly 404ing, the remote pin is the fix arriving. See
-        [Packages that can't be vendored alone](/docs/pinning).
+        [Packages kept remote](/docs/multi-file-packages#packages-kept-remote).
       MD
     end
   end
