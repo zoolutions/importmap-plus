@@ -229,6 +229,18 @@
   server without it, `send_early_hints` is a no-op and nothing changes. Off
   with `config.importmap.early_hints = false`.
 
+### Changed
+
+- **Everything this gem knows about esm.run lives in `Importmap::EsmRun`.**
+  The provider name, the bundle URL shapes, the rewrite that turns a bundle's
+  `/npm/dep@ver/+esm` imports into bare specifiers and the jsDelivr version
+  lookup were nine things in `Importmap::Packager`, which had grown to the
+  800-line ceiling with nowhere to put the next addition. Behaviour is
+  unchanged and no documented setting moved: `Importmap::Packager.esm_run_resolver`
+  still reads and writes the resolver, now on the new class. Only the `:nodoc:`
+  constants `Packager::ESM_RUN_*` are gone, as `Importmap::EsmRun::PROVIDER`,
+  `::CDN`, `::URL_REGEXP` and `::IMPORT_REGEXP`.
+
 ### Fixed
 
 - **A CDN that fails mid-crawl leaves the pin alone.** Vendoring a graph makes
