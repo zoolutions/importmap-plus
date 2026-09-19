@@ -22,7 +22,7 @@ strip_lines_matching = [
   "^/.*:\\d+:in ",
   "^\\(See full trace by running task with --trace\\)$",
 ]
-on_empty = "docs lint: ok"
+on_empty = "docs lint: no output left after filtering (check the exit code)"
 
 [[tests.docs-lint]]
 name = "clean pass drops the echoed command, keeps the inspection summary"
