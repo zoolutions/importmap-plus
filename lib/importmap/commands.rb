@@ -4,6 +4,7 @@ require "importmap/package_graph"
 require "importmap/vendored_graph"
 require "importmap/npm"
 require "importmap/provider_chain"
+require "importmap/batch_resolver"
 require "importmap/integrity"
 require "importmap/doctor"
 
@@ -39,7 +40,7 @@ class Importmap::Commands < Thor
                                 vendor: requested.include?(package) && options[:vendor])
     end
 
-    exit 1 if skipped.any?
+    exit 1 if skipped.any? || resolver.unresolved.any?
   end
 
   desc "lock [*PACKAGES]", "Lock packages at their pinned version"
@@ -84,7 +85,7 @@ class Importmap::Commands < Thor
 
     # skipped: an esm.run bundle's dependency is pinned on the way, and one the
     # CDN failed on is skipped the same way pin skips it.
-    exit 1 if unrestored.any? || skipped.any?
+    exit 1 if unrestored.any? || skipped.any? || resolver.unresolved.any?
   end
 
   desc "json", "Show the full importmap in json"
@@ -166,7 +167,7 @@ class Importmap::Commands < Thor
       end
     end
 
-    exit 1 if unchecked_packages.any? || skipped.any?
+    exit 1 if unchecked_packages.any? || skipped.any? || resolver.unresolved.any?
   end
 
   desc "packages", "Print out packages with version numbers"
@@ -526,28 +527,15 @@ class Importmap::Commands < Thor
     # another CDN would be a rewrite, not a restore.
     def for_each_import_grouped_by_provider(packages, env:, from: nil, fallback: false, &block)
       packages.group_by { |spec| from || vendored_provider_for(spec) || Importmap::ProviderChain::DEFAULT }.each do |provider, group|
-        if fallback && from.nil? && Importmap::ProviderChain.default?(provider)
-          for_each_import_with_fallback(group, env: env, &block)
-        else
-          for_each_import(group, env: env, from: provider, &block)
-        end
+        resolver.each_import(group, env: env, from: provider,
+          fallback: fallback && from.nil? && Importmap::ProviderChain.default?(provider), &block)
       end
     end
 
-    # A package nobody has pinned yet names no CDN, so it is asked of each in
-    # turn: jspm's generator giving up on a package says something about the
-    # generator, not about the package, and the next CDN often has it. A
-    # provider a pin already records, or one --from names, is a choice somebody
-    # made, and a choice is asked once and reported on.
-    def for_each_import_with_fallback(packages, env:, &block)
-      response = Importmap::ProviderChain.new.resolve(packager, packages, env: env) { |_provider, answer| answer }
-
-      if response
-        response[:imports].each(&block)
-      else
-        # Every CDN has already said why it couldn't, so the summary repeats none of it.
-        handle_package_not_found(packages, Importmap::ProviderChain.to_sentence, reason: nil)
-      end
+    # Shared by every group of a single run, so the exit code can ask it once
+    # whether anything was left unresolved.
+    def resolver
+      @resolver ||= Importmap::BatchResolver.new(packager, on_miss: method(:handle_package_not_found))
     end
 
     # A spec with no version means the latest, and the registry is what knows

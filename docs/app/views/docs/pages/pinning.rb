@@ -98,8 +98,29 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
         pin comment, so `update` and `pristine` go straight back to it and never
         retry the jspm that couldn't build it. Nothing new is stored anywhere else.
 
-        If no CDN in the chain has the package, each one's reason is printed and the
-        command says so:
+        A CDN answers a batch of packages as a whole, so one spec its generator
+        can't build would be a "no" for every package beside it. When that happens
+        each package is asked for on its own, along the path it would have taken
+        alone — so only the package the CDN actually refused moves to the next one:
+      MD
+      DocsUI::Code(<<~SHELL, lexer: :console)
+        $ ./bin/importmap pin md5@2.2.0 mermaid@10.6.0
+        jspm couldn't resolve "md5@2.2.0", "mermaid@10.6.0" (No './dist/cytoscape.umd.js' exports subpath defined in cytoscape@3.34.3); asking for each on its own
+        Pinning "md5" to vendor/javascript/md5.js via download from https://ga.jspm.io/npm:md5@2.2.0/md5.js
+        jspm couldn't resolve "mermaid@10.6.0" (No './dist/cytoscape.umd.js' exports subpath defined in cytoscape@3.34.3); trying esm.run
+        Pinning "mermaid" to vendor/javascript/mermaid.js via download from https://cdn.jsdelivr.net/npm/mermaid@10.6.0/+esm
+      SHELL
+      DocsUI::Code(<<~RUBY, filename: "config/importmap.rb")
+        pin "md5" # @2.2.0
+        pin "mermaid" # @10.6.0 (esm.run)
+      RUBY
+      md <<~'MD'
+        `md5` keeps the CDN it would have been pinned from alone — a sibling failing
+        is no reason to change a package's provenance.
+
+        If no CDN in the chain has the package, each one's reason is printed, the
+        command says so and it exits 1. The packages that did resolve are still
+        pinned:
       MD
       DocsUI::Code(<<~SHELL, lexer: :console)
         $ ./bin/importmap pin no-such-package
@@ -123,7 +144,9 @@ class Views::Docs::Pages::Pinning < DocsUI::Page
       md <<~'MD'
         `--from` is a choice you made, so it is asked once and never falls back: the
         CDN you named either has the package or reports why it hasn't. The same goes
-        for a package whose pin already records a CDN.
+        for a package whose pin already records a CDN. A batch it refuses is still
+        split — each package is asked of that same CDN on its own, so the ones it
+        has are pinned and only the ones it hasn't are reported.
 
         The CDN is recorded in the pin comment when it isn't jspm, and later commands
         go back to it — an unpkg download stays on unpkg through `update` and

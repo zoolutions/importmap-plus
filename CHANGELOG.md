@@ -243,6 +243,39 @@
 
 ### Fixed
 
+- **One package a CDN can't resolve no longer blocks — or silently moves — the
+  rest of the batch.** ([#32](https://github.com/zoolutions/importmap-plus/issues/32))
+  A CDN answers a batch of packages as a whole, so `bin/importmap update` with
+  three outdated packages reported `Couldn't find any packages in
+  ["cheap-ruler", "mapbox-gl", "mermaid"] on jspm`, updated nothing and exited
+  0, because jspm's generator can't build `mermaid`. Commenting out the one
+  package let the other two through. A refused batch of more than one package
+  is now asked for one package at a time, along the path each would have taken
+  alone:
+
+  ```
+  $ bin/importmap pin md5@2.2.0 mermaid@10.6.0
+  jspm couldn't resolve "md5@2.2.0", "mermaid@10.6.0" (No './dist/cytoscape.umd.js' exports subpath defined in cytoscape@3.34.3); asking for each on its own
+  Pinning "md5" to vendor/javascript/md5.js via download from https://ga.jspm.io/npm:md5@2.2.0/md5.js
+  jspm couldn't resolve "mermaid@10.6.0" (No './dist/cytoscape.umd.js' exports subpath defined in cytoscape@3.34.3); trying esm.run
+  Pinning "mermaid" to vendor/javascript/mermaid.js via download from https://cdn.jsdelivr.net/npm/mermaid@10.6.0/+esm
+  ```
+  ```ruby
+  pin "md5" # @2.2.0
+  pin "mermaid" # @10.6.0 (esm.run)
+  ```
+
+  Only the package the CDN refused travels the rest of the chain, so a healthy
+  package is never re-pinned from another CDN — and never has its provenance
+  comment rewritten — because a sibling failed. An explicit `--from`, or a
+  provider a pin records, still asks that one CDN and only that one, now once
+  per package. The batch stays the fast path: it is split only when it is
+  refused and holds more than one package.
+
+  `pin`, `update` and `pristine` now **exit 1** when a package was left
+  unresolved, so `bin/importmap update && git commit` can no longer commit an
+  import map that quietly missed a package. The packages that did resolve are
+  still written.
 - **A CDN that fails mid-crawl leaves the pin alone.** Vendoring a graph makes
   one request per file — 250 of them for `date-fns` — so a 503 that outlives
   the retries is far likelier than it was for a single download. `pin` and

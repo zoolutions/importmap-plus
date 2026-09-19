@@ -1060,7 +1060,7 @@ class CommandsTest < ActiveSupport::TestCase
       pin "photoswipe/lightbox", to: "https://cdn.jsdelivr.net/npm/photoswipe@5.3.0/dist/photoswipe-lightbox.esm.js"
     PINS
 
-    out, _err = run_importmap_command("update")
+    out, _err = run_importmap_command_expecting_failure("update")
 
     # The remote pin says jsdelivr, so the subpath is asked of jsdelivr. Taking
     # the package's skypack instead grouped the two into one request, and one
@@ -1126,13 +1126,47 @@ class CommandsTest < ActiveSupport::TestCase
   test "pin asks only the CDN it was told to and says why that one couldn't" do
     importmap_config("")
 
-    out, _err = run_importmap_command("pin", "mermaid@10.6.0", "--from", "jspm")
+    out, _err = run_importmap_command_expecting_failure("pin", "mermaid@10.6.0", "--from", "jspm")
 
     assert_not_includes out, "trying esm.run"
     assert_includes out, %(Couldn't find any packages in ["mermaid@10.6.0"] on jspm)
     assert_match(/cytoscape/, out)
 
     assert_not_includes File.read("#{@tmpdir}/dummy/config/importmap.rb"), "mermaid"
+  end
+
+  # jspm answers a batch as a whole, so the spec its generator can't build used
+  # to be "no" for every spec beside it. md5 resolves on jspm alone and must be
+  # pinned from jspm: a sibling failing is no reason to move its provenance.
+  test "pin splits a batch jspm refused and only the refused package changes CDN" do
+    importmap_config("")
+
+    out, _err = run_importmap_command("pin", "md5@2.2.0", "mermaid@10.6.0")
+
+    assert_match(/jspm couldn't resolve "md5@2\.2\.0", "mermaid@10\.6\.0" \(.+\); asking for each on its own/, out)
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, %(pin "md5" # @2.2.0\n)
+    assert_includes content, %(pin "mermaid" # @10.6.0 (esm.run)\n)
+
+    assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/md5.js")
+    assert File.exist?("#{@tmpdir}/dummy/vendor/javascript/mermaid.js")
+  end
+
+  # --from is still asked once per spec and never falls back: the split is about
+  # which specs a refusal is evidence against, not about the choice of CDN.
+  test "pin splits a batch a named CDN refused without trying another one" do
+    importmap_config("")
+
+    out, _err = run_importmap_command_expecting_failure("pin", "md5@2.2.0", "mermaid@10.6.0", "--from", "jspm")
+
+    assert_match(/Couldn't find any packages in \["md5@2\.2\.0", "mermaid@10\.6\.0"\] on jspm( \(.+\))?; asking for each on its own/, out)
+    assert_includes out, %(Couldn't find any packages in ["mermaid@10.6.0"] on jspm)
+    assert_not_includes out, "trying esm.run"
+
+    content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes content, %(pin "md5" # @2.2.0\n)
+    assert_not_includes content, "mermaid"
   end
 
   test "pin resolves a package with no version from the npm registry" do
@@ -1199,7 +1233,7 @@ class CommandsTest < ActiveSupport::TestCase
   test "pristine asks the CDN the pin names and doesn't fall back" do
     importmap_config(%(pin "mermaid" # @10.6.0))
 
-    out, _err = run_importmap_command("pristine")
+    out, _err = run_importmap_command_expecting_failure("pristine")
 
     assert_not_includes out, "trying esm.run"
     assert_includes out, %(Couldn't find any packages in ["mermaid@10.6.0"] on jspm)
