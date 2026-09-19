@@ -70,7 +70,7 @@ No unresolved threads → report and stop.
 1. Read the actual file and line
 2. Check the suggestion is right for THIS codebase — the pin-line contract, both asset pipelines, Ruby 3.1 and Rails 6.1 floors
 3. Check what else would break: every rewrite path (`pin`, `update`, `pristine`, `unpin`) and `Npm`'s parsing share the regexes
-4. Check `CLAUDE.md` and `.claude/rules/*.md` — project conventions override reviewer preference
+4. Check `AGENTS.md` and `.claude/rules/*.md` — project conventions override reviewer preference
 5. Check the fork constraints — a suggestion fine in a normal gem can be wrong here
 
 ### Fork constraints (push back on sight)

@@ -1,0 +1,64 @@
+# Project-local RTK filters (https://github.com/rtk-ai/rtk#custom-filters).
+#
+# The `rtk hook claude` PreToolUse hook rewrites a matching command to
+# `rtk <cmd>`; rtk runs it and drops the lines listed here before the agent
+# sees the output. Filters are line-based: they strip noise, never reformat.
+#
+# `match_command` is matched against the command with the first word reduced
+# to its basename, so `bin/x`, `./bin/x` and `x` all hit `^x\b`.
+#
+# Trust is a SHA-256 of this file: after every edit run `rtk trust --yes`,
+# then `rtk verify` to run the inline tests.
+schema_version = 1
+
+[filters.docs-lint]
+filter_stderr = true
+description = "docs/: bundle exec rake lint[:fix] — drop the echoed rubocop file-list command and the rake/bundler backtrace, keep the inspection summary and offenses"
+match_command = "^(?:bundle\\s+exec\\s+)?rake\\s+lint(?::fix)?\\b"
+strip_lines_matching = [
+  "^\\s*$",
+  "^bundle exec rubocop ",
+  "^Command failed with status ",
+  "^/.*:\\d+:in ",
+  "^\\(See full trace by running task with --trace\\)$",
+]
+on_empty = "docs lint: ok"
+
+[[tests.docs-lint]]
+name = "clean pass drops the echoed command, keeps the inspection summary"
+input = """bundle exec rubocop app/controllers/application_controller.rb app/models/doc.rb spec/rails_helper.rb config/application.rb Rakefile config.ru
+Inspecting 53 files
+.....................................................
+
+53 files inspected, no offenses detected
+"""
+expected = """Inspecting 53 files
+.....................................................
+53 files inspected, no offenses detected"""
+
+[[tests.docs-lint]]
+name = "offense keeps the offense detail and failure markers, drops the backtrace"
+input = """bundle exec rubocop app/controllers/application_controller.rb app/helpers/application_helper.rb Rakefile config.ru
+Inspecting 53 files
+...C.................................................
+
+Offenses:
+
+app/helpers/application_helper.rb:3:1: C: [Correctable] Layout/TrailingEmptyLines: 3 trailing blank lines detected.
+
+53 files inspected, 1 offense detected, 1 offense autocorrectable
+rake aborted!
+Command failed with status (1): [bundle exec rubocop app/controllers/application_controller.rb app/helpers/application_helper.rb Rakefile config.ru]
+/private/tmp/importmap-plus/docs/Rakefile:17:in 'block in <top (required)>'
+/Users/x/.gem/ruby/4.0.7/gems/rake-13.4.2/exe/rake:27:in '<top (required)>'
+/Users/x/.gem/ruby/4.0.7/gems/bundler-4.0.19/exe/bundle:20:in '<top (required)>'
+Tasks: TOP => lint
+(See full trace by running task with --trace)
+"""
+expected = """Inspecting 53 files
+...C.................................................
+Offenses:
+app/helpers/application_helper.rb:3:1: C: [Correctable] Layout/TrailingEmptyLines: 3 trailing blank lines detected.
+53 files inspected, 1 offense detected, 1 offense autocorrectable
+rake aborted!
+Tasks: TOP => lint"""

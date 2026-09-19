@@ -7,7 +7,7 @@ allowed-tools: Bash(gh issue view:*), Bash(gh search:*), Bash(gh issue list:*), 
 
 # LFG — Full Autonomous Workflow
 
-Execute a complete engineering workflow with verification at each phase. Read `CLAUDE.md` first: the never-do list there (constant surface, no new deps, transform-only minify, provenance survives rewrites, retries on every request) is the set of constraints every phase below assumes.
+Execute a complete engineering workflow with verification at each phase. Read `AGENTS.md` first: the never-do list there (constant surface, no new deps, transform-only minify, provenance survives rewrites, retries on every request) is the set of constraints every phase below assumes.
 
 ## Phase 0: Branch setup
 

@@ -100,7 +100,7 @@ Failures caused by this branch's changes persist → do NOT proceed. Report what
 
 ## Phase B: Run `/github-review-comments`
 
-Invoke `/github-review-comments` with the same `$ARGUMENTS` (`.claude/commands/github-review-comments.md`): fetch unresolved threads → categorise against the codebase and `CLAUDE.md` → implement accepted fixes → verify → commit and push → reply with SHAs or reasoning → resolve threads → verify none remain.
+Invoke `/github-review-comments` with the same `$ARGUMENTS` (`.claude/commands/github-review-comments.md`): fetch unresolved threads → categorise against the codebase and `AGENTS.md` → implement accepted fixes → verify → commit and push → reply with SHAs or reasoning → resolve threads → verify none remain.
 
 ### Phase B exit criteria
 
