@@ -81,7 +81,13 @@ if [ "$current" != "$next" ]; then
   ' "$VERSION_FILE" "$current" "$next"
 
   bundle install --quiet
-  git add "$VERSION_FILE" Gemfile.lock
+
+  # docs/ depends on the gem through `path: ".."`, so docs/Gemfile.lock pins
+  # the version too. Left behind, it fails the frozen install that
+  # deploy-docs.yml runs on this very release — and every docs PR after it.
+  (cd docs && bundle install --quiet)
+
+  git add "$VERSION_FILE" Gemfile.lock docs/Gemfile.lock
   git commit -m "Prepare for $next"
   git push origin main
 else
