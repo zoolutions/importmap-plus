@@ -7,6 +7,8 @@ class Importmap::Npm
   include Importmap::HttpRetries
 
   PIN_REGEX = /#{Importmap::Map::PIN_REGEX}.*/.freeze # :nodoc:
+  VERSION_FROM_URL_REGEX = /^pin .*(?<=npm:|npm\/|skypack\.dev\/|unpkg\.com\/|esm\.sh\/|esm\.sh\/\*)([^@\/]+)@(\d+\.\d+\.\d+(?:[^\/\s"']*))/.freeze # :nodoc:
+  VERSION_FROM_COMMENT_REGEX = /#{PIN_REGEX} #.*@(\d+\.\d+\.\d+(?:[^\s]*)).*$/.freeze # :nodoc:
 
   Error     = Class.new(StandardError)
   HTTPError = Class.new(Error)
@@ -71,8 +73,8 @@ class Importmap::Npm
     @packages_with_versions ||= begin
       # We cannot use the name after "pin" because some dependencies are loaded from inside packages
       # Eg. pin "buffer", to: "https://ga.jspm.io/npm:@jspm/core@2.0.0-beta.19/nodelibs/browser/buffer.js"
-      with_versions = importmap.scan(/^pin .*(?<=npm:|npm\/|skypack\.dev\/|unpkg\.com\/|esm\.sh\/|esm\.sh\/\*)([^@\/]+)@(\d+\.\d+\.\d+(?:[^\/\s"']*))/) |
-        importmap.scan(/#{PIN_REGEX} #.*@(\d+\.\d+\.\d+(?:[^\s]*)).*$/)
+      with_versions = importmap.scan(VERSION_FROM_URL_REGEX) |
+        importmap.scan(VERSION_FROM_COMMENT_REGEX)
 
       with_versions.map! do |package, version|
         [extract_base_package_name(package), version]
@@ -204,9 +206,19 @@ class Importmap::Npm
       package, filename = match.captures
       filename ||= "#{package}.js"
 
-      return if versioned_packages.include?(extract_base_package_name(package))
+      return if versioned_packages.include?(package)
+      return if versioned_line?(line)
 
       path = File.join(@vendor_path, filename)
       [package, path] if File.exist?(path)
+    end
+
+    # A pin is versioned by its own line, not by another pin of the same
+    # package. The audit checks a package once at the version its pins name,
+    # so "@tiptap/pm/tables" with its own comment is covered by "@tiptap/pm";
+    # a vendored subpath with no comment is a file of unknown version even when
+    # its base package is pinned at one, and the warning exists for that file.
+    def versioned_line?(line)
+      line.match?(VERSION_FROM_URL_REGEX) || line.match?(VERSION_FROM_COMMENT_REGEX)
     end
 end

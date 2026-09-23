@@ -11,9 +11,11 @@
   set, so every vendored subpath pin printed `Ignoring @tiptap/pm/tables (...)
   since no version is specified in the importmap` even though its package was
   checked at exactly that version. An app with many subpath pins saw dozens of
-  these lines on every run. The unversioned check now normalises the pin name
-  the same way, so only a pin with no version anywhere is reported. Upstream
-  has the same comparison; the fix is offered there too.
+  these lines on every run. A pin whose own line names a version, in its URL
+  or its comment, is no longer reported; a vendored subpath pin with no
+  version of its own still is, because that file's version is unknown even
+  when its base package is pinned at one. Upstream has the same comparison;
+  the fix is offered there too.
 
 ## 2.0.0
 
