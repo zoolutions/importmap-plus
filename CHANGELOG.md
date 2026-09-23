@@ -1,6 +1,21 @@
 # Changelog
 
-## 1.2.0
+## 2.0.1
+
+### Fixed
+
+- **`audit` and `outdated` no longer report a versioned subpath pin as
+  unversioned.** The audit normalises every versioned pin to its npm package
+  (`@tiptap/pm/tables` is audited as `@tiptap/pm`), but the pass that looks
+  for vendored files with no version compared the full pin name against that
+  set, so every vendored subpath pin printed `Ignoring @tiptap/pm/tables (...)
+  since no version is specified in the importmap` even though its package was
+  checked at exactly that version. An app with many subpath pins saw dozens of
+  these lines on every run. The unversioned check now normalises the pin name
+  the same way, so only a pin with no version anywhere is reported. Upstream
+  has the same comparison; the fix is offered there too.
+
+## 2.0.0
 
 ### Added
 
