@@ -207,16 +207,16 @@ class Importmap::Npm
       filename ||= "#{package}.js"
 
       return if versioned_packages.include?(package)
-      return if versioned_line?(line)
+      return if versioned_line?(line) && versioned_packages.include?(extract_base_package_name(package))
 
       path = File.join(@vendor_path, filename)
       [package, path] if File.exist?(path)
     end
 
-    # A pin is versioned by its own line, not by another pin of the same
-    # package. The audit checks a package once at the version its pins name,
-    # so "@tiptap/pm/tables" with its own comment is covered by "@tiptap/pm";
-    # a vendored subpath with no comment is a file of unknown version even when
+    # A subpath pin is covered when its own line names a version and the
+    # package that version belongs to is in the audited set: "@tiptap/pm/tables"
+    # with its own comment is checked as "@tiptap/pm" at that version. A
+    # vendored subpath with no comment is a file of unknown version even when
     # its base package is pinned at one, and the warning exists for that file.
     def versioned_line?(line)
       line.match?(VERSION_FROM_URL_REGEX) || line.match?(VERSION_FROM_COMMENT_REGEX)
