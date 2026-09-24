@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **A `preload: %w[...]` survives a rewrite.** `pin`, `update` and `pristine`
+  carried over `preload: ["admin", "app"]` but not the same list written as a
+  word array, which RuboCop and Standard prefer (`Style/WordArray`). The option
+  was dropped without a word, so an updated package quietly stopped being
+  preloaded on the pages that named it. It is now read, and written back in the
+  form the app chose:
+
+  ```ruby
+  pin "tailwindcss-stimulus-components", preload: %w[application webcad] # @6.1.3
+  # after bin/importmap update
+  pin "tailwindcss-stimulus-components", preload: %w[application webcad] # @6.1.4
+  ```
+
 ## 1.2.0
 
 ### Added

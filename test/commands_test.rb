@@ -89,6 +89,17 @@ class CommandsTest < ActiveSupport::TestCase
     assert_includes updated_content, 'pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.3.0/md5.js", preload: "custom"'
   end
 
+  test "update command preserves a %w[] preload option as %w[]" do
+    importmap_config('pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", preload: %w[application admin]')
+
+    out, _err = run_importmap_command("update")
+
+    assert_includes out, "Pinning"
+
+    updated_content = File.read("#{@tmpdir}/dummy/config/importmap.rb")
+    assert_includes updated_content, 'pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.3.0/md5.js", preload: %w[application admin]'
+  end
+
   test "update command replaces a stale integrity hash on a remote pin" do
     importmap_config('pin "md5", to: "https://cdn.jsdelivr.net/npm/md5@2.2.0/md5.js", integrity: "sha384-oldintegrity"')
 

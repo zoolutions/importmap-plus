@@ -1431,6 +1431,32 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     assert_equal %(pin "package2", preload: []),
                  packager.pin_for("package2", preloads: extract_options_for_package(packager, "package2")[:preload])
   end
+  test "extract_existing_pin_options reads a %w[] preload" do
+    temp_importmap = create_temp_importmap(<<~PINS)
+      pin "package1", preload: %w[admin app]
+      pin "package2", preload: %w(admin), integrity: true
+      pin "package3", preload: %w[]
+    PINS
+    packager = Importmap::Packager.new(temp_importmap)
+
+    assert_equal({ preload: [ "admin", "app" ] }, extract_options_for_package(packager, "package1"))
+    assert_equal({ preload: [ "admin" ], integrity: true }, extract_options_for_package(packager, "package2"))
+    assert_equal({ preload: [] }, extract_options_for_package(packager, "package3"))
+  end
+
+  test "a %w[] preload survives being read and written again, still as %w[]" do
+    temp_importmap = create_temp_importmap(<<~PINS)
+      pin "package1", preload: %w[admin app] # @1.0.0
+      pin "package2", preload: %w[admin]
+    PINS
+    packager = Importmap::Packager.new(temp_importmap)
+
+    assert_equal %(pin "package1", preload: %w[admin app] # @1.0.1),
+                 packager.vendored_pin_for("package1", "https://cdn/package1@1.0.1", extract_options_for_package(packager, "package1")[:preload])
+    assert_equal %(pin "package2", preload: %w[admin]),
+                 packager.pin_for("package2", preloads: extract_options_for_package(packager, "package2")[:preload])
+  end
+
   private
     GRAPH_ROOT = "https://ga.jspm.io/npm:pkg@1.0.0/".freeze
 
