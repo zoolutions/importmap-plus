@@ -16,10 +16,27 @@ class Importmap::Packager
   # The bracketed form matches an empty array too: `preload: []` is a pin an
   # app wrote, and a rewrite that dropped it would start preloading the package
   # on every page.
-  PRELOAD_OPTION_REGEXP = /preload:\s*(\[[^\]]*\]|%w\[[^\]]*\]|%w\([^)]*\)|true|false|["'][^"']*["'])/.freeze # :nodoc:
+  PRELOAD_OPTION_REGEXP = /preload:\s*(\[[^\]]*\]|%w\[(?:\\.|[^\]\\])*\]|%w\((?:\\.|[^)\\])*\)|true|false|["'][^"']*["'])/.freeze # :nodoc:
   # A `preload: %w[...]` read from a pin, so a rewrite writes it back in the
-  # form the app chose (RuboCop's Style/WordArray flags `["a", "b"]`).
-  class WordArray < Array; end # :nodoc:
+  # form the app chose (RuboCop's Style/WordArray flags `["a", "b"]`). Read
+  # with Ruby's escapes rather than split on whitespace: `%w[my\ app]` is one
+  # word, and a backslash before anything but whitespace, a backslash or the
+  # literal's own delimiter stays in it.
+  class WordArray < Array # :nodoc:
+    LITERAL_REGEXP = /\A%w([\[(])(.*)[\])]\z/m.freeze
+
+    def self.parse(literal)
+      open, body = literal.match(LITERAL_REGEXP)&.captures
+      return unless open
+
+      escapable = /\\([\s\\#{Regexp.escape(open == "[" ? "[]" : "()")}])/
+      new(body.scan(/(?:\\.|[^\s\\])+/m).map { |word| word.gsub(escapable, '\1') })
+    end
+
+    def to_s
+      "%w[#{map { |word| word.gsub(/[\s\\\[\]]/) { "\\#{$&}" } }.join(" ")}]"
+    end
+  end
   TO_OPTION_REGEXP = /to:\s*["']([^"']*)["']/.freeze # :nodoc:
   # Only the booleans: a hash string is tied to the file it was computed for,
   # so a rewrite that changes the URL has to drop it.
@@ -540,8 +557,8 @@ class Importmap::Packager
         true
       when "false"
         false
-      when /\A%w[\[(](.*)[\])]\z/m
-        WordArray.new($1.split)
+      when WordArray::LITERAL_REGEXP
+        WordArray.parse(value)
       when /^\[.*\]$/
         # config/importmap.rb is Ruby, not JSON, and a single-quoted pin is a
         # supported shape here, so the entry points are scanned out of the
@@ -557,7 +574,7 @@ class Importmap::Packager
       # names no entry point. Array() flattens both to [], so the difference
       # has to be read before it.
       return "" if preloads.nil?
-      return %(, preload: %w[#{preloads.join(" ")}]) if preloads.is_a?(WordArray)
+      return %(, preload: #{preloads}) if preloads.is_a?(WordArray)
 
       case Array(preloads)
       in []
