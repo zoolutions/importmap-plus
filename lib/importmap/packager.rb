@@ -13,12 +13,15 @@ class Importmap::Packager
   include Importmap::HttpRetries
 
   PIN_REGEX = /#{Importmap::Map::PIN_REGEX}(.*)/.freeze # :nodoc:
+  # A Ruby string literal, escapes included, so a quote or bracket inside one
+  # doesn't end the match early (`"it's"`, `["a]"]`).
+  QUOTED_STRING_REGEXP = /"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'/m.freeze # :nodoc:
   # The bracketed form matches an empty array too: `preload: []` is a pin an
   # app wrote, and a rewrite that dropped it would start preloading the package
   # on every page. A word array nests its own delimiter the way Ruby does
   # (`%w[foo [bar]]` is "foo" and "[bar]"), hence the recursive groups; with
   # named groups in the pattern, the value has to be named too to stay [1].
-  PRELOAD_OPTION_REGEXP = /preload:\s*(?<value>\[[^\]]*\]|%w(?<brackets>\[(?:\\.|[^\[\]\\]|\g<brackets>)*\])|%w(?<parens>\((?:\\.|[^()\\]|\g<parens>)*\))|true|false|["'][^"']*["'])/.freeze # :nodoc:
+  PRELOAD_OPTION_REGEXP = /preload:\s*(?<value>\[(?:#{QUOTED_STRING_REGEXP}|[^\]"'])*\]|%w(?<brackets>\[(?:\\.|[^\[\]\\]|\g<brackets>)*\])|%w(?<parens>\((?:\\.|[^()\\]|\g<parens>)*\))|true|false|#{QUOTED_STRING_REGEXP})/.freeze # :nodoc:
   # A `preload: %w[...]` read from a pin, so a rewrite writes it back in the
   # form the app chose (RuboCop's Style/WordArray flags `["a", "b"]`). Read
   # with Ruby's escapes rather than split on whitespace: `%w[my\ app]` is one
@@ -565,10 +568,17 @@ class Importmap::Packager
         # config/importmap.rb is Ruby, not JSON, and a single-quoted pin is a
         # supported shape here, so the entry points are scanned out of the
         # literal rather than parsed. JSON.parse raised on every one of them.
-        value.scan(/["']([^"']*)["']/).flatten
+        value.scan(QUOTED_STRING_REGEXP).map { |double, single| unquote(double, single) }
       else
-        value.gsub(/["']/, "")
+        unquote(*value.match(/\A#{QUOTED_STRING_REGEXP}\z/).captures)
       end
+    end
+
+    # A single-quoted string unescapes only \\ and \'. In a double-quoted one
+    # a backslash before any character an entry point would hold is that
+    # character, which is all a preload name needs.
+    def unquote(double, single)
+      double ? double.gsub(/\\(.)/m, '\1') : single.gsub(/\\([\\'])/, '\1')
     end
 
     def preload(preloads)
@@ -586,7 +596,7 @@ class Importmap::Packager
       in ["false"] | [false]
         %(, preload: false)
       in [string]
-        %(, preload: "#{string}")
+        %(, preload: #{string.to_s.inspect})
       else
         %(, preload: #{preloads})
       end
