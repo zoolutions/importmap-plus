@@ -8,9 +8,9 @@
   carried over `preload: ["admin", "app"]` but not the same list written as a
   word array, which RuboCop and Standard prefer (`Style/WordArray`). The option
   was dropped without a word, so an updated package quietly stopped being
-  preloaded on the pages that named it. It is now read — backslash escapes
-  included, so `%w[my\ app]` is the one entry point Ruby sees — and written back
-  in the form the app chose:
+  preloaded on the pages that named it. It is now read — backslash escapes and
+  nested brackets included, so `%w[my\ app]` is the one entry point Ruby sees and
+  `%w[foo [bar]]` keeps its `[bar]` — and written back in the form the app chose:
 
   ```ruby
   pin "tailwindcss-stimulus-components", preload: %w[application webcad] # @6.1.3

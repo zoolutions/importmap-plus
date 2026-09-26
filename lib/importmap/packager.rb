@@ -15,8 +15,10 @@ class Importmap::Packager
   PIN_REGEX = /#{Importmap::Map::PIN_REGEX}(.*)/.freeze # :nodoc:
   # The bracketed form matches an empty array too: `preload: []` is a pin an
   # app wrote, and a rewrite that dropped it would start preloading the package
-  # on every page.
-  PRELOAD_OPTION_REGEXP = /preload:\s*(\[[^\]]*\]|%w\[(?:\\.|[^\]\\])*\]|%w\((?:\\.|[^)\\])*\)|true|false|["'][^"']*["'])/.freeze # :nodoc:
+  # on every page. A word array nests its own delimiter the way Ruby does
+  # (`%w[foo [bar]]` is "foo" and "[bar]"), hence the recursive groups; with
+  # named groups in the pattern, the value has to be named too to stay [1].
+  PRELOAD_OPTION_REGEXP = /preload:\s*(?<value>\[[^\]]*\]|%w(?<brackets>\[(?:\\.|[^\[\]\\]|\g<brackets>)*\])|%w(?<parens>\((?:\\.|[^()\\]|\g<parens>)*\))|true|false|["'][^"']*["'])/.freeze # :nodoc:
   # A `preload: %w[...]` read from a pin, so a rewrite writes it back in the
   # form the app chose (RuboCop's Style/WordArray flags `["a", "b"]`). Read
   # with Ruby's escapes rather than split on whitespace: `%w[my\ app]` is one

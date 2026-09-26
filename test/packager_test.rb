@@ -1480,6 +1480,26 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     end
   end
 
+  test "a %w[] preload reads nested delimiters the way Ruby does, and writes them back" do
+    temp_importmap = create_temp_importmap(<<~'PINS')
+      pin "package1", preload: %w[foo [bar]], integrity: true
+      pin "package2", preload: %w(a (b c) [d)
+      pin "package3", preload: %w[a[b[c]] d]
+    PINS
+    packager = Importmap::Packager.new(temp_importmap)
+
+    assert_equal({ preload: %w[foo [bar]], integrity: true }, extract_options_for_package(packager, "package1"))
+    assert_equal %w(a (b c) [d), extract_options_for_package(packager, "package2")[:preload]
+    assert_equal %w[a[b[c]] d], extract_options_for_package(packager, "package3")[:preload]
+
+    %w[ package1 package2 package3 ].each do |package|
+      preloads = extract_options_for_package(packager, package)[:preload]
+      written  = packager.pin_for(package, preloads: preloads)
+
+      assert_equal preloads, eval(written[/%w\[.*\]/m]), written
+    end
+  end
+
   private
     GRAPH_ROOT = "https://ga.jspm.io/npm:pkg@1.0.0/".freeze
 
