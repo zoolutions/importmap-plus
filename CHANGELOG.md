@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **A `preload: %w[...]` survives a rewrite.** `pin`, `update` and `pristine`
+  carried over `preload: ["admin", "app"]` but not the same list written as a
+  word array, which RuboCop and Standard prefer (`Style/WordArray`). The option
+  was dropped without a word, so an updated package quietly stopped being
+  preloaded on the pages that named it. It is now read — backslash escapes and
+  nested brackets included, so `%w[my\ app]` is the one entry point Ruby sees and
+  `%w[foo [bar]]` keeps its `[bar]` — and written back in the form the app chose:
+
+  ```ruby
+  pin "tailwindcss-stimulus-components", preload: %w[application webcad] # @6.1.3
+  # after bin/importmap update
+  pin "tailwindcss-stimulus-components", preload: %w[application webcad] # @6.1.4
+  ```
+
+- **A quoted preload keeps a bracket or quote inside it.** `preload: ["a]", "b"]`
+  was cut at the first `]` and `preload: "it's"` at the `'`, so a rewrite wrote
+  back a shorter list or a different entry point. Quoted strings are now read
+  whole, with Ruby's escapes, and a single entry point is written back as a
+  valid Ruby string (`preload: 'say "hi"'` no longer becomes `"say "hi""`).
+
 ## 1.2.0
 
 ### Added

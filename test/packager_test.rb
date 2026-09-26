@@ -1431,6 +1431,115 @@ class Importmap::PackagerTest < ActiveSupport::TestCase
     assert_equal %(pin "package2", preload: []),
                  packager.pin_for("package2", preloads: extract_options_for_package(packager, "package2")[:preload])
   end
+  test "extract_existing_pin_options reads a %w[] preload" do
+    temp_importmap = create_temp_importmap(<<~PINS)
+      pin "package1", preload: %w[admin app]
+      pin "package2", preload: %w(admin), integrity: true
+      pin "package3", preload: %w[]
+    PINS
+    packager = Importmap::Packager.new(temp_importmap)
+
+    assert_equal({ preload: [ "admin", "app" ] }, extract_options_for_package(packager, "package1"))
+    assert_equal({ preload: [ "admin" ], integrity: true }, extract_options_for_package(packager, "package2"))
+    assert_equal({ preload: [] }, extract_options_for_package(packager, "package3"))
+  end
+
+  test "a %w[] preload survives being read and written again, still as %w[]" do
+    temp_importmap = create_temp_importmap(<<~PINS)
+      pin "package1", preload: %w[admin app] # @1.0.0
+      pin "package2", preload: %w[admin]
+    PINS
+    packager = Importmap::Packager.new(temp_importmap)
+
+    assert_equal %(pin "package1", preload: %w[admin app] # @1.0.1),
+                 packager.vendored_pin_for("package1", "https://cdn/package1@1.0.1", extract_options_for_package(packager, "package1")[:preload])
+    assert_equal %(pin "package2", preload: %w[admin]),
+                 packager.pin_for("package2", preloads: extract_options_for_package(packager, "package2")[:preload])
+  end
+
+  test "a %w[] preload reads backslash escapes the way Ruby does, and writes them back" do
+    temp_importmap = create_temp_importmap(<<~'PINS')
+      pin "package1", preload: %w[my\ app admin]
+      pin "package2", preload: %w[a\]b c\\d e\x]
+      pin "package3", preload: %w(a\)b a\[b)
+    PINS
+    packager = Importmap::Packager.new(temp_importmap)
+
+    assert_equal %w[my\ app admin], extract_options_for_package(packager, "package1")[:preload]
+    assert_equal %w[a\]b c\\d e\x], extract_options_for_package(packager, "package2")[:preload]
+    assert_equal %w(a\)b a\[b), extract_options_for_package(packager, "package3")[:preload]
+
+    assert_equal %q{pin "package1", preload: %w[my\ app admin]},
+                 packager.pin_for("package1", preloads: extract_options_for_package(packager, "package1")[:preload])
+
+    %w[ package1 package2 package3 ].each do |package|
+      preloads = extract_options_for_package(packager, package)[:preload]
+      written  = packager.pin_for(package, preloads: preloads)
+
+      assert_equal preloads, eval(written[/%w\[.*\]/m]), written
+    end
+  end
+
+  test "a %w[] preload reads nested delimiters the way Ruby does, and writes them back" do
+    temp_importmap = create_temp_importmap(<<~'PINS')
+      pin "package1", preload: %w[foo [bar]], integrity: true
+      pin "package2", preload: %w(a (b c) [d)
+      pin "package3", preload: %w[a[b[c]] d]
+    PINS
+    packager = Importmap::Packager.new(temp_importmap)
+
+    assert_equal({ preload: %w[foo [bar]], integrity: true }, extract_options_for_package(packager, "package1"))
+    assert_equal %w(a (b c) [d), extract_options_for_package(packager, "package2")[:preload]
+    assert_equal %w[a[b[c]] d], extract_options_for_package(packager, "package3")[:preload]
+
+    %w[ package1 package2 package3 ].each do |package|
+      preloads = extract_options_for_package(packager, package)[:preload]
+      written  = packager.pin_for(package, preloads: preloads)
+
+      assert_equal preloads, eval(written[/%w\[.*\]/m]), written
+    end
+  end
+
+  test "an array preload reads quoted entry points holding brackets, quotes and escapes, and writes them back" do
+    temp_importmap = create_temp_importmap(<<~'PINS')
+      pin "package1", preload: ["a]", "b"], integrity: true
+      pin "package2", preload: ['c]d', "e"]
+      pin "package3", preload: ["it's", 'say "hi"']
+      pin "package4", preload: ['a\'b', "c\"d", 'e\\f']
+    PINS
+    packager = Importmap::Packager.new(temp_importmap)
+
+    assert_equal({ preload: [ "a]", "b" ], integrity: true }, extract_options_for_package(packager, "package1"))
+    assert_equal [ "c]d", "e" ], extract_options_for_package(packager, "package2")[:preload]
+    assert_equal [ "it's", 'say "hi"' ], extract_options_for_package(packager, "package3")[:preload]
+    assert_equal [ "a'b", 'c"d', 'e\\f' ], extract_options_for_package(packager, "package4")[:preload]
+
+    %w[ package1 package2 package3 package4 ].each do |package|
+      preloads = extract_options_for_package(packager, package)[:preload]
+      written  = packager.pin_for(package, preloads: preloads)
+
+      assert_equal preloads, eval(written[/preload: (.*)\z/, 1]), written
+    end
+  end
+
+  test "a single-string preload reads a quote or escape inside it, and writes it back" do
+    temp_importmap = create_temp_importmap(<<~'PINS')
+      pin "package1", preload: "it's", integrity: true
+      pin "package2", preload: 'say "hi"'
+    PINS
+    packager = Importmap::Packager.new(temp_importmap)
+
+    assert_equal({ preload: "it's", integrity: true }, extract_options_for_package(packager, "package1"))
+    assert_equal 'say "hi"', extract_options_for_package(packager, "package2")[:preload]
+
+    %w[ package1 package2 ].each do |package|
+      preloads = extract_options_for_package(packager, package)[:preload]
+      written  = packager.pin_for(package, preloads: preloads)
+
+      assert_equal preloads, eval(written[/preload: (.*)\z/, 1]), written
+    end
+  end
+
   private
     GRAPH_ROOT = "https://ga.jspm.io/npm:pkg@1.0.0/".freeze
 
