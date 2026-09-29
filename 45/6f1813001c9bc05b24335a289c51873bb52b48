@@ -1,0 +1,21 @@
+README.md
+  s_6316ef16943157::t_ec48cf64c062f6 260-269
+lib/importmap/early_hints.rb
+  s_6316ef16943157::t_a9404d780f9118 1-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "456f1813001c9bc05b24335a289c51873bb52b48",
+  "prompts": {},
+  "sessions": {
+    "s_6316ef16943157": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "16376545-043d-48e0-914b-2e454443d5fc",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
