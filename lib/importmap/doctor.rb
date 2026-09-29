@@ -59,11 +59,18 @@ class Importmap::Doctor
   # against the importing file's own URL, or fetches outright, is not one.
   SCHEME_REGEXP = %r{\A[a-zA-Z][a-zA-Z0-9+\-.]*:}.freeze # :nodoc:
 
-  def initialize(importmap:, resolver:, root:, asset_paths: [], online: false)
+  # Where installed gems live: the default +gem_paths+. A bundle installed
+  # with `path: vendor/bundle` puts Bundler's under the app root.
+  def self.gem_paths
+    [ *Gem.path, (Bundler.bundle_path.to_s if defined?(Bundler)) ].compact.uniq
+  end
+
+  def initialize(importmap:, resolver:, root:, asset_paths: [], gem_paths: self.class.gem_paths, online: false)
     @importmap   = importmap
     @resolver    = resolver
     @root        = Pathname.new(root)
     @asset_paths = Array(asset_paths).map { |path| Pathname.new(path) }
+    @gem_paths   = Array(gem_paths).map { |path| Pathname.new(path) }
     @online      = online
   end
 
@@ -188,9 +195,14 @@ class Importmap::Doctor
 
     # The files this gem may read: the app's own, not a file an engine serves
     # out of its gem, which no `bin/importmap` command can do anything about.
-    # One file serving two keys is scanned once.
+    # Being under the root isn't enough to be the app's: a bundle installed
+    # into vendor/bundle is too. One file serving two keys is scanned once.
     def scannable
-      @scannable ||= entries.select { |entry| entry.file && under?(entry.file, @root) }.uniq(&:file)
+      @scannable ||= entries.select { |entry| entry.file && app_file?(entry.file) }.uniq(&:file)
+    end
+
+    def app_file?(file)
+      under?(file, @root) && @gem_paths.none? { |gem_path| under?(file, gem_path) }
     end
 
     def vendored

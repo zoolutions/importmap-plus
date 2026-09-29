@@ -4,6 +4,14 @@
 
 ### Fixed
 
+- **`doctor` leaves a bundle installed inside the app alone.** A file an engine
+  serves out of its gem is skipped, because no `bin/importmap` command can fix
+  it — but "out of its gem" was read as "outside the app root". With
+  `bundle config set path vendor/bundle`, as a CI caching its gems has, the
+  gems are under the root, so an engine's controller importing a package the
+  app never pinned failed `doctor` in CI and nowhere else. Files under
+  `Gem.path` or `Bundler.bundle_path` are now skipped wherever they sit.
+
 - **A `preload: %w[...]` survives a rewrite.** `pin`, `update` and `pristine`
   carried over `preload: ["admin", "app"]` but not the same list written as a
   word array, which RuboCop and Standard prefer (`Style/WordArray`). The option
