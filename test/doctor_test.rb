@@ -139,6 +139,19 @@ class Importmap::DoctorTest < ActiveSupport::TestCase
     end
   end
 
+  # `bundle config set path vendor/bundle`, which every CI that caches gems
+  # uses, installs them inside the app: an engine's file is under the root
+  # there and nowhere near it on the laptop that wrote the map.
+  test "a file the map serves from a gem installed inside the app is not scanned" do
+    in_app "vendor/bundle/ruby/4.0.0/gems/daisyui-1.0.0/app/javascript/dropdown.js" => %(import "@floating-ui/dom";) do |root|
+      gem_dir = root.join("vendor/bundle/ruby/4.0.0")
+      asset_paths = [ gem_dir.join("gems/daisyui-1.0.0/app/javascript") ]
+      doctor = doctor_for(root, asset_paths: asset_paths, gem_paths: [ gem_dir ]) { pin "dropdown" }
+
+      assert_empty doctor.diagnose
+    end
+  end
+
   test "a vendored file whose relative import has no file beside it is an error" do
     in_app "vendor/javascript/@popperjs--core.js" =>
       %(// @popperjs/core@2.11.8 downloaded from https://ga.jspm.io/npm:@popperjs/core@2.11.8/lib/index.js\n\nimport "./enums.js";) do |root|
@@ -310,7 +323,7 @@ class Importmap::DoctorTest < ActiveSupport::TestCase
       end
     end
 
-    def doctor_for(root, online: false, asset_paths: nil, &block)
+    def doctor_for(root, online: false, asset_paths: nil, gem_paths: [], &block)
       asset_paths ||= [ root.join("app/javascript"), root.join("vendor/javascript") ]
 
       Importmap::Doctor.new(
@@ -318,6 +331,7 @@ class Importmap::DoctorTest < ActiveSupport::TestCase
         resolver: FakeResolver.new(asset_paths),
         root: root,
         asset_paths: asset_paths,
+        gem_paths: gem_paths,
         online: online
       )
     end
