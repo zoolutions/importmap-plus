@@ -1,0 +1,31 @@
+lib/importmap/import_scanner.rb
+  s_fe4006c3deebc3::t_5ca07442370412 9-11,17-21,44-49,58-60
+test/doctor_test.rb
+  s_fe4006c3deebc3::t_5ca07442370412 116-129
+lib/importmap/version.rb
+  s_fe4006c3deebc3::t_5ca07442370412 4
+test/import_scanner_test.rb
+  s_fe4006c3deebc3::t_5ca07442370412 85-121
+docs/Gemfile.lock
+  ai_agent 4,433
+lib/importmap/module_inspector.rb
+  s_fe4006c3deebc3::t_5ca07442370412 147-154,181-184,189
+Gemfile.lock
+  ai_agent 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "89272190ea535cf3953a5eb1bf46b63b33b96d96",
+  "prompts": {},
+  "sessions": {
+    "s_fe4006c3deebc3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d3f5ca64-bc35-45b6-85cd-9f74e506a287",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
