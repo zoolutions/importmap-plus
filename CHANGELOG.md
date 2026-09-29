@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`bin/importmap doctor` no longer reports comments and prose as unpinned
+  imports.** The import scanner read `from "…"` and `import "…"` wherever the
+  text appeared, so a line comment such as `// e.g. 'en' from 'en-US'` and
+  strings such as turbo_power's `` `…provided in the "from" attribute for
+  the "…` `` came back as `error … imports " attribute for the ", which isn't
+  pinned`. Line comments are now discounted before scanning (strings and
+  regex literals are still consumed whole, so `"https://…"` is safe), and a
+  quoted text that can't be a module specifier — whitespace, a backtick, a
+  `${` interpolation, or no word character at all — is not reported.
+
 ## 1.2.0
 
 ### Added

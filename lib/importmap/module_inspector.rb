@@ -144,6 +144,14 @@ class Importmap::ModuleInspector
     @code ||= without_block_comments
   end
 
+  # #code with its line comments discounted too, for Importmap::ImportScanner:
+  # prose such as `// e.g. 'en' from 'en-US'` reads as an import otherwise.
+  # Strings and regex literals are still consumed whole first, so the `//` of
+  # `"https://…"` or `/\/\//` never opens a comment.
+  def code_without_line_comments
+    @code_without_line_comments ||= without_block_comments(line_comments: true)
+  end
+
   private
     def statements
       @statements ||= without_block_comments(statements_only: true)
@@ -170,12 +178,15 @@ class Importmap::ModuleInspector
     # reads as an import statement while the text inside it stops being read
     # as code at all. That mode feeds only the ES-module check, where the
     # `[//]` trap above can at worst send a package on to the next CDN.
-    def without_block_comments(statements_only: false)
+    # With +line_comments+ alone they go but literals are kept, for the import
+    # scanner: the trap there can at worst miss an import in the doctor's
+    # report, where prose in a comment is a false error on every run.
+    def without_block_comments(statements_only: false, line_comments: statements_only)
       scanner = StringScanner.new(source)
       kept    = +""
 
       until scanner.eos?
-        if scanner.skip(BLOCK_COMMENT_REGEXP) || (statements_only && scanner.skip(LINE_COMMENT_REGEXP))
+        if scanner.skip(BLOCK_COMMENT_REGEXP) || (line_comments && scanner.skip(LINE_COMMENT_REGEXP))
           next
         elsif (literal = scanner.scan(STRING_REGEXP)) ||
               (regexp_literal_next?(kept, scanner) && (literal = scanner.scan(REGEXP_LITERAL_REGEXP)))

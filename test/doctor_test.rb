@@ -113,6 +113,20 @@ class Importmap::DoctorTest < ActiveSupport::TestCase
     end
   end
 
+  test "prose in a comment or a string is not an unpinned import" do
+    source = <<~'JS'
+      const base = lang.split("-")[0] // e.g. 'en' from 'en-US'
+      console.warn(`no "from" or "to" class provided`)
+      export default base
+    JS
+
+    in_app "app/javascript/application.js" => source do |root|
+      doctor = doctor_for(root) { pin "application" }
+
+      assert_empty doctor.diagnose
+    end
+  end
+
   test "a file the map serves from outside the app is not scanned" do
     Dir.mktmpdir do |gem_dir|
       File.write(File.join(gem_dir, "turbo.js"), %(import "somewhere/else";))

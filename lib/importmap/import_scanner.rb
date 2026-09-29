@@ -6,16 +6,19 @@ require "importmap/module_inspector"
 #
 # Like Importmap::ModuleInspector and Importmap::PackageGraph::IMPORT_REGEXP
 # this reads the source with regexes rather than parsing JavaScript, so an
-# import statement spelled out inside a string literal is reported too, and a
-# form the regexp can't read — a magic comment between the keyword and the
+# import statement spelled out inside a string literal is reported too — unless
+# what it names can't be a module specifier at all — and a form the regexp
+# can't read — a magic comment between the keyword and the
 # specifier, a specifier built at runtime — isn't reported at all. Both
 # mistakes are the cautious direction for the one caller: a specifier reported
 # that the browser never asks for costs a pin, and a specifier missed leaves
 # the app exactly as broken as it was before anyone ran the check.
 #
-# Block comments are discounted first, through ModuleInspector#code, because a
-# published bundle is full of `/** @typedef {import('./slide.js').Slide} */` —
-# type annotations naming files the package never loads.
+# Comments are discounted first, through
+# ModuleInspector#code_without_line_comments, because a published bundle is
+# full of `/** @typedef {import('./slide.js').Slide} */` — type annotations
+# naming files the package never loads — and app code is full of prose like
+# `// 'en' from 'en-US'`.
 class Importmap::ImportScanner
   Import = Struct.new(:specifier, :kind, keyword_init: true) # :nodoc:
 
@@ -38,6 +41,12 @@ class Importmap::ImportScanner
       (?:from|import)\s*(["'])([^"'\n]*)\3
     )
   /x.freeze # :nodoc:
+  # What a quoted `from "…"` or `import "…"` has to hold to name a module
+  # rather than be prose the regexp above found in a string: something, no
+  # whitespace or backtick, no `${` interpolation, and at least one word
+  # character — `"from" attribute for the "`, `["import",","]` and
+  # `` `import("${url}")` `` are all strings, never specifiers.
+  SPECIFIER_REGEXP = /\A(?!.*\$\{)[^\s`]*\w[^\s`]*\z/.freeze # :nodoc:
 
   attr_reader :source
 
@@ -46,7 +55,9 @@ class Importmap::ImportScanner
   end
 
   def imports
-    @imports ||= Importmap::ModuleInspector.new(source).code.scan(IMPORT_REGEXP).map do |_, dynamic, _, static|
+    @imports ||= Importmap::ModuleInspector.new(source).code_without_line_comments.scan(IMPORT_REGEXP).filter_map do |_, dynamic, _, static|
+      next unless (dynamic || static).match?(SPECIFIER_REGEXP)
+
       dynamic ? Import.new(specifier: dynamic, kind: :dynamic) : Import.new(specifier: static, kind: :static)
     end
   end
