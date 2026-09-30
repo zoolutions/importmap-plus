@@ -66,6 +66,9 @@ end
 - **The primary argument is positional; modifiers are keywords.**
   `Section("Title", description:)`, `Code(source, filename:)`,
   `Header("Title", eyebrow:)`.
+- **`Code`'s `filename:` selects the language** (`*.yml` → yaml, `Dockerfile`
+  → docker, `*.sh` → shell, …); pass `lexer:` only to override the guess or when
+  there is no filename (the default is ruby).
 - **Wrappers that take no positional arg use lowercase page helpers** so a block
   needs no parens: `md <<~'MD' … MD`, `prose { … }`, `example { |ex| … }`,
   `operation "operationId"`. (A bare `DocsUI::Prose do` is a Ruby SyntaxError; the
@@ -100,6 +103,6 @@ bun run build:css                          # if you added classes the CSS scans
 Then render the page locally (`bin/dev`, open `/docs/<slug>`) and confirm it
 reads correctly — with JavaScript off, too.
 
-**Depth:** docs-kit's live [Authoring pages](https://docs-kit.zoolutions.llc/docs/authoring) doc is the full,
+**Depth:** the live [Authoring pages](/docs/authoring) doc is the full,
 always-current version of this contract. When in doubt, read it.
 <!-- END docs-kit -->

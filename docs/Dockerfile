@@ -1,5 +1,5 @@
 # syntax = docker/dockerfile:1
-# docs-kit Dockerfile v1.1.1 — regenerate/diff: bin/rails g docs_kit:install
+# docs-kit Dockerfile v1.2.1 — regenerate/diff: bin/rails g docs_kit:install
 #
 # The docs app depends on the gem via `gem "importmap-plus", path: ".."`, so the
 # build context is the REPO ROOT (not docs/): the gem lives at /app and the docs
@@ -17,7 +17,7 @@
 ARG RUBY_VERSION=3.4.2
 # Keep in step with the repo-root .bun-version: bun.lock is written by the local
 # bun, and an older bun can't read a newer lockfile version.
-ARG BUN_VERSION=1.4.0
+ARG BUN_VERSION=1.4.2
 
 # bun arrives as a binary copied out of its own official image, pinned by
 # digest. The alternative the scaffold shipped — `curl -fsSL
@@ -26,7 +26,7 @@ ARG BUN_VERSION=1.4.0
 # same weakness one step removed: tags are mutable, digests are not. The tag is
 # kept alongside it for readability and must be bumped WITH the digest:
 #   docker buildx imagetools inspect docker.io/oven/bun:<version>-slim
-FROM docker.io/oven/bun:${BUN_VERSION}-slim@sha256:e0ee68d16ccb9927bf02aa7dd8fd4bf3369ee6d46da04faa72b05ce8bfd135f6 AS bun
+FROM docker.io/oven/bun:${BUN_VERSION}-slim@sha256:cb3bbbb08e13a4a2ff400f24c7a2a1d5efa83f6ef8544d52d95a519631e2fc61 AS bun
 
 FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
 
