@@ -3,7 +3,10 @@ require "bundler/setup"
 APP_RAKEFILE = File.expand_path("test/dummy/Rakefile", __dir__)
 load "rails/tasks/engine.rake"
 
-require "bundler/gem_tasks"
+# No `bundler/gem_tasks`: its `release` task (tag + `gem push` from this machine)
+# would merge into the release kit's `rake release[X.Y.Z]` (rakelib/release.rake)
+# and publish with a local API key. Releases go through bin/release; the gem is
+# built and pushed by release.yml over trusted publishing.
 
 require "rake/testtask"
 

@@ -64,7 +64,7 @@ bundle exec rake test          # the command tests talk to live CDNs (jspm, jsDe
 cd docs && bin/dev             # the docs site, a docs-kit app at docs/
 ```
 
-Releases are cut with `bin/release`, which tags a version and publishes a GitHub Release; that fires `.github/workflows/release.yml` (RubyGems trusted publishing) and `.github/workflows/deploy-docs.yml` (the docs site).
+Releases are cut with `bin/release` (the zoolutions release kit), which bumps the version and lockfile pins, pushes `main` and publishes a GitHub Release; that fires `.github/workflows/release.yml` (RubyGems trusted publishing) and `.github/workflows/deploy-docs.yml` (the docs site).
 
 ## License
 

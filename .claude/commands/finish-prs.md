@@ -12,7 +12,7 @@ Repo: `zoolutions/importmap-plus`. You are driving a set of open pull requests t
 Two conflicts recur mechanically on this repo, so this command resolves them itself:
 
 1. **`CHANGELOG.md`** — every feature PR appends bullets under the same next-version heading (`## 1.1.0` → `### Added`), so each merge re-conflicts the rest. Resolution is always a *union at a known anchor*.
-2. **`docs/Gemfile.lock`** — `docs/` depends on the gem via `path: ".."`, so the lock pins `importmap-plus (X.Y.Z)`. `bin/release` doesn't update it, so after a release every `docs/**` PR fails its frozen install until the pin is bumped. The fix is `cd docs && bundle install` — **never revert the pin**.
+2. **`docs/Gemfile.lock`** — `docs/` depends on the gem via `path: ".."`, so the lock pins `importmap-plus (X.Y.Z)`. `bin/release` bumps it in the release commit, but a feature PR that moves `VERSION` must bump it too, or every `docs/**` PR fails its frozen install until the pin is bumped. The fix is `cd docs && bundle install` — **never revert the pin**.
 
 **This command does NOT merge** unless `automerge` was passed. Default: make each PR merge-ready, pause for the user to merge, then sync the rest and continue.
 
@@ -141,9 +141,9 @@ Out-of-order merge by the user → drop it from the list, sync whatever is now n
 
 ---
 
-## Phase 4 (optional): fix the docs-lock drift at its source
+## Phase 4: (retired) docs-lock drift at its source
 
-The drift originates in `bin/release`, which bumps the root `Gemfile.lock` but not `docs/Gemfile.lock`. The durable fix is a `bundle install` inside `docs/` as part of the release script, so the pin lands on `main` with the version bump. Mention this once if the drift recurs; don't change `bin/release` unprompted.
+`bin/release` now bumps the `docs/Gemfile.lock` pin in the release commit (the zoolutions release kit), so drift can only come from a feature PR that moved `VERSION` without re-locking `docs/`. Fix that PR; nothing to change in the release path.
 
 ---
 
