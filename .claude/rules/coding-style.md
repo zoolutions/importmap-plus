@@ -7,7 +7,8 @@ This is a fork, so style is a merge-cost decision before it is a taste decision.
 | File | Owner | Style rule |
 |---|---|---|
 | `map.rb`, `engine.rb`, `reloader.rb`, `npm.rb`, `commands.rb`, `packager.rb`, helpers, `lib/install/`, `test/importmap_test.rb`, `test/npm_test.rb` … | upstream (modified here) | **Match upstream exactly.** No reformatting, no reordering, no renaming for taste. Add; don't rearrange. |
-| `minifier.rb`, `http_retries.rb`, `test/minifier_test.rb`, `bin/release`, `CHANGELOG.md`, `.github/workflows/release.yml`, `docs/` | this fork | Same conventions, but you own the shape. |
+| `minifier.rb`, `http_retries.rb`, `test/minifier_test.rb`, `CHANGELOG.md`, `docs/` | this fork | Same conventions, but you own the shape. |
+| `bin/release`, `rakelib/release.rake`, `.github/workflows/release.yml` (all but its `test` job) | the zoolutions release kit (canonical in docs-kit) | **Never edit here.** Change docs-kit, then `script/release-kit sync`. |
 
 When a change to an upstream-owned file grows past a few dozen lines, ask whether it belongs in a new file that the upstream file calls into — that is how `Minifier` and `HttpRetries` were added and why they never conflict.
 

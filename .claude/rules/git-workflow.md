@@ -70,18 +70,19 @@ A `feat:` PR also updates `CHANGELOG.md` under the next version heading and the 
 
 ## Releases
 
-Only from `main`, only via `bin/release`:
+Only from `main`, only via `bin/release` (the zoolutions release kit: `bin/release`, `rakelib/release.rake` and the shared jobs of `release.yml` are byte-identical across the gems, canonical copy in docs-kit's `RELEASE_KIT.md` — never edit them here):
 
 ```bash
-bin/release --dry-run          # shows the next patch version
+bin/release list               # last releases + what each bump would give
+bin/release --dry-run          # next version + changes since the last tag
 bin/release                    # patch
 bin/release minor | major | 1.4.0
 ```
 
-It refuses a dirty tree or a non-`main` branch, bumps `lib/importmap/version.rb` and `Gemfile.lock`, commits "Prepare for X.Y.Z", tags `vX.Y.Z` and publishes a GitHub Release. A feature PR that opens a new minor bumps `VERSION` itself — 1.1.0 landed that way — and `bin/release 1.1.0` then tags the version already in the file without a second bump. Only one of the two may move a given release's number. Publishing the release fires `release.yml` (test → build → RubyGems trusted publishing, no API key anywhere) and `deploy-docs.yml` (the docs site). Watch it with `gh run watch`.
+It refuses a dirty tree, a non-`main` branch or a `main` behind `origin`, then runs `rake release[X.Y.Z]`: bumps `lib/importmap/version.rb` and the `importmap-plus` pin in `Gemfile.lock` and `docs/Gemfile.lock`, verifies `gem build --strict`, commits "chore: bump version to X.Y.Z", pushes `main` and publishes the GitHub Release (which creates the `vX.Y.Z` tag). A feature PR that opens a new minor bumps `VERSION` itself — 1.1.0 landed that way — and `bin/release 1.1.0` then tags the version already in the file without a second bump. Only one of the two may move a given release's number. Publishing the release fires `release.yml` (frozen-install test → build → Sigstore-signed RubyGems trusted publishing, no API key anywhere → gem + checksums + signature attached to the release) and `deploy-docs.yml` (the docs site). Watch it with `gh run watch`.
 
 - Tags are plain `vX.Y.Z`. Never `-rc` suffixes, never `git push --tags`.
-- Whenever `VERSION` moves — in the feature PR or in `bin/release` — `cd docs && bundle install` and commit the `docs/Gemfile.lock` pin, or the next `docs/**` PR fails its frozen install. The 1.1.0 bump hit exactly this.
+- `bin/release` bumps the `docs/Gemfile.lock` pin itself. When a feature PR moves `VERSION`, `cd docs && bundle install` and commit the pin in that PR, or the next `docs/**` PR fails its frozen install. The 1.1.0 bump hit exactly this.
 - `UPSTREAM_VERSION` is not touched by a release; it moves only in a sync PR.
 
 ## Rules

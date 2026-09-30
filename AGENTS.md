@@ -49,8 +49,8 @@ BUNDLE_GEMFILE=gemfiles/rails_7.1_sprockets.gemfile ASSETS_PIPELINE=sprockets bu
 bundle exec appraisal generate                          # regenerate gemfiles/ after editing Appraisals
 cd docs && bundle exec rake lint && bundle exec rspec   # docs site: RuboCop + request specs (render every registered page)
 cd docs && bin/dev                                      # docs site locally
-bin/release --dry-run                                   # print the next patch version
-bin/release [minor|major|X.Y.Z]                         # bump + tag vX.Y.Z + GitHub Release → release.yml publishes the gem, deploy-docs.yml ships the docs
+bin/release --dry-run                                   # next version + changes since the last tag (`bin/release list` for the history)
+bin/release [minor|major|X.Y.Z]                         # bump version + lockfile pins, commit, push, GitHub Release → release.yml publishes the gem, deploy-docs.yml ships the docs
 ```
 
 The `--minify` tests **skip** unless bun, esbuild or terser is on `PATH` or in `node_modules/.bin`. CI installs bun; install it locally or those paths go unexercised.
@@ -122,7 +122,7 @@ Two paths, kept apart: the **request path** (engine → Map → helpers, no I/O 
 | Version | `Importmap::UPSTREAM_VERSION` | `Importmap::VERSION` (own semver) |
 | Gemspec | `importmap-rails.gemspec` (deleted here) | `importmap-plus.gemspec` |
 | Entry point | `lib/importmap-rails.rb` (kept — still the real entry) | `lib/importmap-plus.rb` requires it |
-| Release | `bin/release` pushed from a laptop with an API key | `bin/release` → GitHub Release → trusted publishing (`release.yml`) |
+| Release | `bin/release` pushed from a laptop with an API key | `bin/release` → `rake release[X.Y.Z]` → GitHub Release → trusted publishing (`release.yml`), the zoolutions release kit |
 | Fork-only files | — | `minifier.rb`, `http_retries.rb`, `module_inspector.rb`, `package_graph.rb`, `vendored_graph.rb`, `provider_chain.rb`, `integrity.rb`, `esm_run.rb`, `CHANGELOG.md`, `release.yml`, `deploy-docs.yml`, `docs-ci.yml`, `docs/` |
 
 Upstream files this fork has modified heavily, which WILL conflict on sync: `commands.rb`, `packager.rb`, `npm.rb`, `README.md`, `ci.yml`, `test/commands_test.rb`, `test/packager_test.rb`. Per-file resolution rules: `.claude/rules/upstream-sync.md`.
@@ -131,7 +131,7 @@ Upstream files this fork has modified heavily, which WILL conflict on sync: `com
 
 A self-contained docs-kit Rails app with its own bundle, RuboCop and RSpec. `docs-ci.yml` runs it only when `docs/**` changes; `deploy-docs.yml` ships it on every GitHub Release, so the docs go live with the gem. Pages are registered in `docs/app/models/doc.rb`; add one with `cd docs && bin/rails g docs_kit:page "Title" --group=…`. The authoring contract is `docs/AGENTS.md`.
 
-`docs/Gemfile` depends on the gem through `path: ".."`, so `docs/Gemfile.lock` pins `importmap-plus (X.Y.Z)`. `bin/release` bumps the root `Gemfile.lock` but not this one — after a release, `cd docs && bundle install` and commit the new pin, or the frozen docs bundle install fails on the next `docs/**` PR.
+`docs/Gemfile` depends on the gem through `path: ".."`, so `docs/Gemfile.lock` pins `importmap-plus (X.Y.Z)`. `rake release` bumps that pin with the root one, in the release commit. A feature PR that moves `VERSION` itself must still `cd docs && bundle install` and commit the pin, or the frozen docs bundle install fails on the next `docs/**` PR.
 
 ## Screenshots on PRs and issues (always)
 
