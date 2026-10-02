@@ -140,14 +140,13 @@ paths:
   "test/commands_test.rb": cli
   "lib/install/**/*": cli
   "lib/importmap/{packager,npm,provider_chain,batch_resolver,vendored_graph,package_graph,esm_run,http_retries,integrity}.rb": packager
-  "test/{packager,npm}*": packager
   "lib/importmap/{doctor,module_inspector,import_scanner,graph}.rb": doctor
-  "test/{doctor,module_inspector}*": doctor
   "lib/importmap/{map,reloader,early_hints,engine,minifier}.rb": runtime
   "test/importmap{,_tags_helper}_test.rb": runtime
   "app/**/*": runtime
   "lib/tasks/**/*": runtime
   "test/{packager,npm,provider_chain,batch_resolver,vendored_graph,package_graph,esm_run,http_retries,integrity}_test.rb": packager
+  "test/{packager,npm,provider_chain,batch_resolver,vendored_graph,package_graph,esm_run,http_retries,integrity}_*_test.rb": packager
   "test/{doctor,module_inspector,import_scanner,graph}_test.rb": doctor
   "test/{map,reloader,early_hints,engine,minifier}_test.rb": runtime
   ".github/**/*": devops
