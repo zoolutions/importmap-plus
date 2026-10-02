@@ -63,7 +63,7 @@ There is no RuboCop at the gem root. Don't add one in a feature PR; upstream fil
 1. Branch off `main`
 2. Commit in small steps; run the checklist
 3. `git push -u origin <branch>` and `gh pr create` with a summary and a test plan. Write the body to a file and pass `--body-file` when it has code fences — with a single-quoted heredoc backticks pass through verbatim, so never escape them.
-4. Label the PR: exactly one `type` + at least one `area` (`gh pr create --label …`), never a `status` label. `bin/labels infer <changed paths>` gives the areas; the taxonomy is `.github/labels.yml`, the rules are `.github/LABELS.md`
+4. Label the PR: exactly one `type` + at least one `area` (as `--label …` flags on the `gh pr create` call itself; `gh pr edit <n> --add-label …` if the PR is already open), never a `status` label. `bin/labels infer <changed paths>` gives the areas; the taxonomy is `.github/labels.yml`, the rules are `.github/LABELS.md`
 5. `/github-review-pr` when CI or a reviewer says something; `/finish-prs` for a stack
 6. Squash merge on `main` when green and approved
 
