@@ -127,6 +127,18 @@ Two paths, kept apart: the **request path** (engine → Map → helpers, no I/O 
 
 Upstream files this fork has modified heavily, which WILL conflict on sync: `commands.rb`, `packager.rb`, `npm.rb`, `README.md`, `ci.yml`, `test/commands_test.rb`, `test/packager_test.rb`. Per-file resolution rules: `.claude/rules/upstream-sync.md`.
 
+## Labels
+
+Every pull request carries exactly one `type` label and at least one `area`
+label from `.github/labels.yml` — never a `status` label. `/plan` labels the
+issue, `/lfg` copies the issue's `type` and `area` labels onto the PR (never
+`plan` or another status label). Without an issue, the type comes from the
+change's conventional-commit prefix and the areas from
+`bin/labels infer $(git diff --name-only origin/main...HEAD)`. Labels change in
+the manifest and reach GitHub with `bin/labels sync`, never through the UI.
+Rules: `.github/LABELS.md`. `bin/labels` + `.github/LABELS.md` are the shared
+labels kit (canonical copy in docs-kit): never edit them in place.
+
 ## Docs site (`docs/`)
 
 A self-contained docs-kit Rails app with its own bundle, RuboCop and RSpec. `docs-ci.yml` runs it only when `docs/**` changes; `deploy-docs.yml` ships it on every GitHub Release, so the docs go live with the gem. Pages are registered in `docs/app/models/doc.rb`; add one with `cd docs && bin/rails g docs_kit:page "Title" --group=…`. The authoring contract is `docs/AGENTS.md`.
