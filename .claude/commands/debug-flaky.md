@@ -100,7 +100,7 @@ Hard rules: no `skip`, no retry around the assertion, no `sleep`, no assertion l
 ## Phase 8: Record
 
 1. Append a dated entry to `test/flaky-tests.md` (create it if missing): test, class, the one-sentence mechanism, fix, reproduction recipe. Prune entries whose tests no longer exist.
-2. If the fix ships now, close any open `flaky-test` issue in the PR (`Closes #N`). If it can't ship now: `gh issue create --repo zoolutions/importmap-plus --label flaky-test --label chore --label <area>` with the evidence and recipe (one type, `chore`; ≥1 area via `bin/labels infer <the test's paths>`; `flaky-test` is the status label). A missing label means `bin/labels sync`, never `gh label create`. A fix PR gets `--label <type> --label <area>` the same way (one type, ≥1 area).
+2. If the fix ships now, close any open `flaky-test` issue in the PR (`Closes #N`). If it can't ship now: `gh issue create --repo zoolutions/importmap-plus --label flaky-test --label chore --label <area>` with the evidence and recipe (one type, `chore`; ≥1 area via `bin/labels infer <the test's paths>`, or — when infer prints nothing — the area of the code under test, picked by hand; `flaky-test` is the status label). A missing label means `bin/labels sync`, never `gh label create`. A fix PR gets `--label <type> --label <area>` the same way (one type, ≥1 area).
 3. Something systemic (a CDN that rate-limits the matrix, an isolation leak in the test harness) gets its own issue.
 
 Now begin with Phase 0 for: $ARGUMENTS
