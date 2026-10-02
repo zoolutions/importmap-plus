@@ -63,8 +63,9 @@ There is no RuboCop at the gem root. Don't add one in a feature PR; upstream fil
 1. Branch off `main`
 2. Commit in small steps; run the checklist
 3. `git push -u origin <branch>` and `gh pr create` with a summary and a test plan. Write the body to a file and pass `--body-file` when it has code fences — with a single-quoted heredoc backticks pass through verbatim, so never escape them.
-4. `/github-review-pr` when CI or a reviewer says something; `/finish-prs` for a stack
-5. Squash merge on `main` when green and approved
+4. Label the PR: exactly one `type` + at least one `area` (`gh pr create --label …`), never a `status` label. `bin/labels infer <changed paths>` gives the areas; the taxonomy is `.github/labels.yml`, the rules are `.github/LABELS.md`
+5. `/github-review-pr` when CI or a reviewer says something; `/finish-prs` for a stack
+6. Squash merge on `main` when green and approved
 
 A `feat:` PR also updates `CHANGELOG.md` under the next version heading and the relevant `docs/` page in the same PR.
 
@@ -91,5 +92,6 @@ It refuses a dirty tree, a non-`main` branch or a `main` behind `origin`, then r
 - **NEVER** force-push a published branch (`--force-with-lease` only inside `/finish-prs`, on a branch nobody else has)
 - **NEVER** push to `upstream`
 - **NEVER** hand-merge a lockfile
+- Labels are edited in `.github/labels.yml` and applied with `bin/labels sync`, never by hand in the GitHub UI. `bin/labels` and `.github/LABELS.md` are the zoolutions labels kit (canonical copy in docs-kit, see its LABELS_KIT.md): never edit them here — change docs-kit, then `script/labels-kit sync`
 - **ALWAYS** run the tests before pushing; the live ones too
 - **ALWAYS** explain WHY in the commit body

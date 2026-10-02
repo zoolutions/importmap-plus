@@ -2,7 +2,7 @@
 description: "Use when a CI test failure looks intermittent — takes a failed Actions run, PR, or test path; drives evidence → reproduction → root cause → stress-proofed fix → knowledge capture. Never masks with skip/retry/sleep. Knows this suite's two real flake sources: live CDNs and per-test process isolation."
 model: opus
 argument-hint: "Actions run URL/ID, PR number, or test path (e.g. test/commands_test.rb)"
-allowed-tools: Bash(gh run view:*), Bash(gh run download:*), Bash(gh pr view:*), Bash(gh pr checks:*), Bash(gh api:*), Bash(gh issue list:*), Bash(gh issue view:*), Bash(gh issue create:*), Bash(gh issue edit:*), Bash(gh label list:*), Bash(gh label create:*), Bash(git log:*), Bash(git diff:*), Bash(git show:*), Bash(git blame:*), Bash(bundle exec:*), Bash(bundle install:*), Bash(BUNDLE_GEMFILE=*), Bash(curl:*), Read, Write, Edit, Glob, Grep, Agent
+allowed-tools: Bash(gh run view:*), Bash(gh run download:*), Bash(gh pr view:*), Bash(gh pr checks:*), Bash(gh api:*), Bash(gh issue list:*), Bash(gh issue view:*), Bash(gh issue create:*), Bash(gh issue edit:*), Bash(gh label list:*), Bash(bin/labels infer:*), Bash(bin/labels sync), Bash(git log:*), Bash(git diff:*), Bash(git show:*), Bash(git blame:*), Bash(bundle exec:*), Bash(bundle install:*), Bash(BUNDLE_GEMFILE=*), Bash(curl:*), Read, Write, Edit, Glob, Grep, Agent
 ---
 
 # Debug Flaky Test: $ARGUMENTS
@@ -100,7 +100,7 @@ Hard rules: no `skip`, no retry around the assertion, no `sleep`, no assertion l
 ## Phase 8: Record
 
 1. Append a dated entry to `test/flaky-tests.md` (create it if missing): test, class, the one-sentence mechanism, fix, reproduction recipe. Prune entries whose tests no longer exist.
-2. If the fix ships now, close any open `flaky-test` issue in the PR (`Closes #N`). If it can't ship now: `gh issue create --repo zoolutions/importmap-plus --label flaky-test` with the evidence and recipe (`gh label create flaky-test` first if needed).
+2. If the fix ships now, close any open `flaky-test` issue in the PR (`Closes #N`). If it can't ship now: `gh issue create --repo zoolutions/importmap-plus --label flaky-test --label chore --label <area>` with the evidence and recipe (one type, `chore`; ≥1 area via `bin/labels infer <the test's paths>`; `flaky-test` is the status label). A missing label means `bin/labels sync`, never `gh label create`. A fix PR gets `--label <type> --label <area>` the same way (one type, ≥1 area).
 3. Something systemic (a CDN that rate-limits the matrix, an isolation leak in the test harness) gets its own issue.
 
 Now begin with Phase 0 for: $ARGUMENTS

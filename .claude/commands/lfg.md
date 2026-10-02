@@ -2,7 +2,7 @@
 description: "Executes the full autonomous engineering workflow with verification. Use when implementing a complete feature, tackling a GitHub issue, or running an end-to-end development cycle on importmap-plus."
 model: opus
 argument-hint: "GitHub issue number/URL, a docs/plans/*.md path, or a feature description"
-allowed-tools: Bash(gh issue view:*), Bash(gh search:*), Bash(gh issue list:*), Bash(gh pr create:*), Bash(gh pr view:*), Bash(bundle exec:*), Bash(bundle install:*), Bash(BUNDLE_GEMFILE=*), Bash(git:*), Bash(cd:*), Read, Write, Edit, Glob, Grep, Agent
+allowed-tools: Bash(gh issue view:*), Bash(gh search:*), Bash(gh issue list:*), Bash(gh pr create:*), Bash(gh pr edit:*), Bash(gh pr view:*), Bash(bin/labels infer:*), Bash(bin/labels sync), Bash(bundle exec:*), Bash(bundle install:*), Bash(BUNDLE_GEMFILE=*), Bash(git:*), Bash(cd:*), Read, Write, Edit, Glob, Grep, Agent
 ---
 
 # LFG — Full Autonomous Workflow
@@ -29,6 +29,8 @@ Never branch from an existing feature branch unless the work is deliberately sta
 - A GitHub issue number or URL: `gh issue view <number> --json title,body,labels,comments`
 - A `docs/plans/*.md` path: read it — it is a `/plan` artifact and its Decision and Out-of-scope sections are binding
 - A description: use it directly
+
+**Keep the issue's `type` and `area` labels** — Phase 7 puts them on the pull request. `/lfg` never edits the issue's own labels; the issue's lifecycle is the user's to manage. A `docs/plans/*.md` plan carries them on its `Labels:` line. If there are none, or you were given a description, infer them: one `type` label plus `bin/labels infer <changed paths>` for the areas (`.github/LABELS.md`).
 
 ### Step 2: Acceptance criteria
 
@@ -236,9 +238,11 @@ Closes #<issue>
 ## Deviations & judgment calls
 <contents of implementation-notes.md, or "None — the plan held.">
 EOF
-gh pr create --title "feat(cli): brief description" --body-file /tmp/pr-body.md
+gh pr create --title "feat(cli): brief description" --label <type> --label <area> [--label <area>…] --body-file /tmp/pr-body.md
 rm /tmp/pr-body.md implementation-notes.md
 ```
+
+**Label the PR — every time.** The `--label` flags are the issue's `type` + `area` labels from Phase 1, never a `status` label (`plan`, `epic`, …). For a description-only run, infer them: one `type` (`.github/LABELS.md` maps conventional-commit prefixes to types) plus `bin/labels infer $(git diff --name-only origin/main...HEAD)`. Exactly one type, at least one area. `gh pr create` fails on a label that doesn't exist on GitHub: run `bin/labels sync` (or label after the fact with `gh pr edit <n> --add-label …`).
 
 With a single-quoted heredoc, backticks and `$` pass through verbatim — never escape them. `--body-file` sidesteps the shell entirely and is the default here because PR bodies for this gem quote pin lines and commands.
 
@@ -264,6 +268,7 @@ The tests prove the code; this keeps the user's mental model right. End your fin
 - [ ] Docs page and CHANGELOG updated for user-visible changes
 - [ ] Upstream-owned file diffs are additive and in upstream's style
 - [ ] `config/importmap.rb` output still parses under importmap-rails
+- [ ] PR labelled: one `type` + at least one `area`, no `status` (`.github/LABELS.md`)
 - [ ] PR created; body ends with Deviations & judgment calls
 - [ ] Comprehension close-out delivered
 
