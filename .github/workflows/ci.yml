@@ -49,7 +49,9 @@ jobs:
             assets-pipeline: "sprockets"
 
     name: ${{ format('Tests (Ruby {0}, Rails {1}, {2})', matrix.ruby-version, matrix.rails-version, matrix.assets-pipeline) }}
-    runs-on: ubuntu-26.04
+    # setup-ruby publishes no Ruby 3.1 (EOL) build for ubuntu-26.04; keep those
+    # jobs on 24.04 for as long as the gemspec supports 3.1.
+    runs-on: ${{ matrix.ruby-version == '3.1' && 'ubuntu-24.04' || 'ubuntu-26.04' }}
 
     env:
       BUNDLE_GEMFILE: gemfiles/rails_${{ matrix.rails-version }}_${{ matrix.assets-pipeline }}.gemfile
