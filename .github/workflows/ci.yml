@@ -49,14 +49,14 @@ jobs:
             assets-pipeline: "sprockets"
 
     name: ${{ format('Tests (Ruby {0}, Rails {1}, {2})', matrix.ruby-version, matrix.rails-version, matrix.assets-pipeline) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     env:
       BUNDLE_GEMFILE: gemfiles/rails_${{ matrix.rails-version }}_${{ matrix.assets-pipeline }}.gemfile
       ASSETS_PIPELINE: ${{ matrix.assets-pipeline }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Remove Gemfile lock
         run: |
