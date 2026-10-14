@@ -22,6 +22,4 @@ group :test do
 
   gem "rexml"
   gem "capybara"
-  gem "selenium-webdriver"
-  gem "webdrivers"
 end
