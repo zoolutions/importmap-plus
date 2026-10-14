@@ -15,6 +15,9 @@ end
 
 group :test do
   gem "minitest-mock"
+  # The kit needs Ruby 3.2+; the 3.1 lanes run without it (Bundler resolves
+  # required_ruby_version even inside install_if, so a plain guard it is).
+  gem "conformance-kit", "~> 0.1", require: false if RUBY_VERSION >= "3.2" # concurrency conformance gates (zoolutions/phlex-reactive#363)
   gem "turbo-rails"
   gem "stimulus-rails"
 
