@@ -26,9 +26,16 @@ class Importmap::Graph
   # requiring the CLI onto the request path to borrow it would be a poor trade.
   REMOTE_PATH_REGEXP = %r{\A(?:[a-zA-Z][a-zA-Z0-9+\-.]*:)?//}.freeze # :nodoc:
 
-  def initialize(map, roots: [])
-    @map   = map
-    @roots = Array(roots).map { |root| Pathname.new(root) }
+  # +entries+ are the expanded pins to walk when given (Importmap::Map passes
+  # those of the generation it is rendering), +map+'s otherwise. One graph
+  # serves every render of a generation, so its file reads are memoised under
+  # a lock.
+  def initialize(map, roots: [], entries: nil)
+    @roots        = Array(roots).map { |root| Pathname.new(root) }
+    @entries      = (entries || map.each_expanded_package).to_h
+    @keys_by_path = @entries.each_with_object({}) { |(key, mapping), keys| keys[mapping.path] ||= key }
+    @edges        = {}
+    @lock         = Mutex.new
   end
 
   # The keys reachable from +entry_points+ through static imports, the entry
@@ -47,21 +54,21 @@ class Importmap::Graph
   end
 
   private
-    def entries
-      @entries ||= @map.each_expanded_package.to_h
-    end
+    attr_reader :entries
 
     # The key a path belongs to, for resolving a relative import back into the
     # map. Two keys can name one file; the first one drawn wins, and since both
     # resolve to the same asset path the preload set can't tell them apart
     # anyway.
-    def keys_by_path
-      @keys_by_path ||= entries.each_with_object({}) { |(key, mapping), keys| keys[mapping.path] ||= key }
-    end
+    attr_reader :keys_by_path
 
+    # The file is read outside the lock; the first render to store its edges
+    # wins.
     def edges_from(key)
-      @edges ||= {}
-      @edges[key] ||= compute_edges(entries[key])
+      @lock.synchronize { @edges[key] } || begin
+        edges = compute_edges(entries[key])
+        @lock.synchronize { @edges[key] ||= edges }
+      end
     end
 
     def compute_edges(mapping)

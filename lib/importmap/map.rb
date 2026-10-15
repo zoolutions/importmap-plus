@@ -2,9 +2,13 @@
 
 require "pathname"
 require "importmap/graph"
+require "importmap/pin_set"
 
 class Importmap::Map
-  attr_reader :packages, :directories
+  # The current generation's, frozen: change the map through #pin,
+  # #pin_all_from and #draw.
+  def packages = @pins.packages
+  def directories = @pins.directories
 
   PIN_REGEX = /^pin\s+["']([^"']+)["']/.freeze # :nodoc:
 
@@ -15,21 +19,25 @@ class Importmap::Map
   class InvalidFile < StandardError; end
 
   def initialize
-    @integrity = false
-    @packages, @directories = {}, {}
-    @cache = {}
+    @pins = Importmap::PinSet.new
+    # Serialises the writers (draws, pins, sweeps), each of which builds the
+    # next Importmap::PinSet on a draft. A render never takes it, so no
+    # request waits while config/importmap.rb is re-evaluated.
+    @writer = Mutex.new
   end
 
   def draw(path = nil, &block)
-    if path && File.exist?(path)
-      begin
-        instance_eval(File.read(path), path.to_s)
-      rescue StandardError => e
-        Rails.logger.error "Unable to parse import map from #{path}: #{e.message}"
-        raise InvalidFile, "Unable to parse import map from #{path}: #{e.message}"
+    drafting do
+      if path && File.exist?(path)
+        begin
+          instance_eval(File.read(path), path.to_s)
+        rescue StandardError => e
+          Rails.logger.error "Unable to parse import map from #{path}: #{e.message}"
+          raise InvalidFile, "Unable to parse import map from #{path}: #{e.message}"
+        end
+      elsif block_given?
+        instance_eval(&block)
       end
-    elsif block_given?
-      instance_eval(&block)
     end
 
     self
@@ -68,18 +76,15 @@ class Importmap::Map
   # * For Propshaft, you must configure +config.assets.integrity_hash_algorithm+
   # * External CDN packages should provide their own integrity hashes
   def enable_integrity!
-    clear_cache
-    @integrity = true
+    drafting { |draft| draft.integrity = true }
   end
 
   def pin(name, to: nil, preload: true, integrity: true)
-    clear_cache
-    @packages[name] = MappedFile.new(name: name, path: to || "#{name}.js", preload: preload, integrity: integrity)
+    drafting { |draft| draft.packages[name] = MappedFile.new(name: name, path: to || "#{name}.js", preload: preload, integrity: integrity) }
   end
 
   def pin_all_from(dir, under: nil, to: nil, preload: true, integrity: true)
-    clear_cache
-    @directories[dir] = MappedDir.new(dir: dir, under: under, path: to, preload: preload, integrity: integrity)
+    drafting { |draft| draft.directories[dir] = MappedDir.new(dir: dir, under: under, path: to, preload: preload, integrity: integrity) }
   end
 
   # Returns an array of all the resolved module paths of the pinned packages. The `resolver` must respond to
@@ -138,12 +143,12 @@ class Importmap::Map
   #   # Use a custom cache key for different asset hosts
   #   packages = importmap.preloaded_module_packages(resolver: helpers, cache_key: "cdn_host")
   def preloaded_module_packages(resolver:, entry_point: "application", cache_key: :preloaded_module_packages)
-    cache_as(cache_key) do
-      expanded_preloading_packages_and_directories(entry_point:).filter_map do |_, package|
+    cache_as(cache_key) do |pins|
+      expanded_preloading_packages_and_directories(pins, entry_point:).filter_map do |_, package|
         resolved_path = resolve_asset_path(package.path, resolver: resolver)
         next unless resolved_path
 
-        resolved_integrity = resolve_integrity_value(package.integrity, package.path, resolver: resolver)
+        resolved_integrity = resolve_integrity_value(pins, package.integrity, package.path, resolver: resolver)
 
         package = MappedFile.new(
           name: package.name,
@@ -163,9 +168,9 @@ class Importmap::Map
   # want these resolved paths to use. In case you need to resolve for different asset hosts, you can pass in a custom
   # `cache_key` to vary the cache used by this method for the different cases.
   def to_json(resolver:, cache_key: :json)
-    cache_as(cache_key) do
-      packages = expanded_packages_and_directories
-      map = build_import_map(packages, resolver: resolver)
+    cache_as(cache_key) do |pins|
+      packages = expanded_packages_and_directories(pins)
+      map = build_import_map(pins, packages, resolver: resolver)
       JSON.pretty_generate(map)
     end
   end
@@ -201,24 +206,44 @@ class Importmap::Map
   # #to_json is about to resolve, before a resolver has touched it. Returns an
   # Enumerator without a block.
   def each_expanded_package(&block)
-    expanded_packages_and_directories.each(&block)
+    expanded_packages_and_directories(@pins).each(&block)
   end
 
   private
     MappedDir  = Struct.new(:dir, :path, :under, :preload, :integrity, keyword_init: true)
     MappedFile = Struct.new(:name, :path, :preload, :integrity, keyword_init: true)
 
+    # Memoised in the generation it renders, which the block is handed: a
+    # render reads one Importmap::PinSet start to finish, so a draw landing
+    # mid-render can neither mix two versions of the map into it nor have it
+    # cached over the newer one.
     def cache_as(name)
-      if result = @cache[name.to_s]
-        result
-      else
-        @cache[name.to_s] = yield
-      end
+      pins = @pins
+      pins.fetch(name.to_s) { yield pins }
     end
 
+    # The same pins as a new generation, so every render is redone. Inside a
+    # draw there is nothing to do: the draw publishes a new generation itself.
     def clear_cache
-      @cache.clear
-      @graph = nil
+      return if @writer.owned?
+
+      @writer.synchronize { @pins = @pins.recached }
+    end
+
+    # Every change is written into a draft of the current generation and the
+    # finished generation published whole. A pin inside a draw lands in that
+    # draw's draft; a draw that raises publishes nothing.
+    def drafting
+      return yield @draft if @writer.owned?
+
+      @writer.synchronize do
+        @draft = @pins.draft
+        result = yield @draft
+        @pins = @draft.to_pin_set
+        result
+      ensure
+        @draft = nil
+      end
     end
 
     def rescuable_asset_error?(error)
@@ -244,29 +269,29 @@ class Importmap::Map
       end
     end
 
-    def build_import_map(packages, resolver:)
+    def build_import_map(pins, packages, resolver:)
       map = { "imports" => resolve_asset_paths(packages, resolver: resolver) }
-      integrity = build_integrity_hash(packages, resolver: resolver)
+      integrity = build_integrity_hash(pins, packages, resolver: resolver)
       map["integrity"] = integrity unless integrity.empty?
       map
     end
 
-    def build_integrity_hash(packages, resolver:)
+    def build_integrity_hash(pins, packages, resolver:)
       packages.filter_map do |name, mapping|
         next unless mapping.integrity
 
         resolved_path = resolve_asset_path(mapping.path, resolver: resolver)
         next unless resolved_path
 
-        integrity_value = resolve_integrity_value(mapping.integrity, mapping.path, resolver: resolver)
+        integrity_value = resolve_integrity_value(pins, mapping.integrity, mapping.path, resolver: resolver)
         next unless integrity_value
 
         [resolved_path, integrity_value]
       end.to_h
     end
 
-    def resolve_integrity_value(integrity, path, resolver:)
-      return unless @integrity
+    def resolve_integrity_value(pins, integrity, path, resolver:)
+      return unless pins.integrity
 
       case integrity
       when true
@@ -276,9 +301,9 @@ class Importmap::Map
       end
     end
 
-    def expanded_preloading_packages_and_directories(entry_point:)
-      preloading = expanded_packages_and_directories.select { |name, mapping| mapping.preload.in?([true, false]) ? mapping.preload : (Array(mapping.preload) & Array(entry_point)).any? }
-      reachable_only(preloading, entry_point: entry_point)
+    def expanded_preloading_packages_and_directories(pins, entry_point:)
+      preloading = expanded_packages_and_directories(pins).select { |name, mapping| mapping.preload.in?([true, false]) ? mapping.preload : (Array(mapping.preload) & Array(entry_point)).any? }
+      reachable_only(pins, preloading, entry_point: entry_point)
     end
 
     # With config.importmap.preload_strategy == :reachable, a pin that says
@@ -287,32 +312,33 @@ class Importmap::Map
     # page without anyone maintaining a `preload: false` for it and for
     # everything it depends on. A pin naming the entry point is the app
     # overruling the graph, and `preload: false` is off either way.
-    def reachable_only(packages, entry_point:)
+    def reachable_only(pins, packages, entry_point:)
       return packages unless Rails.application.config.importmap.preload_strategy == :reachable
 
-      reachable = graph.reachable_from(Array(entry_point))
+      reachable = graph(pins).reachable_from(Array(entry_point))
       packages.select { |name, mapping| mapping.preload != true || reachable.include?(name) }
     end
 
-    # Memoised beside the rendered map rather than inside it: #cache_as shares
-    # one namespace with the cache_key the preload helper passes, which is the
-    # entry point's own name, so an app with an entry point named "graph" would
-    # read this back as its preload set. Dropped by the same clear_cache the
-    # sweeper calls when a .js file under a watched directory changes.
-    def graph
-      @graph ||= Importmap::Graph.new(self, roots: asset_paths)
+    # Memoised in the generation beside its renders, under a Symbol: every
+    # #cache_as key is a String, and the preload helper passes the entry
+    # point's own name as one, so an app with an entry point named "graph"
+    # can't read this back as its preload set. Redone with the rest of the
+    # generation's cache when a draw, or the sweeper seeing a .js file under a
+    # watched directory change, publishes a new one.
+    def graph(pins)
+      pins.fetch(:graph) { Importmap::Graph.new(self, roots: asset_paths, entries: expanded_packages_and_directories(pins)) }
     end
 
     def asset_paths
       (config = Rails.application.config).respond_to?(:assets) ? config.assets.paths : []
     end
 
-    def expanded_packages_and_directories
-      @packages.dup.tap { |expanded| expand_directories_into expanded }
+    def expanded_packages_and_directories(pins)
+      pins.packages.dup.tap { |expanded| expand_directories_into expanded, pins.directories }
     end
 
-    def expand_directories_into(paths)
-      @directories.values.each do |mapping|
+    def expand_directories_into(paths, directories)
+      directories.values.each do |mapping|
         if (absolute_path = absolute_root_of(mapping.dir)).exist?
           find_javascript_files_in_tree(absolute_path).each do |filename|
             module_filename = filename.relative_path_from(absolute_path)

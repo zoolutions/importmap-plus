@@ -29,3 +29,10 @@ Style/FrozenStringLiteralComment:
 # The blank line after it, as everywhere else in Ruby.
 Layout/EmptyLineAfterMagicComment:
   Enabled: true
+
+# These tests start threads on purpose: concurrent renders and reloads are
+# what they test.
+ThreadSafety/NewThread:
+  Exclude:
+    - "test/cache_as_contention_test.rb"
+    - "test/map_reload_race_test.rb"
