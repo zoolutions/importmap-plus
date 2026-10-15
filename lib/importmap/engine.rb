@@ -15,7 +15,7 @@ module Importmap
     config.importmap.rescuable_asset_errors = []
     config.importmap.preload_strategy = :all
     config.importmap.early_hints = true
-    config.importmap.finalize = !(Rails.env.development? || Rails.env.test?)
+    config.importmap.finalize = true
 
     config.autoload_once_paths = %W( #{root}/app/helpers #{root}/app/controllers )
 
@@ -76,14 +76,15 @@ module Importmap
       end
     end
 
-    # An app that doesn't reload classes never draws its map again once it
-    # has booted, so the map is finalized then: no request can see it change,
-    # and every pin is Ractor-shareable. Registered from an initializer, so it
-    # runs after the after_initialize blocks of config/application.rb and the
+    # Once the app has booted, in every environment, its map is finalized:
+    # every pin is deeply frozen (Ractor-shareable), and so is every set of
+    # pins a development reload, a cache sweep or a later pin publishes, so
+    # reloading works as before. Registered from an initializer, so it runs
+    # after the after_initialize blocks of config/application.rb and the
     # environment files.
     initializer "importmap.finalize" do |app|
       app.config.after_initialize do
-        app.importmap.finalize! if app.config.importmap.finalize && app.config.cache_classes
+        app.importmap.finalize! if app.config.importmap.finalize
       end
     end
   end

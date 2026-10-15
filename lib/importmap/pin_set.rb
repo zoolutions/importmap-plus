@@ -14,31 +14,43 @@ require "importmap/shareable"
 # clearing one shared cache would let a render that started before the change
 # write the old map back into it.
 class Importmap::PinSet
-  # A generation being drawn: the same three things, writable, for the one
-  # writer holding the map's lock.
-  Draft = Struct.new(:packages, :directories, :integrity) do
-    def to_pin_set = Importmap::PinSet.new(packages: packages, directories: directories, integrity: integrity)
+  # A generation being drawn: the same things, writable, for the one writer
+  # holding the map's lock. The generation it publishes is finalized when the
+  # one it was drafted from was.
+  Draft = Struct.new(:packages, :directories, :integrity, :finalized) do
+    def to_pin_set = Importmap::PinSet.new(packages: packages, directories: directories, integrity: integrity, finalized: finalized)
   end
 
   attr_reader :packages, :directories, :integrity
 
-  def initialize(packages: {}, directories: {}, integrity: false)
-    @packages    = packages.freeze
-    @directories = directories.freeze
+  def initialize(packages: {}, directories: {}, integrity: false, finalized: false)
+    @packages    = finalized ? deep_freeze(packages) : packages.freeze
+    @directories = finalized ? deep_freeze(directories) : directories.freeze
     @integrity   = integrity
+    @finalized   = finalized
     @lock        = Mutex.new
     @cache       = {}
     freeze
   end
 
+  # Whether every pin and directory is deeply frozen: Ractor-shareable where
+  # Ruby has Ractors, but for a value an app gave that no Ractor can share.
+  def finalized? = @finalized
+
   def draft
-    Draft.new(packages.dup, directories.dup, integrity)
+    Draft.new(packages.dup, directories.dup, integrity, finalized?)
   end
 
   # The same pins with an empty cache: what a sweep publishes when a watched
   # .js file changes and every render has to be redone.
   def recached
-    self.class.new(packages: packages, directories: directories, integrity: integrity)
+    self.class.new(packages: packages, directories: directories, integrity: integrity, finalized: finalized?)
+  end
+
+  # The same pins deeply frozen, as a new generation with an empty cache.
+  # Every generation drafted from it is finalized in turn.
+  def finalized
+    finalized? ? self : self.class.new(packages: packages, directories: directories, integrity: integrity, finalized: true)
   end
 
   # The value cached under +key+, else the block's. The block runs outside the
@@ -53,11 +65,13 @@ class Importmap::PinSet
     @lock.synchronize { @cache[key] ||= rendered }
   end
 
-  # Deep-freezes the pins in place, for a map that is never drawn again:
-  # Ractor-shareable where Ruby has Ractors. The cache stays writable.
-  def finalize!
-    Importmap::Shareable.make(packages)
-    Importmap::Shareable.make(directories)
-    self
-  end
+  private
+    # Each pin on its own, so one holding a value no Ractor can share (see
+    # Importmap::Shareable) leaves only itself unshared. The pins are the
+    # map's own structs: one that can't be shared is still frozen, around the
+    # value the app gave it.
+    def deep_freeze(entries)
+      entries.each_value { |entry| Importmap::Shareable.make(entry).freeze }
+      Importmap::Shareable.make(entries.freeze)
+    end
 end

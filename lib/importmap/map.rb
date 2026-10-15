@@ -87,18 +87,20 @@ class Importmap::Map
     drafting { |draft| draft.directories[dir] = MappedDir.new(dir: dir, under: under, path: to, preload: preload, integrity: integrity) }
   end
 
-  # Freezes the map for good, once nothing will draw it again: the engine
-  # calls it when an app that doesn't reload classes has booted
-  # (config.importmap.finalize). Every pin and directory is deeply frozen,
-  # Ractor-shareable where Ruby has Ractors, and a later draw, pin or cache
-  # sweep raises FrozenError instead of changing a map requests are reading.
-  # Rendering is unchanged: the cache lives in the pin set, not in the map.
+  # Deep-freezes every pin and directory, Ractor-shareable where Ruby has
+  # Ractors, and every set of them the map publishes from now on: the engine
+  # calls it once the app has booted (config.importmap.finalize). The map
+  # still changes as before: a draw, a pin, a development reload or a cache
+  # sweep publishes a new, finalized set, so no reader is ever handed a pin
+  # another thread can change. A value the app pinned that no Ractor can
+  # share is left as it is (see Importmap::Shareable). Returns the map.
   def finalize!
-    @writer.synchronize do
-      @pins.finalize!
-      freeze
-    end
+    @writer.synchronize { @pins = @pins.finalized }
+    self
   end
+
+  # Whether #finalize! has been called.
+  def finalized? = @pins.finalized?
 
   # Returns an array of all the resolved module paths of the pinned packages. The `resolver` must respond to
   # `path_to_asset`, such as `ActionController::Base.helpers` or `ApplicationController.helpers`. You'll want to use the
@@ -240,10 +242,7 @@ class Importmap::Map
     def clear_cache
       return if @writer.owned?
 
-      @writer.synchronize do
-        refuse_once_finalized
-        @pins = @pins.recached
-      end
+      @writer.synchronize { @pins = @pins.recached }
     end
 
     # Every change is written into a draft of the current generation and the
@@ -253,21 +252,13 @@ class Importmap::Map
       return yield @draft if @writer.owned?
 
       @writer.synchronize do
-        refuse_once_finalized
         @draft = @pins.draft
         result = yield @draft
         @pins = @draft.to_pin_set
         result
       ensure
-        @draft = nil unless frozen?
+        @draft = nil
       end
-    end
-
-    def refuse_once_finalized
-      return unless frozen?
-
-      raise FrozenError.new("can't change #{self.class}: it was finalized when the app booted " \
-                            "(set config.importmap.finalize = false to keep drawing it after boot)", receiver: self)
     end
 
     def rescuable_asset_error?(error)
