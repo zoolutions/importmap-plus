@@ -11,9 +11,8 @@ probes:
   gem_name: importmap-plus
   roundhouse_app: test/dummy
 main_only:
-  - name: Importmap::Engine.@called_from
-    reason: Rails::Engine's own class state, set by Rails at boot on the main Ractor
-  - name: Importmap::Engine.@initializers
-    reason: Rails::Engine's own class state, set by Rails at boot on the main Ractor
-  - name: Importmap::Engine.@instance
+  # Only Rails' own ivars: state importmap-plus kept on its Engine would still
+  # be audited.
+  - ancestor: Rails::Engine
+    ivars: ["@called_from", "@initializers", "@instance"]
     reason: Rails::Engine's own class state, set by Rails at boot on the main Ractor
