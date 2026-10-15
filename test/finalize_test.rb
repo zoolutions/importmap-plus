@@ -166,7 +166,7 @@ class FinalizeTest < ActiveSupport::TestCase
   end
 
   test "config.importmap.finalize = false leaves the map unfinalized" do
-    %w[ development production ].each do |env|
+    %w[ development test production ].each do |env|
       assert_equal "false false\n", boot_dummy(env, "print Rails.application.importmap.finalized?, ' ', Rails.application.importmap.packages.values.first.frozen?", finalize: false), env
     end
   end
