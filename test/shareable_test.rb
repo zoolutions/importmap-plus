@@ -70,6 +70,14 @@ class ShareableTest < ActiveSupport::TestCase
     assert_not_predicate path, :frozen?
   end
 
+  test "a value that holds itself is made shareable, not recursed into for good" do
+    value = [ +"alpha.js" ]
+    value << value
+
+    assert_same value, Importmap::Shareable.make(value)
+    assert Ractor.shareable?(value)
+  end
+
   test "a struct around a lambda over the app's state is frozen around it" do
     seen = []
     callable = ->(source) { seen << source }
@@ -103,5 +111,24 @@ class ShareableWithoutRactorsTest < ActiveSupport::TestCase
     assert_predicate pin.preload, :frozen?
     assert_predicate pin.preload.first, :frozen?
     assert_not_predicate logger, :frozen?
+  end
+
+  test "without Ractors, what is inside a value that is already frozen is frozen too" do
+    path = +"alpha.js"
+    value = { "alpha" => [ path ] }.freeze
+
+    Importmap::Shareable.stub(:ractors?, false) { Importmap::Shareable.make(value) }
+
+    assert_predicate path, :frozen?
+  end
+
+  test "without Ractors, a value that holds itself is frozen once" do
+    value = { "alpha" => [ +"alpha.js" ] }
+    value["self"] = value
+
+    Importmap::Shareable.stub(:ractors?, false) { Importmap::Shareable.make(value) }
+
+    assert_predicate value, :frozen?
+    assert_predicate value["alpha"].first, :frozen?
   end
 end
