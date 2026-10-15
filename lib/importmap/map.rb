@@ -87,6 +87,19 @@ class Importmap::Map
     drafting { |draft| draft.directories[dir] = MappedDir.new(dir: dir, under: under, path: to, preload: preload, integrity: integrity) }
   end
 
+  # Freezes the map for good, once nothing will draw it again: the engine
+  # calls it when an app that doesn't reload classes has booted
+  # (config.importmap.finalize). Every pin and directory is deeply frozen,
+  # Ractor-shareable where Ruby has Ractors, and a later draw, pin or cache
+  # sweep raises FrozenError instead of changing a map requests are reading.
+  # Rendering is unchanged: the cache lives in the pin set, not in the map.
+  def finalize!
+    @writer.synchronize do
+      @pins.finalize!
+      freeze
+    end
+  end
+
   # Returns an array of all the resolved module paths of the pinned packages. The `resolver` must respond to
   # `path_to_asset`, such as `ActionController::Base.helpers` or `ApplicationController.helpers`. You'll want to use the
   # resolver that has been configured for the `asset_host` you want these resolved paths to use. In case you need to
@@ -227,7 +240,10 @@ class Importmap::Map
     def clear_cache
       return if @writer.owned?
 
-      @writer.synchronize { @pins = @pins.recached }
+      @writer.synchronize do
+        refuse_once_finalized
+        @pins = @pins.recached
+      end
     end
 
     # Every change is written into a draft of the current generation and the
@@ -237,13 +253,21 @@ class Importmap::Map
       return yield @draft if @writer.owned?
 
       @writer.synchronize do
+        refuse_once_finalized
         @draft = @pins.draft
         result = yield @draft
         @pins = @draft.to_pin_set
         result
       ensure
-        @draft = nil
+        @draft = nil unless frozen?
       end
+    end
+
+    def refuse_once_finalized
+      return unless frozen?
+
+      raise FrozenError.new("can't change #{self.class}: it was finalized when the app booted " \
+                            "(set config.importmap.finalize = false to keep drawing it after boot)", receiver: self)
     end
 
     def rescuable_asset_error?(error)

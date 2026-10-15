@@ -15,6 +15,7 @@ module Importmap
     config.importmap.rescuable_asset_errors = []
     config.importmap.preload_strategy = :all
     config.importmap.early_hints = true
+    config.importmap.finalize = !(Rails.env.development? || Rails.env.test?)
 
     config.autoload_once_paths = %W( #{root}/app/helpers #{root}/app/controllers )
 
@@ -72,6 +73,17 @@ module Importmap
 
       if defined?(Sprockets::Rails)
         app.config.importmap.rescuable_asset_errors << Sprockets::Rails::Helper::AssetNotFound
+      end
+    end
+
+    # An app that doesn't reload classes never draws its map again once it
+    # has booted, so the map is finalized then: no request can see it change,
+    # and every pin is Ractor-shareable. Registered from an initializer, so it
+    # runs after the after_initialize blocks of config/application.rb and the
+    # environment files.
+    initializer "importmap.finalize" do |app|
+      app.config.after_initialize do
+        app.importmap.finalize! if app.config.importmap.finalize && app.config.cache_classes
       end
     end
   end

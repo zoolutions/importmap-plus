@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "importmap/shareable"
+
 # One generation of an Importmap::Map: its pins, its pin_all_from directories
 # and whether integrity is on, frozen together, plus the cache of what was
 # rendered from them.
@@ -49,5 +51,13 @@ class Importmap::PinSet
 
     rendered = yield
     @lock.synchronize { @cache[key] ||= rendered }
+  end
+
+  # Deep-freezes the pins in place, for a map that is never drawn again:
+  # Ractor-shareable where Ruby has Ractors. The cache stays writable.
+  def finalize!
+    Importmap::Shareable.make(packages)
+    Importmap::Shareable.make(directories)
+    self
   end
 end
