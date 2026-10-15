@@ -2,7 +2,44 @@
 
 ## Unreleased
 
+### Added
+
+- **A production app's map is finalized once it has booted.** Outside
+  development and test, when classes don't reload, the engine calls the new
+  `Importmap::Map#finalize!` after initialization: every pin and directory is
+  deeply frozen (Ractor-shareable on Ruby 3+), and a later `pin`, `draw` or
+  `enable_integrity!` raises a `FrozenError` that names the setting. Rendering
+  is unchanged. An app that pins after boot sets
+  `config.importmap.finalize = false`.
+
+### Changed
+
+- **`Importmap::Map#packages` and `#directories` return frozen hashes**, the
+  current generation's (see the reload fix below). Change the map with `pin`,
+  `pin_all_from` and `draw`.
+- **The class-level URIs are stored deeply frozen.** `Packager.endpoint`,
+  `Packager.esm_run_resolver` (`EsmRun.resolver`) and `Npm.base_uri` are set
+  once, in an initializer; the URI you assign is frozen in place, so no thread
+  can change it under another. The default minifier is looked for when
+  `importmap/packager` loads rather than on first use; one you set is kept as
+  given.
+- Every Ruby file in the gem has `# frozen_string_literal: true`.
+
 ### Fixed
+
+- **A request during a reload renders a whole map.** The reloader
+  re-evaluated `config/importmap.rb` into the map every request reads, one pin
+  at a time, so a request mid-reload could render half of the new map and half
+  of the old. Every change now builds the next pin set on a copy and swaps it
+  in whole, and a draw that raises leaves the map it started from. A reload
+  still adds to the map, as before.
+
+- **A render no longer caches the map from before a change.** The rendered
+  JSON and preloads were memoised with an unlocked check-then-set that a pin,
+  `enable_integrity!` or the cache sweeper reset underneath: a render that
+  started first finished after the reset and cached the old map until the next
+  change. Each render is now cached in the pin set it read, under a lock, and
+  renders that miss together all get the one that was kept.
 
 - **`doctor` leaves a bundle installed inside the app alone.** A file an engine
   serves out of its gem is skipped, because no `bin/importmap` command can fix

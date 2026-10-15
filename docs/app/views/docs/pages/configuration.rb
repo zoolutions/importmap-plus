@@ -24,7 +24,8 @@ class Views::Docs::Pages::Configuration < DocsUI::Page
           [ [ :code, "cache_sweepers" ], "Array<Pathname>", "[] — app/javascript and vendor/javascript are added when the watcher is installed", "The directories the watcher covers, read once when sweep_cache is on and classes are reloadable. Engines append their JavaScript directories before importmap.cache_sweeper runs." ],
           [ [ :code, "rescuable_asset_errors" ], "Array<Class>", "the pipeline's missing-asset error", "Errors that make a pin resolve to nothing (and log a warning) instead of raising. Propshaft::MissingAssetError and Sprockets' AssetNotFound are added for you." ],
           [ [ :code, "preload_strategy" ], "Symbol", ":all", "Which preload: true pins get a modulepreload link. :all is every one of them, upstream's behaviour. :reachable is only those the entry point reaches through static imports — see Preloading. A pin naming an entry point, and preload: false, mean the same under both." ],
-          [ [ :code, "early_hints" ], "Boolean", "true", "Send the modulepreload links javascript_importmap_tags is about to emit as a 103 Early Hints Link header. A no-op unless the server supports it (Puma needs early_hints true) — see Preloading." ]
+          [ [ :code, "early_hints" ], "Boolean", "true", "Send the modulepreload links javascript_importmap_tags is about to emit as a 103 Early Hints Link header. A no-op unless the server supports it (Puma needs early_hints true) — see Preloading." ],
+          [ [ :code, "finalize" ], "Boolean", "false in development and test", "Freeze the map once the app has booted, when classes don't reload: every pin is deeply frozen (Ractor-shareable), rendering is unchanged, and a later pin or draw raises FrozenError. Turn it off if something pins after boot." ]
         ]
       )
       DocsUI::Code(<<~RUBY, filename: "config/application.rb")
@@ -61,6 +62,10 @@ class Views::Docs::Pages::Configuration < DocsUI::Page
         `Importmap::Npm.base_uri` (default `https://registry.npmjs.org`) is where
         `outdated`, `update` and `audit` ask about versions and advisories; point it
         at a mirror if your network needs one.
+
+        Set these once, at boot. `endpoint`, `esm_run_resolver` and `base_uri` are
+        stored deeply frozen (Ractor-shareable), so the URI you assign is frozen
+        too; a minifier you assign is kept as given.
       MD
     end
   end
