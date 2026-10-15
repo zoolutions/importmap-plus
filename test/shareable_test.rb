@@ -53,6 +53,55 @@ class ShareableTest < ActiveSupport::TestCase
 
     assert_same value, Importmap::Shareable.make(value)
     assert_not Ractor.shareable?(value)
+    assert_not_predicate value, :frozen?
+    assert_not_predicate path, :frozen?
     assert_not_predicate value["logger"], :frozen?
+  end
+
+  # A Method can't be copied either, so the copy raises TypeError as it does
+  # for a Proc, but make_shareable gives up on it only after freezing what
+  # came before it.
+  test "a hash holding something that can't be copied, nor shared, is left as it was" do
+    path = +"alpha.js"
+    value = { "alpha" => path, "upcase" => "alpha".method(:upcase) }
+
+    assert_same value, Importmap::Shareable.make(value)
+    assert_not_predicate value, :frozen?
+    assert_not_predicate path, :frozen?
+  end
+
+  test "a struct around a lambda over the app's state is frozen around it" do
+    seen = []
+    callable = ->(source) { seen << source }
+    value = Struct.new(:name, :path).new(+"lazy", callable)
+
+    assert_same value, Importmap::Shareable.make(value)
+    assert_predicate value.name, :frozen?
+    assert_not_predicate callable, :frozen?
+  end
+end
+
+# JRuby and TruffleRuby have no Ractor: there the value's hashes, arrays,
+# structs and strings are frozen all the way down.
+class ShareableWithoutRactorsTest < ActiveSupport::TestCase
+  Pin = Struct.new(:name, :preload)
+
+  # The logger keeps Ractor.make_shareable off the whole value, so what is
+  # frozen here was frozen by the fallback.
+  test "without Ractors, the hashes, arrays, structs and strings inside a value are frozen, and nothing else" do
+    pin = Pin.new(+"alpha", [ +"application" ])
+    logger = Logger.new(StringIO.new)
+    value = { +"alpha" => pin, "logger" => logger }
+
+    Importmap::Shareable.stub(:ractors?, false) do
+      assert_same value, Importmap::Shareable.make(value)
+    end
+
+    assert_predicate value, :frozen?
+    assert_predicate pin, :frozen?
+    assert_predicate pin.name, :frozen?
+    assert_predicate pin.preload, :frozen?
+    assert_predicate pin.preload.first, :frozen?
+    assert_not_predicate logger, :frozen?
   end
 end
