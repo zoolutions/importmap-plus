@@ -12,7 +12,8 @@ module Importmap::HttpRetries
   RETRYABLE_CODES  = %w[ 429 500 502 503 504 ].freeze # :nodoc:
 
   # Boot-time settings, also written as Packager.retry_attempts and
-  # retry_wait. An Integer and a Float, so shareable whatever is written.
+  # retry_wait. The defaults are an Integer and a Float, so shareable; a
+  # value an app writes is kept as given.
   singleton_class.attr_accessor :attempts, :wait
   self.attempts = 3
   self.wait = 0.5

@@ -6,8 +6,9 @@
 
 - **Every app's map is finalized once it has booted, in every environment.**
   After initialization the engine calls the new `Importmap::Map#finalize!`:
-  every pin and directory is deeply frozen, Ractor-shareable on Ruby 3+, and so
-  is every set of pins the map publishes after it. A development reload, the
+  every pin and directory is deeply frozen, Ractor-shareable on Ruby 3+ (but
+  for a pinned value no Ractor can share, below), and so is every set of pins
+  the map publishes after it. A development reload, the
   cache sweeper, and a `pin` or `draw` after boot work as before, each
   publishing a new, frozen set, so nothing that pins or reloads starts raising.
   `Importmap::Map#finalized?` says whether a map has been. Outside the engine
@@ -33,8 +34,11 @@
   once, in an initializer; the URI you assign is frozen in place, so no thread
   can change it under another. The default minifier is looked for when
   `importmap/packager` loads rather than on first use; one you set, a lambda
-  over your own state included, is kept as given.
-- Every Ruby file in the gem has `# frozen_string_literal: true`.
+  over your own state included, is kept as given, and `nil` puts the default
+  back.
+- Every Ruby file in the gem has `# frozen_string_literal: true`, but for the
+  two install templates copied into an app (`bin/importmap` and
+  `config/importmap.rb`), which are the app's files.
 
 ### Fixed
 
