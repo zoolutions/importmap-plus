@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "importmap/packager"
 
 # The CDNs a package that names none of its own is asked of, in order.

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "thor"
 require "importmap/packager"
 require "importmap/package_graph"

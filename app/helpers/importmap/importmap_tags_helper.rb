@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Importmap::ImportmapTagsHelper
   # Setup all script tags needed to use an importmap-powered entrypoint (which defaults to application.js)
   def javascript_importmap_tags(entry_point = "application", importmap: Rails.application.importmap)

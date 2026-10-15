@@ -25,3 +25,7 @@ AllCops:
 Style/FrozenStringLiteralComment:
   Enabled: true
   EnforcedStyle: always_true
+
+# The blank line after it, as everywhere else in Ruby.
+Layout/EmptyLineAfterMagicComment:
+  Enabled: true

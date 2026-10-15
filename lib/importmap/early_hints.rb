@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # The modulepreload links of javascript_importmap_tags, sent ahead of the
 # response as 103 Early Hints.
 #

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 namespace :importmap do
   desc "Setup Importmap for the app"
   task :install do

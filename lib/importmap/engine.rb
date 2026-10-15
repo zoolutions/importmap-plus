@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "importmap/map"
 require "importmap/early_hints"
 
