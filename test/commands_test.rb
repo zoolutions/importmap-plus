@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "test_helper"
 require "json"
 
@@ -7,7 +9,9 @@ class CommandsTest < ActiveSupport::TestCase
   setup do
     @tmpdir = Dir.mktmpdir
     FileUtils.cp_r("#{__dir__}/dummy", @tmpdir)
-    Dir.chdir("#{@tmpdir}/dummy")
+    # Each test runs in a process of its own (Testing::Isolation forks), so
+    # the working directory it changes is nobody else's.
+    Dir.chdir("#{@tmpdir}/dummy") # rubocop:disable ThreadSafety/DirChdir
   end
 
   teardown do

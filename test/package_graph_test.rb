@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "test_helper"
 require "importmap/package_graph"
 require "importmap/packager"

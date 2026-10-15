@@ -11,15 +11,19 @@ begin
   require "rubocop"
 
   lint_files = -> { Dir.glob(%w[app/**/*.rb spec/**/*.rb config/**/*.rb lib/**/*.rb lib/**/*.rake Rakefile config.ru]) }
+  # Without it RuboCop also loads the gem's own .rubocop.yml, for its
+  # AllCops/Exclude, and that inherits conformance-kit, which this bundle
+  # doesn't have.
+  rubocop = %w[bundle exec rubocop --ignore-parent-exclusion]
 
   desc "Lint the docs site with RuboCop"
   task :lint do # rubocop:disable Rails/RakeEnvironment
-    sh "bundle", "exec", "rubocop", *lint_files.call
+    sh(*rubocop, *lint_files.call)
   end
 
   desc "Lint and autocorrect"
   task "lint:fix" do # rubocop:disable Rails/RakeEnvironment
-    sh "bundle", "exec", "rubocop", "-A", *lint_files.call
+    sh(*rubocop, "-A", *lint_files.call)
   end
 rescue LoadError
   # RuboCop isn't in the production bundle; the lint tasks simply don't load.

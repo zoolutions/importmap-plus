@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "importmap/module_inspector"
 
 # Every module specifier a JavaScript file names, in source order, with whether

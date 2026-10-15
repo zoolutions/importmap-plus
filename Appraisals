@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 appraise "rails_6.1_sprockets" do
   gem "rails", "~> 6.1.0"
   remove_gem "propshaft"

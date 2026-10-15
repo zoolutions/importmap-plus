@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "uri"
 require "importmap/module_inspector"
 require "importmap/integrity"

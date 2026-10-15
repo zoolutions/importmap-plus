@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "test_helper"
 require "importmap/esm_run"
 require "importmap/packager"

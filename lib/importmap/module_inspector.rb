@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "strscan"
 
 # Decides whether a downloaded ESM file can stand alone as the single file an

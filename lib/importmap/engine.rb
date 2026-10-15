@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "importmap/map"
 require "importmap/early_hints"
 
@@ -13,6 +15,7 @@ module Importmap
     config.importmap.rescuable_asset_errors = []
     config.importmap.preload_strategy = :all
     config.importmap.early_hints = true
+    config.importmap.finalize = true
 
     config.autoload_once_paths = %W( #{root}/app/helpers #{root}/app/controllers )
 
@@ -70,6 +73,18 @@ module Importmap
 
       if defined?(Sprockets::Rails)
         app.config.importmap.rescuable_asset_errors << Sprockets::Rails::Helper::AssetNotFound
+      end
+    end
+
+    # Once the app has booted, in every environment, its map is finalized:
+    # every pin is deeply frozen (Ractor-shareable), and so is every set of
+    # pins a development reload, a cache sweep or a later pin publishes, so
+    # reloading works as before. Registered from an initializer, so it runs
+    # after the after_initialize blocks of config/application.rb and the
+    # environment files.
+    initializer "importmap.finalize" do |app|
+      app.config.after_initialize do
+        app.importmap.finalize! if app.config.importmap.finalize
       end
     end
   end

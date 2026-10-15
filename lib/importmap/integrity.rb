@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "digest"
 
 # The subresource-integrity hash of a file, in the form the import map's

@@ -1,5 +1,8 @@
+# frozen_string_literal: true
+
 require "uri"
 require "json"
+require "importmap/shareable"
 
 # Everything this gem knows about jsDelivr's bundling endpoint
 # (https://www.jsdelivr.com/esm): one minified ESM file per package, with its
@@ -32,8 +35,14 @@ class Importmap::EsmRun
 
   # The jsDelivr data API versions are resolved through. Also readable and
   # writable as Importmap::Packager.esm_run_resolver, which is where an app
-  # that points this at a mirror has always set it.
-  singleton_class.attr_accessor :resolver
+  # that points this at a mirror has always set it, in an initializer.
+  singleton_class.attr_reader :resolver
+
+  def self.resolver=(value)
+    # A boot-time setting, written before the commands that read it, and
+    # stored deeply frozen (Ractor-shareable), so none can change it in place.
+    @resolver = Importmap::Shareable.make(value) # rubocop:disable ThreadSafety/ClassInstanceVariable
+  end
   self.resolver = URI("https://data.jsdelivr.com/v1/packages/npm/")
 
   class << self

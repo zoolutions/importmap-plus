@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "test_helper"
 require "rails/generators/rails/app/app_generator"
 
@@ -54,7 +56,9 @@ class InstallerTest < ActiveSupport::TestCase
 
         Rails::Generators::AppGenerator.start([app_dir, "--quiet", "--skip-bundle", "--skip-bootsnap"])
 
-        Dir.chdir(app_dir) do
+        # Each test runs in a process of its own (Testing::Isolation forks), so
+        # the working directory it changes is nobody else's.
+        Dir.chdir(app_dir) do # rubocop:disable ThreadSafety/DirChdir
           gemfile = File.read("Gemfile")
           # rails new adds importmap-rails; this gem replaces it, never joins it.
           gemfile.gsub!(/^gem "importmap-rails".*/, "")

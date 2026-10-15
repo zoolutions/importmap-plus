@@ -13,7 +13,7 @@ This is a **maintained fork that still tracks upstream**. The `upstream` remote 
 - **Runtime deps**: railties, activesupport, actionpack — nothing else. Thor comes with railties.
 - **CLI**: Thor (`lib/importmap/commands.rb`, installed into apps as `bin/importmap`)
 - **Testing**: Minitest via `ActiveSupport::TestCase` against `test/dummy`; the CI matrix is Appraisal gemfiles under `gemfiles/`
-- **Linting**: none at the gem root (upstream has none — don't introduce one in a feature PR). `docs/` has its own RuboCop.
+- **Linting**: RuboCop at the gem root checks only what conformance-kit holds the gem to — the thread-safety cops and `# frozen_string_literal: true` (`.rubocop.yml`, `DisabledByDefault`). Never turn style cops on there: upstream-owned files stay diff-minimal. `docs/` has its own RuboCop.
 - **Docs**: `docs/` — a docs-kit Rails app deployed to https://importmap-plus.zoolutions.llc
 
 ## Critical Rules
@@ -47,6 +47,8 @@ bundle exec ruby -Itest test/commands_test.rb -n /minify/   # tests matching a n
 BUNDLE_GEMFILE=gemfiles/rails_7.1_sprockets.gemfile bundle install && \
 BUNDLE_GEMFILE=gemfiles/rails_7.1_sprockets.gemfile ASSETS_PIPELINE=sprockets bundle exec rake test   # one CI matrix cell
 bundle exec appraisal generate                          # regenerate gemfiles/ after editing Appraisals
+bundle exec rubocop                                     # thread-safety cops + the frozen-string magic comment (root bundle, Ruby 3.2+)
+bundle exec conformance-kit check                       # the conformance gate CI runs on Ruby 4.0: doctor, the Ractor canary, conformance-audit --strict
 cd docs && bundle exec rake lint && bundle exec rspec   # docs site: RuboCop + request specs (render every registered page)
 cd docs && bin/dev                                      # docs site locally
 bin/release --dry-run                                   # next version + changes since the last tag (`bin/release list` for the history)

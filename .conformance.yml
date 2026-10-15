@@ -1,0 +1,18 @@
+# conformance-kit (https://github.com/zoolutions/conformance-kit): what
+# importmap-plus is held to. `bundle exec conformance-kit check` runs it.
+audit:
+  require: [./test/conformance_eager_load.rb]
+  namespace: [Importmap]
+  strict_autoloads: true
+ractor:
+  # Minitest, one file: the Ractor canary (Ruby 4.0).
+  test_command: bundle exec ruby -Itest test/ractor_canary_test.rb
+probes:
+  gem_name: importmap-plus
+  roundhouse_app: test/dummy
+main_only:
+  # Only Rails' own ivars: state importmap-plus kept on its Engine would still
+  # be audited.
+  - ancestor: Rails::Engine
+    ivars: ["@called_from", "@initializers", "@instance"]
+    reason: Rails::Engine's own class state, set by Rails at boot on the main Ractor

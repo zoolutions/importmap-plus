@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "test_helper"
 require "importmap/minifier"
 
@@ -16,7 +18,9 @@ class Importmap::MinifierTest < ActiveSupport::TestCase
 
   test "finds a tool in node_modules/.bin before looking on PATH" do
     Dir.mktmpdir do |dir|
-      Dir.chdir(dir) do
+      # node_modules/.bin is looked up from the working directory. The suite
+      # runs one test at a time on one thread, and the block puts it back.
+      Dir.chdir(dir) do # rubocop:disable ThreadSafety/DirChdir
         FileUtils.mkdir_p("node_modules/.bin")
         File.write("node_modules/.bin/importmap-fake-minifier", "#!/bin/sh\n")
         File.chmod(0755, "node_modules/.bin/importmap-fake-minifier")
@@ -30,7 +34,9 @@ class Importmap::MinifierTest < ActiveSupport::TestCase
 
   test "finds a Windows .cmd shim, which is how npm installs these tools there" do
     Dir.mktmpdir do |dir|
-      Dir.chdir(dir) do
+      # node_modules/.bin is looked up from the working directory. The suite
+      # runs one test at a time on one thread, and the block puts it back.
+      Dir.chdir(dir) do # rubocop:disable ThreadSafety/DirChdir
         FileUtils.mkdir_p("node_modules/.bin")
         File.write("node_modules/.bin/importmap-fake-minifier.CMD", "@echo off\n")
         File.chmod(0755, "node_modules/.bin/importmap-fake-minifier.CMD")

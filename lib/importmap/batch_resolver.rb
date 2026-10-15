@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "importmap/provider_chain"
 
 # Resolves a group of specs against a CDN, batch first and then one at a time.
