@@ -1,0 +1,19 @@
+test/finalize_test.rb
+  s_4786a62cd35147::t_3d9f77c835cf24 6,15-17,25-38,41-42,51-57,74-95,97-113,115-117,125,128-165,168-171,174-201,212-215,218-220,223
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6836dfd273144e38a779add9e316315f9f9677c0",
+  "prompts": {},
+  "sessions": {
+    "s_4786a62cd35147": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d1e58604-bb1b-456c-ace0-8fe7f151dae8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "mhenrixon <mikael@mhenrixon.com>"
+    }
+  }
+}
