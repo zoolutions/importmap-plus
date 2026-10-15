@@ -56,7 +56,7 @@ bundle exec rake test                            # before pushing — the comman
 cd docs && bundle exec rake lint && bundle exec rspec   # only if docs/ changed
 ```
 
-There is no RuboCop at the gem root. Don't add one in a feature PR; upstream files must stay diff-minimal.
+`bundle exec rubocop` at the gem root runs only conformance-kit's thread-safety cops and the frozen-string magic comment. Don't turn more cops on; upstream files must stay diff-minimal.
 
 ## PR workflow
 

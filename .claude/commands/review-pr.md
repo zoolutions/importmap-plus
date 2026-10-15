@@ -27,7 +27,7 @@ Review the PR for pattern compliance, fork-constraint violations and real bugs. 
 | Upstream-owned file rewritten | a method in `commands.rb` / `packager.rb` / `npm.rb` / `map.rb` restructured or reformatted rather than added to | conflict surface on the next sync |
 | Downgrade story | a `config/importmap.rb` this PR writes would not parse under importmap-rails (new keywords on `pin`, non-comment metadata) | apps must be able to switch back |
 | Lockfile | hand-merged `Gemfile.lock` / `docs/Gemfile.lock` / `docs/bun.lock`; a `gemfiles/*.lock` committed | regenerate; the appraisal locks are gitignored |
-| Root RuboCop | a `.rubocop.yml` or lint job added at the gem root | upstream has none; `docs/` has its own |
+| Root RuboCop | a cop beyond conformance-kit's thread-safety set and `Style/FrozenStringLiteralComment` turned on at the gem root, or an `Exclude`/disable without a reason | style cops would reformat upstream-owned files; `docs/` has its own |
 
 ## Pattern violations
 

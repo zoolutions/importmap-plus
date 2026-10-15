@@ -83,7 +83,7 @@ No unresolved threads → report and stop.
 | "Pass this as a new `pin` keyword" (fork metadata) | Metadata lives in the provenance comment so importmap-rails still parses the file |
 | "Reformat / reorder this method" (upstream-owned file) | Conflict surface on the next upstream sync; additive edits only |
 | "Move `UPSTREAM_VERSION` here" | Only a `sync:` PR does, after merging the upstream tag |
-| "Add RuboCop to the gem" | Upstream has none; root lint would reformat upstream-owned files |
+| "Turn on more RuboCop cops" | The root config is conformance-kit's thread-safety cops and the magic comment only; style cops would reformat upstream-owned files |
 | "Rebase on main and force-push" | Published branch — merge forward |
 | "Mock this in `commands_test.rb`" | Those tests run the real `bin/importmap` in a forked process against live CDNs by design; logic tests belong in `packager_test.rb` with `Net::HTTP.stub` |
 | "Retry/skip this flaky live test" | `/debug-flaky`; `HttpRetries` is the only retry |

@@ -78,3 +78,20 @@ jobs:
       - name: Run tests
         run: |
           bundle exec rake
+
+  lint:
+    name: Lint
+    # The root bundle: .rubocop.yml inherits conformance-kit's config, and the
+    # kit needs Ruby 3.2+, so this is one job on a current Ruby, not a matrix.
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+
+      - name: Run RuboCop
+        run: bundle exec rubocop

@@ -11,6 +11,11 @@ gem "sqlite3"
 
 group :development do
   gem "appraisal"
+  # Lint only the concurrency rules conformance-kit holds this gem to, plus the
+  # frozen-string magic comment (.rubocop.yml). The root bundle on one Ruby runs
+  # it; the Appraisal gemfiles CI tests with leave it out.
+  gem "rubocop", require: false
+  gem "rubocop-thread_safety", ">= 0.8", require: false
 end
 
 group :test do
