@@ -168,11 +168,17 @@ class Importmap::Packager
   end
 
   # Anything responding to #call(source) => String. Defaults to the first of
-  # bun, esbuild or terser found on the machine, looked for once, when this
-  # file loads, and stored shareable. One an app sets is used as given: a
-  # callable is seldom shareable, and only the CLI's own thread calls it.
-  singleton_class.attr_accessor :minifier
-  self.minifier = Importmap::Shareable.make(Importmap::Minifier.new)
+  # bun, esbuild or terser found on the machine, looked for when this file
+  # loads, and stored shareable; assigning nil puts that default back. A
+  # minifier an app sets is used as given: a callable is seldom shareable, and
+  # only the CLI's own thread calls it.
+  singleton_class.attr_reader :minifier
+
+  def self.minifier=(value)
+    # A boot-time setting, written before the commands that read it.
+    @minifier = value || Importmap::Shareable.make(Importmap::Minifier.new) # rubocop:disable ThreadSafety/ClassInstanceVariable
+  end
+  self.minifier = nil
 
   attr_reader :vendor_path
 

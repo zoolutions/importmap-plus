@@ -72,6 +72,19 @@ class BootSettingsTest < ActiveSupport::TestCase
     Importmap::Packager.minifier = original
   end
 
+  test "assigning nil puts the default minifier back" do
+    original = Importmap::Packager.minifier
+    Importmap::Packager.minifier = ->(source) { source }
+
+    Importmap::Packager.minifier = nil
+
+    assert_kind_of Importmap::Minifier, Importmap::Packager.minifier
+    assert_equal Importmap::Minifier.detect, Importmap::Packager.minifier.tool
+    assert_shareable Importmap::Packager.minifier
+  ensure
+    Importmap::Packager.minifier = original
+  end
+
   test "the minifiers' argv builders are shareable" do
     assert_shareable Importmap::Minifier::TOOLS
     assert_equal [ "in.js", "--minify", "--format=esm", "--outfile=out.js" ], Importmap::Minifier::TOOLS.fetch("esbuild").call("in.js", "out.js")
