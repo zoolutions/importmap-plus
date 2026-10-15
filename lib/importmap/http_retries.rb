@@ -11,6 +11,8 @@ module Importmap::HttpRetries
   RETRYABLE_ERRORS = [ SocketError, SystemCallError, Timeout::Error, EOFError, OpenSSL::SSL::SSLError, Net::ProtocolError ].freeze # :nodoc:
   RETRYABLE_CODES  = %w[ 429 500 502 503 504 ].freeze # :nodoc:
 
+  # Boot-time settings, also written as Packager.retry_attempts and
+  # retry_wait. An Integer and a Float, so shareable whatever is written.
   singleton_class.attr_accessor :attempts, :wait
   self.attempts = 3
   self.wait = 0.5

@@ -4,6 +4,7 @@ require "net/http"
 require "uri"
 require "json"
 require "importmap/http_retries"
+require "importmap/shareable"
 
 class Importmap::Npm
   include Importmap::HttpRetries
@@ -13,7 +14,14 @@ class Importmap::Npm
   Error     = Class.new(StandardError)
   HTTPError = Class.new(Error)
 
-  singleton_class.attr_accessor :base_uri
+  # The registry, or a mirror of it set in an initializer.
+  singleton_class.attr_reader :base_uri
+
+  def self.base_uri=(value)
+    # A boot-time setting, written before the commands that read it, and
+    # stored deeply frozen (Ractor-shareable), so none can change it in place.
+    @base_uri = Importmap::Shareable.make(value) # rubocop:disable ThreadSafety/ClassInstanceVariable
+  end
   self.base_uri = URI("https://registry.npmjs.org")
 
   def initialize(importmap_path = "config/importmap.rb", vendor_path: "vendor/javascript")

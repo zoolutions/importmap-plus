@@ -2,6 +2,7 @@
 
 require "open3"
 require "tmpdir"
+require "importmap/shareable"
 
 # Minifies a vendored package with whichever JavaScript minifier is installed:
 # bun, esbuild or terser, looked up in node_modules/.bin and then on PATH.
@@ -10,11 +11,12 @@ require "tmpdir"
 class Importmap::Minifier
   Error = Class.new(StandardError)
 
-  TOOLS = {
+  # Shareable: the lambdas capture nothing, and their self is this class.
+  TOOLS = Importmap::Shareable.make({
     "bun"     => ->(input, output) { [ "build", "--no-bundle", "--minify", "--format=esm", "--target=browser", input, "--outfile=#{output}" ] },
     "esbuild" => ->(input, output) { [ input, "--minify", "--format=esm", "--outfile=#{output}" ] },
     "terser"  => ->(input, output) { [ input, "--module", "--compress", "--mangle", "--output", output ] }
-  }.freeze # :nodoc:
+  }) # :nodoc:
 
   class << self
     def detect

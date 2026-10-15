@@ -10,6 +10,7 @@ require "importmap/vendored_graph"
 require "importmap/http_retries"
 require "importmap/integrity"
 require "importmap/esm_run"
+require "importmap/shareable"
 
 class Importmap::Packager
   include Importmap::HttpRetries
@@ -134,7 +135,14 @@ class Importmap::Packager
     end
   end
 
-  singleton_class.attr_accessor :endpoint
+  # jspm's generator, or another one set in an initializer.
+  singleton_class.attr_reader :endpoint
+
+  def self.endpoint=(value)
+    # A boot-time setting, written before the commands that read it, and
+    # stored deeply frozen (Ractor-shareable), so none can change it in place.
+    @endpoint = Importmap::Shareable.make(value) # rubocop:disable ThreadSafety/ClassInstanceVariable
+  end
   self.endpoint = URI("https://api.jspm.io/generate")
 
   # CDNs reset connections and rate-limit bursts. Each request is tried this
@@ -160,12 +168,11 @@ class Importmap::Packager
   end
 
   # Anything responding to #call(source) => String. Defaults to the first of
-  # bun, esbuild or terser found on the machine.
-  singleton_class.attr_writer :minifier
-
-  def self.minifier
-    @minifier ||= Importmap::Minifier.new
-  end
+  # bun, esbuild or terser found on the machine, looked for once, when this
+  # file loads, and stored shareable. One an app sets is used as given: a
+  # callable is seldom shareable, and only the CLI's own thread calls it.
+  singleton_class.attr_accessor :minifier
+  self.minifier = Importmap::Shareable.make(Importmap::Minifier.new)
 
   attr_reader :vendor_path
 
