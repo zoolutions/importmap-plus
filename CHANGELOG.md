@@ -1,19 +1,30 @@
 # Changelog
 
-## Unreleased
+## 2.1.0
 
 ### Added
 
-- **A production app's map is finalized once it has booted.** Outside
-  development and test, when classes don't reload, the engine calls the new
-  `Importmap::Map#finalize!` after initialization: every pin and directory is
-  deeply frozen (Ractor-shareable on Ruby 3+), and a later `pin`, `draw` or
-  `enable_integrity!` raises a `FrozenError` that names the setting. Rendering
-  is unchanged. An app that pins after boot sets
-  `config.importmap.finalize = false`.
+- **Every app's map is finalized once it has booted, in every environment.**
+  After initialization the engine calls the new `Importmap::Map#finalize!`:
+  every pin and directory is deeply frozen, Ractor-shareable on Ruby 3+, and so
+  is every set of pins the map publishes after it. A development reload, the
+  cache sweeper, and a `pin` or `draw` after boot work as before, each
+  publishing a new, frozen set, so nothing that pins or reloads starts raising.
+  `Importmap::Map#finalized?` says whether a map has been. Outside the engine
+  (an `Importmap::Map.new` passed to the helpers) `finalize!` is yours to call.
 
 ### Changed
 
+- **Behaviour change: the pins are frozen once the app has booted.** Changing
+  one in place, such as `importmap.packages["md5"].preload = false`, raises
+  `FrozenError` in development and test as well as production. Change the map
+  with `pin`, `pin_all_from` and `draw`; an app that can't sets
+  `config.importmap.finalize = false`, which leaves its pins unfrozen.
+- **A pinned value no Ractor can share is kept as it is, never raised on.** A
+  pin whose `to:` is an object holding a lock, a logger or a lambda over the
+  app's state stays the object the app gave, unfrozen, and works on the main
+  Ractor only; its pin and every other pin are still frozen. The same goes for
+  the class-level URIs below.
 - **`Importmap::Map#packages` and `#directories` return frozen hashes**, the
   current generation's (see the reload fix below). Change the map with `pin`,
   `pin_all_from` and `draw`.
@@ -21,8 +32,8 @@
   `Packager.esm_run_resolver` (`EsmRun.resolver`) and `Npm.base_uri` are set
   once, in an initializer; the URI you assign is frozen in place, so no thread
   can change it under another. The default minifier is looked for when
-  `importmap/packager` loads rather than on first use; one you set is kept as
-  given.
+  `importmap/packager` loads rather than on first use; one you set, a lambda
+  over your own state included, is kept as given.
 - Every Ruby file in the gem has `# frozen_string_literal: true`.
 
 ### Fixed
@@ -40,6 +51,10 @@
   started first finished after the reset and cached the old map until the next
   change. Each render is now cached in the pin set it read, under a lock, and
   renders that miss together all get the one that was kept.
+
+## 2.0.2
+
+### Fixed
 
 - **`doctor` leaves a bundle installed inside the app alone.** A file an engine
   serves out of its gem is skipped, because no `bin/importmap` command can fix

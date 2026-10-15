@@ -25,7 +25,7 @@ class Views::Docs::Pages::Configuration < DocsUI::Page
           [ [ :code, "rescuable_asset_errors" ], "Array<Class>", "the pipeline's missing-asset error", "Errors that make a pin resolve to nothing (and log a warning) instead of raising. Propshaft::MissingAssetError and Sprockets' AssetNotFound are added for you." ],
           [ [ :code, "preload_strategy" ], "Symbol", ":all", "Which preload: true pins get a modulepreload link. :all is every one of them, upstream's behaviour. :reachable is only those the entry point reaches through static imports — see Preloading. A pin naming an entry point, and preload: false, mean the same under both." ],
           [ [ :code, "early_hints" ], "Boolean", "true", "Send the modulepreload links javascript_importmap_tags is about to emit as a 103 Early Hints Link header. A no-op unless the server supports it (Puma needs early_hints true) — see Preloading." ],
-          [ [ :code, "finalize" ], "Boolean", "false in development and test", "Freeze the map once the app has booted, when classes don't reload: every pin is deeply frozen (Ractor-shareable), rendering is unchanged, and a later pin or draw raises FrozenError. Turn it off if something pins after boot." ]
+          [ [ :code, "finalize" ], "Boolean", "true", "Finalize the map once the app has booted, in every environment: every pin is deeply frozen (Ractor-shareable), and so is every set of pins a development reload, the cache sweeper or a later pin publishes, so reloading and pinning work as before. A pinned value no Ractor can share, such as an object holding a lock, is kept as given, on the main Ractor only. Changing a pin in place (packages[\"md5\"].preload = false) raises FrozenError; turn it off if something does." ]
         ]
       )
       DocsUI::Code(<<~RUBY, filename: "config/application.rb")
@@ -65,7 +65,9 @@ class Views::Docs::Pages::Configuration < DocsUI::Page
 
         Set these once, at boot. `endpoint`, `esm_run_resolver` and `base_uri` are
         stored deeply frozen (Ractor-shareable), so the URI you assign is frozen
-        too; a minifier you assign is kept as given.
+        too, unless it holds something no Ractor can share, which is kept as
+        given. A minifier you assign is kept as given too, a lambda over your
+        own state included.
       MD
     end
   end
