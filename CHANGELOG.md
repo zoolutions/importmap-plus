@@ -41,6 +41,10 @@
 - Every Ruby file in the gem has `# frozen_string_literal: true`, but for the
   two install templates copied into an app (`bin/importmap` and
   `config/importmap.rb`), which are the app's files.
+- **The Rails dependencies are bounded below 9.0.** railties, activesupport
+  and actionpack (`>= 6.0.0`, inherited from importmap-rails) now also say
+  `< 9.0`, so the gem builds with `gem build --strict`. Every Rails from 6.0
+  to 8.x installs as before; Rails 9 will need a new importmap-plus release.
 
 ### Fixed
 
