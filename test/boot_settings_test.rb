@@ -59,7 +59,7 @@ class BootSettingsTest < ActiveSupport::TestCase
 
   test "the default minifier is shareable and is the first tool found" do
     assert_shareable Importmap::Packager.minifier
-    assert_equal Importmap::Minifier.detect, Importmap::Packager.minifier.tool
+    assert_detected_tool Importmap::Packager.minifier
   end
 
   test "a minifier an app sets is used as given, shareable or not" do
@@ -79,7 +79,7 @@ class BootSettingsTest < ActiveSupport::TestCase
     Importmap::Packager.minifier = nil
 
     assert_kind_of Importmap::Minifier, Importmap::Packager.minifier
-    assert_equal Importmap::Minifier.detect, Importmap::Packager.minifier.tool
+    assert_detected_tool Importmap::Packager.minifier
     assert_shareable Importmap::Packager.minifier
   ensure
     Importmap::Packager.minifier = original
@@ -93,5 +93,15 @@ class BootSettingsTest < ActiveSupport::TestCase
   private
     def assert_shareable(value)
       assert Ractor.shareable?(value), "#{value.inspect} (#{value.class}) is not Ractor-shareable"
+    end
+
+    # The first minifier on this machine, or none (the release workflow's
+    # runner has no bun, esbuild or terser): either way the default matches it.
+    def assert_detected_tool(minifier)
+      if (tool = Importmap::Minifier.detect)
+        assert_equal tool, minifier.tool
+      else
+        assert_nil minifier.tool
+      end
     end
 end
