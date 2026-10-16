@@ -1,6 +1,8 @@
 # Changelog
 
-## 2.1.0
+## Unreleased
+
+## 2.1.0 (2026-10-16)
 
 ### Added
 
@@ -56,7 +58,7 @@
   change. Each render is now cached in the pin set it read, under a lock, and
   renders that miss together all get the one that was kept.
 
-## 2.0.2
+## 2.0.2 (2026-09-29)
 
 ### Fixed
 
@@ -90,7 +92,7 @@
   `app` entry point and `"#{prefix}app"` still interpolates (both used to come
   back as a different name). `preload: 'say "hi"'` no longer becomes `"say "hi""`.
 
-## 2.0.1
+## 2.0.1 (2026-09-29)
 
 ### Fixed
 
@@ -104,7 +106,7 @@
   quoted text that can't be a module specifier — whitespace, a backtick, a
   `${` interpolation, or no word character at all — is not reported.
 
-## 1.2.0
+## 2.0.0 (2026-09-21)
 
 ### Added
 
@@ -455,7 +457,7 @@
   flag in it. Moving such a pin on purpose is still `--from`, which re-resolves
   it from the CDN you name.
 
-## 1.1.0
+## 1.1.1 (2026-09-12)
 
 ### Added
 
@@ -507,7 +509,7 @@
   reports on, so an app file pinned under a package's namespace —
   `pin "md5/helpers", to: "md5/helpers.js"` — is left alone. Inherited from
   importmap-rails; `update photoswipe/lightbox` was fixed for the named form
-  in 1.1.0.
+  in 1.1.1.
 - **A remote subpath pin is re-resolved from the CDN it is on.** Moving
   `pin "photoswipe/lightbox", to: "https://cdn.jsdelivr.net/npm/photoswipe@5.3.0/…"`
   back onto jsDelivr asked for `photoswipe/lightbox@5.4.4`, a path no CDN
@@ -524,7 +526,7 @@
   other package is still checked. `audit` is unchanged: a registry it can't
   reach still fails the command outright.
 
-## 1.0.0
+## 1.0.0 (2026-09-11)
 
 First release of importmap-plus, a drop-in replacement for
 [importmap-rails](https://github.com/rails/importmap-rails) 2.2.3. The
