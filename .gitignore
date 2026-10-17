@@ -24,5 +24,5 @@
 # Ignore Gemfile.lock files for Rails main branch.
 /gemfiles/*.lock
 
-# Worktrees created by /finish-prs and parallel agents
+# Worktrees created by /flow:finish-prs and parallel agents
 /.claude/worktrees/
