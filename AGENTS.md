@@ -1,11 +1,11 @@
 # importmap-plus
 
 Project instructions for every agent: Claude Code (`CLAUDE.md` `@`-imports this file), Grok, Cursor,
-Copilot and Codex read it directly. Claude-only extras (rules, skills, commands) live under `.claude/`.
+Copilot and Codex read it directly. Claude-only extras (commands, plugin settings) live under `.claude/`; the delivery workflow comes from the `flow` and `ruby-gem` plugins of the shared marketplace (`.claude/settings.json`).
 
 A drop-in replacement for [rails/importmap-rails](https://github.com/rails/importmap-rails) — repo `zoolutions/importmap-plus`, published on rubygems.org as `importmap-plus`. Same `Importmap::` constants, same engine, same helpers and pin DSL; an app switches by changing one `Gemfile` line. Everything this gem adds lives in the vendoring path: `bin/importmap pin --minify`, `--from esm.run` for jsDelivr's bundled builds, version locks, `update` by package name, and a pin comment that records where each package came from.
 
-This is a **maintained fork that still tracks upstream**. The `upstream` remote points at rails/importmap-rails, `Importmap::UPSTREAM_VERSION` names the release currently merged in, and `Importmap::VERSION` is this gem's own semver. The fork rules are in `.claude/rules/upstream-sync.md`.
+This is a **maintained fork that still tracks upstream**. The `upstream` remote points at rails/importmap-rails, `Importmap::UPSTREAM_VERSION` names the release currently merged in, and `Importmap::VERSION` is this gem's own semver. The per-file merge rules are in `.claude/commands/upstream-sync.md`.
 
 ## Tech Stack
 
@@ -26,17 +26,31 @@ This is a **maintained fork that still tracks upstream**. The `upstream` remote 
 4. **NO losing a pin's provenance or options on rewrite** — the `# @<version> (<provider>[, minified][, vendored][, remote[: <reason>]][, locked])` comment plus `preload:` and `integrity:` must survive `pin`, `update`, `pristine` and `unpin`. Dropping them silently drifts a package back to jspm on the next update.
 5. **NO raw `Net::HTTP` calls in Packager or Npm** — every outbound request goes through `with_retries` (`Importmap::HttpRetries`) and raises the class's own `HTTPError` once the attempts are spent.
 6. **NO network access on the request path** — engine → `Map` → helpers never reach a CDN or registry. Only the CLI (`Commands` → `Packager` / `Npm`) does.
-7. **NO hand-merging `Gemfile.lock`, `docs/Gemfile.lock` or `docs/bun.lock`** — regenerate them (`.claude/rules/git-workflow.md`). `gemfiles/*.lock` are gitignored; CI deletes and re-resolves them.
+7. **NO hand-merging `Gemfile.lock`, `docs/Gemfile.lock` or `docs/bun.lock`** — regenerate them (Workflow → Conflicts). `gemfiles/*.lock` are gitignored; CI deletes and re-resolves them.
 8. **NO moving `UPSTREAM_VERSION` outside a sync PR** — it names the importmap-rails release merged in, and only `/upstream-sync` changes it. `VERSION` is different: a feature PR that opens a new minor bumps it (that is how 1.1.0 landed), and `bin/release X.Y.Z` then tags the version already in the file. Never bump it twice for one release.
 
 ### Always Do
 
-1. **TDD** — a failing Minitest first, then the code (`.claude/rules/testing.md`)
+1. **TDD** — a failing Minitest first, then the code (Testing below)
 2. **Keep upstream-owned files diff-minimal** — new behaviour goes in new files (`minifier.rb`, `http_retries.rb` are the precedent) or in small, clearly bounded additions, so the next `git merge upstream/main` stays mergeable
 3. **Match upstream's Ruby style in upstream-owned files** — `[ a, b ]` array spacing, `private` followed by indented methods, `# :nodoc:` on internals. A style-only diff is conflict surface for no gain.
 4. **A pin this gem writes must be a pin importmap-rails can read** — an app can go back to importmap-rails and its `config/importmap.rb` must still parse. Comments carry the fork's metadata precisely because upstream ignores them.
 5. **Document user-facing changes** — update the matching page under `docs/app/views/docs/pages/` and add a `CHANGELOG.md` entry under the next version heading
 6. **Run the CDN-backed tests before pushing** anything that touches `commands.rb`, `packager.rb` or `npm.rb` — `test/commands_test.rb` and the two `*_integration_test.rb` files are the only coverage of the real jspm, jsDelivr and npm-registry contracts
+7. **Go through the existing helpers** — pin lines match with `Importmap::Map.pin_line_regexp_for` and re-emit via `vendored_pin_for` / `pin_for`, options read back with `extract_existing_pin_options`; vendored paths come from `vendored_package_path`; shell-outs are `Open3.capture3(executable, *argv)`, never a string (package names arrive from the network); write the final `vendor/javascript` file last, from a `Dir.mktmpdir`
+8. **Fix upstream's bug in both places** — a bug in a file this fork leaves unchanged is fixed here and opened against rails/importmap-rails, so the next sync shrinks the diff
+
+### Code style
+
+Upstream-owned files (`map.rb`, `engine.rb`, `reloader.rb`, `npm.rb`, `commands.rb`, `packager.rb`, helpers, `lib/install/`) are matched exactly: add, never rearrange or reformat; past a few dozen lines extract a fork-only collaborator. Fork-only files (`minifier.rb`, `http_retries.rb`, `CHANGELOG.md`, `docs/`) own their shape. `bin/release`, `rakelib/release.rake`, `release.yml` (all but its `test` job), `bin/labels` and `.github/LABELS.md` are kits, byte-identical across the gems: change docs-kit, then run its `script/release-kit sync` / `script/labels-kit sync`. Comments say why, never what; no `TODO` without an issue; one class per file under `Importmap::`, ~400 lines (`packager.rb` is at the limit). A CLI failure is a sentence via `Thor::Error` / `Packager::Error` (`Commands.exit_on_failure?` is `false` on purpose); never `rescue` a CDN call to quiet a test.
+
+### Testing
+
+Minitest only (`ActiveSupport::TestCase`, `test "…" do`, `Minitest::Mock` / `Object#stub`) — no RSpec. The default is a unit test with the network stubbed (`Net::HTTP.stub`, `packager.stub(:post_json, …)`, `npm.stub(:get_json, …)`); a live `commands_test.rb` case only for a new CDN contract, with exact versions (`md5@2.2.0`). Anything that writes takes `vendor_path:` inside `Dir.mktmpdir` (the default resolves against the cwd and leaves `vendor/javascript` at the repo root); class-level accessors (`HttpRetries.attempts`/`wait`, `Packager.endpoint`, `Npm.base_uri`) are restored in `ensure` (`without_retry_wait`). `CommandsTest` forks per test, copies `test/dummy` and runs the real `bin/importmap`: assert the printed sentences and the resulting files. A new pin-line shape gets a fixture, `test/fixtures/files/<shape>_import_map.rb`. CI cells to remember: `ASSETS_PIPELINE` branches in `importmap_test.rb`; Rails 6.1 needs `logger`/`mutex_m`/`drb`/`bigdecimal` (`Appraisals`); Ruby 3.1 has no `Data.define` or anonymous `*`/`**` forwarding. A red live test is not a flake until the matrix and `with_retries` are ruled out; never `retry`, `sleep` or `skip` it. Coverage: 80% overall, 100% for Packager pin-line rewriting, `Minifier`, `HttpRetries`, `Map#to_json` / `preloaded_module_paths`.
+
+### Git
+
+`origin` is this gem (`gh repo set-default zoolutions/importmap-plus`, or `gh` targets the fork parent); `upstream` is rails/importmap-rails, read-only. Work branches `feat|fix|chore|docs|ci|sync/*` off fresh `origin/main`; stacked PRs only when the second builds on the first (say so in the body); published branches take `main` merged forward, never rebased. Commit prefixes add `sync:` (`sync: merge importmap-rails 2.3.0`). Tags are plain `vX.Y.Z`, no `-rc`, never `git push --tags`.
 
 ## Commands
 
@@ -66,23 +80,13 @@ run from inside `docs/`. Write commands in hook-rewritable shapes: no `for`/subs
 
 ## Slash Commands
 
+The delivery workflow is the `flow` plugin (`/flow:lfg`, `/flow:plan`, `/flow:tdd`, `/flow:review-pr`, `/flow:github-review-pr`, `/flow:finish-prs`, `/flow:follow-through`, `/flow:debug-flaky`) and `ruby-gem` (`/ruby-gem:release`, `/ruby-gem:perf`), driven by the Workflow section below. Local:
+
 | Command | Purpose |
 |---------|---------|
-| `/lfg` | Full autonomous workflow: branch off `main` → understand → explore → plan → TDD → verify → PR |
-| `/plan` | Fable-powered, read-only planning → GitHub issue or `docs/plans/` markdown (execute with `/lfg`) |
 | `/architect` | Order multi-layer work across engine → Map → helpers → CLI → Packager/Npm → docs |
-| `/tdd` | Enforce RED → GREEN → REFACTOR with Minitest |
 | `/security` | Audit CDN and registry input handling, vendored-file paths, shell-outs, SRI |
-| `/perf` | Baseline the request path (`Map#to_json`, preload resolution) against `main` in a worktree |
-| `/review-pr` | Review a PR for pattern and fork-constraint compliance |
-| `/github-review-pr` | Full PR pass: resolve conflicts with `main`, fix CI failures, then process review comments |
-| `/github-review-failures` | Diagnose and fix CI failures until green |
-| `/github-review-comments` | Process unresolved PR review comments |
-| `/finish-prs` | Drive a stack of open PRs to merge-ready, one at a time, in order |
-| `/debug-flaky` | Root-cause an intermittent test — evidence → repro → stress-proofed fix; never skip/retry |
 | `/upstream-sync` | Merge a new importmap-rails release, bump `UPSTREAM_VERSION`, re-sync the docs |
-
-Commands pin a model tier via frontmatter aliases — `sonnet` for pattern-following implementation, `opus` for orchestration, security and full review, `fable` for read-only planning — so they track the latest model per tier. Subagents doing mechanical work (file finding, pattern scans) get a cheaper model passed explicitly.
 
 ## Architecture
 
@@ -132,8 +136,8 @@ Upstream files this fork has modified heavily, which WILL conflict on sync: `com
 ## Labels
 
 Every pull request carries exactly one `type` label and at least one `area`
-label from `.github/labels.yml` — never a `status` label. `/plan` labels the
-issue, `/lfg` copies the issue's `type` and `area` labels onto the PR (never
+label from `.github/labels.yml` — never a `status` label. `/flow:plan` labels the
+issue, `/flow:lfg` copies the issue's `type` and `area` labels onto the PR (never
 `plan` or another status label). Without an issue, the type comes from the
 change's conventional-commit prefix and the areas from
 `bin/labels infer $(git diff --name-only origin/main...HEAD)`. Labels change in
@@ -175,7 +179,20 @@ gh issue comment <n> --attach ./repro.mp4                       # video renders 
 
 ## More Documentation
 
-- `.claude/rules/` — coding-style, git-workflow, testing, agents, upstream-sync, striving-for-excellence
-- `.claude/commands/` — the slash commands above
 - `CHANGELOG.md` — what each release adds over importmap-rails
 - Upstream README (shared basics): https://github.com/rails/importmap-rails#readme
+
+## Workflow
+
+- **Verify:** `bundle exec rake test` · `bundle exec rubocop` · `bundle exec conformance-kit check` · `cd docs && bundle exec rake lint && bundle exec rspec` if `docs/` changed
+- **Specs:** fast `bundle exec ruby -Itest test/<file>_test.rb [-n /name/]`; full `bundle exec rake test` (live CDNs, bun for `--minify`); one cell `BUNDLE_GEMFILE=gemfiles/rails_7.1_sprockets.gemfile ASSETS_PIPELINE=sprockets bundle exec rake test`; two worktrees: yes, one full suite at a time (CDN rate limits)
+- **CI:** required `cubic · AI code reviewer`, `conformance / Conformance (Ruby 4.0)`, `conformance / Conformance settings`, ten `Tests (Ruby 3.1|3.2, …)` cells; jobs `Tests (Ruby X, Rails Y, pipeline)`, `Lint`, `Build & test` (docs paths only); full suite on the PR (pushes: `main` only); failure report none
+- **Review bot:** cubic
+- **Merge:** squash — `gh pr merge <PR> --squash --delete-branch` (ruleset: 1 approval, threads resolved, signed commits, linear history)
+- **PR contract:** `## Summary`, `## Test plan`, last `## Deviations & judgment calls`; one `type` + ≥1 `area` label, no `status` (`bin/labels infer <paths>`); `feat:` updates `CHANGELOG.md` and its `docs/` page; `docs/app/**` changes attach screenshots
+- **Conflicts:** `CHANGELOG.md` union, no duplicated `###`; `Gemfile.lock` / `docs/Gemfile.lock` (pin = `Importmap::VERSION`) / `docs/bun.lock` take main's, then `bundle install` / `bun install` (docs in `docs/`); `gemfiles/*.gemfile` → `bundle exec appraisal generate`; `version.rb`: higher `VERSION` only if the branch's commits explain it, else main's, `UPSTREAM_VERSION` always main's outside `sync:`; `docs/app/models/doc.rb`, `docs/config/routes.rb` append-only; `packager.rb`/`commands.rb`/`npm.rb` keep both, rerun tests
+- **Worktree setup:** `bundle install`; for docs work `cd docs && bundle install && bun install`
+- **Release:** `bin/release [minor|major|X.Y.Z]`; changelog `CHANGELOG.md`, heading `## X.Y.Z (YYYY-MM-DD)` under `## Unreleased`; prep none; lockfiles `Gemfile.lock` `docs/Gemfile.lock`; docs `deploy-docs.yml` on release; human none. A feature PR opening a minor bumps `VERSION` itself and `bin/release X.Y.Z` tags it
+- **Main health:** `gh run list -b main -w CI -L 1 --json conclusion --jq '.[0].conclusion'`
+- **Upstream:** libraries we own `zoolutions/*`; scrub none
+- **Bench:** none; request path only (`Map#to_json`, `preloaded_module_paths`, `digest`, `pin_all_from` expansion, cache sweeper) via `bin/rails runner` in `test/dummy`; the command path needs no measurement

@@ -63,7 +63,7 @@ Surfaces
 
 ## Fork-boundary rules
 
-- Additive edits in upstream-owned files; new behaviour in fork-only files (`.claude/rules/upstream-sync.md`)
+- Additive edits in upstream-owned files; new behaviour in fork-only files (`.claude/commands/upstream-sync.md`, reference section)
 - Nothing upstream defines is renamed or removed
 - A `config/importmap.rb` this gem writes must parse under importmap-rails
 - No new runtime dependency
@@ -88,6 +88,6 @@ Surfaces
 
 ## Handoff
 
-Summarise: the contract (pin line + CLI output), files per layer, integration points touched, and the fork-boundary decisions made. Then hand to `/lfg` or `/plan`.
+Summarise: the contract (pin line + CLI output), files per layer, integration points touched, and the fork-boundary decisions made. Then hand to `/flow:lfg` or `/flow:plan`.
 
 Now coordinate: $ARGUMENTS
