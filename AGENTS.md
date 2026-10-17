@@ -46,7 +46,7 @@ Upstream-owned files (`map.rb`, `engine.rb`, `reloader.rb`, `npm.rb`, `commands.
 
 ### Testing
 
-Minitest only (`ActiveSupport::TestCase`, `test "…" do`, `Minitest::Mock` / `Object#stub`) — no RSpec. The default is a unit test with the network stubbed (`Net::HTTP.stub`, `packager.stub(:post_json, …)`, `npm.stub(:get_json, …)`); a live `commands_test.rb` case only for a new CDN contract, with exact versions (`md5@2.2.0`). Anything that writes takes `vendor_path:` inside `Dir.mktmpdir` (the default resolves against the cwd and leaves `vendor/javascript` at the repo root); class-level accessors (`HttpRetries.attempts`/`wait`, `Packager.endpoint`, `Npm.base_uri`) are restored in `ensure` (`without_retry_wait`). `CommandsTest` forks per test, copies `test/dummy` and runs the real `bin/importmap`: assert the printed sentences and the resulting files. A new pin-line shape gets a fixture, `test/fixtures/files/<shape>_import_map.rb`. CI cells to remember: `ASSETS_PIPELINE` branches in `importmap_test.rb`; Rails 6.1 needs `logger`/`mutex_m`/`drb`/`bigdecimal` (`Appraisals`); Ruby 3.1 has no `Data.define` or anonymous `*`/`**` forwarding. A red live test is not a flake until the matrix and `with_retries` are ruled out; never `retry`, `sleep` or `skip` it. Coverage: 80% overall, 100% for Packager pin-line rewriting, `Minifier`, `HttpRetries`, `Map#to_json` / `preloaded_module_paths`.
+Gem code (`lib/`, `test/`) is Minitest only (`ActiveSupport::TestCase`, `test "…" do`, `Minitest::Mock` / `Object#stub`) — no RSpec there; the self-contained `docs/` app is the exception and uses RSpec (`cd docs && bundle exec rspec`). The default is a unit test with the network stubbed (`Net::HTTP.stub`, `packager.stub(:post_json, …)`, `npm.stub(:get_json, …)`); a live `commands_test.rb` case only for a new CDN contract, with exact versions (`md5@2.2.0`). Anything that writes takes `vendor_path:` inside `Dir.mktmpdir` (the default resolves against the cwd and leaves `vendor/javascript` at the repo root); class-level accessors (`HttpRetries.attempts`/`wait`, `Packager.endpoint`, `Npm.base_uri`) are restored in `ensure` (`without_retry_wait`). `CommandsTest` forks per test, copies `test/dummy` and runs the real `bin/importmap`: assert the printed sentences and the resulting files. A new pin-line shape gets a fixture, `test/fixtures/files/<shape>_import_map.rb`. CI cells to remember: `ASSETS_PIPELINE` branches in `importmap_test.rb`; Rails 6.1 needs `logger`/`mutex_m`/`drb`/`bigdecimal` (`Appraisals`); Ruby 3.1 has no `Data.define` or anonymous `*`/`**` forwarding. A red live test is not a flake until the matrix and `with_retries` are ruled out; never `retry`, `sleep` or `skip` it. Coverage: 80% overall, 100% for Packager pin-line rewriting, `Minifier`, `HttpRetries`, `Map#to_json` / `preloaded_module_paths`.
 
 ### Git
 
@@ -80,7 +80,7 @@ run from inside `docs/`. Write commands in hook-rewritable shapes: no `for`/subs
 
 ## Slash Commands
 
-The delivery workflow is the `flow` plugin (`/flow:lfg`, `/flow:plan`, `/flow:tdd`, `/flow:review-pr`, `/flow:github-review-pr`, `/flow:finish-prs`, `/flow:follow-through`, `/flow:debug-flaky`) and `ruby-gem` (`/ruby-gem:release`, `/ruby-gem:perf`), driven by the Workflow section below. Local:
+The delivery workflow is the `flow` plugin (`/flow:lfg`, `/flow:plan`, `/flow:tdd`, `/flow:review-pr`, `/flow:github-review-pr`, `/flow:github-review-failures`, `/flow:github-review-comments`, `/flow:finish-prs`, `/flow:follow-through`, `/flow:debug-flaky`) and `ruby-gem` (`/ruby-gem:release`, `/ruby-gem:perf`), driven by the Workflow section below. Local:
 
 | Command | Purpose |
 |---------|---------|
@@ -131,7 +131,7 @@ Two paths, kept apart: the **request path** (engine → Map → helpers, no I/O 
 | Release | `bin/release` pushed from a laptop with an API key | `bin/release` → `rake release[X.Y.Z]` → GitHub Release → trusted publishing (`release.yml`), the zoolutions release kit |
 | Fork-only files | — | `minifier.rb`, `http_retries.rb`, `module_inspector.rb`, `package_graph.rb`, `vendored_graph.rb`, `provider_chain.rb`, `integrity.rb`, `esm_run.rb`, `CHANGELOG.md`, `release.yml`, `deploy-docs.yml`, `docs-ci.yml`, `docs/` |
 
-Upstream files this fork has modified heavily, which WILL conflict on sync: `commands.rb`, `packager.rb`, `npm.rb`, `README.md`, `ci.yml`, `test/commands_test.rb`, `test/packager_test.rb`. Per-file resolution rules: `.claude/rules/upstream-sync.md`.
+Upstream files this fork has modified heavily, which WILL conflict on sync: `commands.rb`, `packager.rb`, `npm.rb`, `README.md`, `ci.yml`, `test/commands_test.rb`, `test/packager_test.rb`. Per-file resolution rules: `.claude/commands/upstream-sync.md`.
 
 ## Labels
 
